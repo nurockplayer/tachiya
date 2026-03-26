@@ -104,10 +104,11 @@ tachiya/
 ### Storefront（`tachiya/frontend/`）
 
 ```
-├──tachiya/frontend/    # 電商前端，獨立repo（nurockplayer/storefront，fork 自 saleor/storefront）
-├── 獨立的 git repo（有自己的 `.git`），不是 git submodule
-└── 以獨立 VSCode workspace + Claude Code 開發，不在此 repo 的 git 管理範圍內
+tachiya/frontend/    # 電商前端，自己的 fork（nurockplayer/storefront，fork 自 saleor/storefront）
 ```
+
+- 獨立的 git repo（有自己的 `.git`），不是 git submodule，也不在此 repo 的 git 管理範圍內
+- 以獨立 VSCode workspace + Claude Code 開發
 
 ### 串接點
 
@@ -127,3 +128,32 @@ Twitch 觀眾
 | Saleor dashboard | fork 官方，自行 build | 繁體中文化，推 GHCR |
 | Saleor frontend | 自己的 fork（`nurockplayer/storefront`） | 見 `frontend/` 目錄 |
 | FastAPI | 自行開發 | 在此 repo 的 `api/` 目錄 |
+
+---
+
+## 後端架構：三服務拆法
+
+**決策：Go（tachigo）、FastAPI（tachiya api/）、Saleor 三者維持獨立，不整合。**
+
+### 考慮過的選項
+
+| 方案 | 說明 | 放棄理由 |
+|------|------|----------|
+| 用 Go 取代 FastAPI | 把折扣/分潤邏輯移進 tachigo Go backend | 把兩個不同域的關注點混在一起，長期難維護 |
+| **三服務各自獨立** | Go / FastAPI / Saleor 分開部署 | **採用** |
+
+### 各服務職責
+
+- **Saleor**：電商核心（購物車、訂單、結帳、Saleor 自己的帳號系統）
+- **Go（tachigo）**：Twitch 身份、忠誠點數、token 發放——自建會員系統
+- **FastAPI（tachiya api/）**：Saleor 的自訂邏輯出口（折扣計算、分潤、webhook 處理）；不動 Saleor 原始碼的前提下擴充業務邏輯
+
+### 會員系統不衝突
+
+Saleor Account 只管「能結帳的帳號」（購物車、訂單、地址），Go 會員系統管忠誠點數與 Twitch 身份，兩者用 Saleor customer ID 關聯，職責不重疊。
+
+### 維持三服務的理由
+
+- FastAPI 是保護層：沒有它，未來要自訂邏輯只能 fork Saleor
+- 三服務用 docker-compose 管理，部署成本低，FastAPI 輕量可與其他服務共機
+- 等未來 FastAPI 真的不再成長、只剩一兩支 API，再評估是否併入 Go
