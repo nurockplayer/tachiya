@@ -78,3 +78,52 @@
 - 部署週期不同（Twitch extension 有審核流程）
 - 關注點完全不同，團隊可獨立作業
 - 兩者透過 API 邊界連接（例如：Tachigo token 換取 Tachiya 折扣碼）
+
+---
+
+## 系統架構總覽
+
+### Tachigo（獨立 repo）
+
+```
+tachigo/
+├── extension      # Twitch 擴充功能（React）
+└── go backend     # 會員系統、Token 發放（Go）
+```
+
+### Tachiya（此 repo）
+
+```
+tachiya/
+├── Saleor backend   # 電商核心，拉官方 Docker image，不改動
+├── Saleor dashboard # 電商後台，build 自己的 image（繁體中文化）
+├── api/             # FastAPI，處理折扣與區塊鏈代幣銷毀的中間層
+└── frontend/        # Storefront（獨立 git repo，掛在此目錄下）
+```
+
+### Storefront（`tachiya/frontend/`）
+
+```
+├──tachiya/frontend/    # 電商前端，獨立repo（nurockplayer/storefront，fork 自 saleor/storefront）
+├── 獨立的 git repo（有自己的 `.git`），不是 git submodule
+└── 以獨立 VSCode workspace + Claude Code 開發，不在此 repo 的 git 管理範圍內
+```
+
+### 串接點
+
+```
+Twitch 觀眾
+  → tachigo extension（累積 token）
+  → tachigo go backend（驗證 token）
+  → tachiya FastAPI（銷毀 token，產生折扣碼）
+  → Saleor（套用折扣碼結帳）
+```
+
+### 各服務維護方式
+
+| 服務 | 來源 | 維護方式 |
+|------|------|----------|
+| Saleor backend | 官方 Docker image | 不改動，直接拉 |
+| Saleor dashboard | fork 官方，自行 build | 繁體中文化，推 GHCR |
+| Saleor frontend | 自己的 fork（`nurockplayer/storefront`） | 見 `frontend/` 目錄 |
+| FastAPI | 自行開發 | 在此 repo 的 `api/` 目錄 |

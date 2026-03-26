@@ -1,5 +1,5 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/api/.venv/bin/python",
   "files.exclude": {
     "frontend/": true,
     "dashboard/": true

@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote -v:*)",
+      "Bash(git remote -v*)",
+      "Bash(git fetch:*)",
       "Bash(ls:*)",
       "Bash(pwd:*)",
       "Bash(echo:*)",
