@@ -1,0 +1,16 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+  "files.exclude": {
+    "frontend/": true,
+    "dashboard/": true
+  },
+  "cSpell.words": [
+    "axllent",
+    "celeryconf",
+    "mailpit",
+    "saleor",
+    "valkey",
+    "tachiya",
+    "Tachiya"
+  ]
+}

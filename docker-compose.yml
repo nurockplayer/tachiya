@@ -1,0 +1,104 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tachiya}
+      POSTGRES_USER: ${POSTGRES_USER:-tachiya}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachiya}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tachiya}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cache:
+    image: valkey/valkey:8.1-alpine
+    restart: unless-stopped
+    volumes:
+      - cache_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  saleor:
+    image: ghcr.io/saleor/saleor:3.22
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - saleor_media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  saleor-worker:
+    image: ghcr.io/saleor/saleor:3.22
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - saleor_media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    command: celery -A saleor --app=saleor.celeryconf:app worker --loglevel=info -B
+
+  api:
+    build:
+      context: ./api
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+      args:
+        LOCALE_CODE: "ZH_HANT"
+        API_URL: "http://localhost:8000/graphql/"
+    ports:
+      - "9000:80"
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+  frontend:
+    profiles: [frontend]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SALEOR_API_URL: ${NEXT_PUBLIC_SALEOR_API_URL:-http://localhost:8000/graphql/}
+        NEXT_PUBLIC_STOREFRONT_URL: ${NEXT_PUBLIC_STOREFRONT_URL:-http://localhost:3000}
+        NEXT_PUBLIC_DEFAULT_CHANNEL: ${NEXT_PUBLIC_DEFAULT_CHANNEL:-default-channel}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - saleor
+
+volumes:
+  postgres_data:
+  cache_data:
+  saleor_media:

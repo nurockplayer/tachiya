@@ -1,0 +1,24 @@
+# Dev 專用覆蓋設定（自動載入，不需要 -f 指定）
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"   # Web UI
+      - "1025:1025"   # SMTP
+
+  saleor:
+    environment:
+      - EMAIL_URL=smtp://mailpit:1025
+
+  db:
+    ports:
+      - "5432:5432"   # 本地直接連 DB（dev 方便用）
+
+  cache:
+    ports:
+      - "6379:6379"
+
+  api:
+    command: uv run uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ./api:/app

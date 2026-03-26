@@ -1,0 +1,52 @@
+# ========================
+# Environment
+# ========================
+.env
+.env.local
+.env.*.local
+.envrc
+
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*.so
+.venv
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# ========================
+# Upstream repos (not versioned here)
+# ========================
+frontend/
+dashboard/
+
+# ========================
+# Docker
+# ========================
+*.pid
+
+# ========================
+# Editor
+# ========================
+.vscode/*.json
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
