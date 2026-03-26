@@ -66,15 +66,12 @@ services:
         condition: service_healthy
 
   dashboard:
-    build:
-      context: ./dashboard
-      dockerfile: Dockerfile
-      args:
-        LOCALE_CODE: "ZH_HANT"
-        API_URL: "http://localhost:8000/graphql/"
+    image: ghcr.io/nurockplayer/tachiya-dashboard:3.22
     ports:
       - "9000:80"
     restart: unless-stopped
+    environment:
+      API_URL: "${DASHBOARD_API_URL}"
 
   mailpit:
     image: axllent/mailpit

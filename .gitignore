@@ -36,6 +36,11 @@ dashboard/
 *.pid
 
 # ========================
+# Claude Code
+# ========================
+.claude/settings.local.json
+
+# ========================
 # Editor
 # ========================
 .vscode/*.json
