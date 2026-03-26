@@ -1,18 +1,16 @@
-# Cloned upstream repos — 大量未修改的上游原始碼
+# Upstream repos（不修改，不需要讀）
 frontend/
 dashboard/
+backend/
 
-# Python
+# Python / uv
 api/.venv/
 api/__pycache__/
-api/.mypy_cache/
-api/.ruff_cache/
-api/.pytest_cache/
+api/**/__pycache__/
+api/**/*.pyc
 
-# Node
-node_modules/
-
-# Locks（內容大、幾乎不需要閱讀）
+# uv lock（自動生成）
 api/uv.lock
-frontend/pnpm-lock.yaml
-dashboard/pnpm-lock.yaml
+
+# 翻譯檔（大型 JSON，需要時再讀）
+translations/
