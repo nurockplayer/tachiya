@@ -6,6 +6,30 @@
 
 ---
 
+## 工作原則
+
+### 先規劃再動手
+
+收到非簡單的任務時（跨檔案修改、新功能、架構調整），先用 Plan Mode 提出方案，等使用者確認後再開始寫 code。不要一收到需求就直接動手。
+
+### 驗證迴圈
+
+寫完 code 之後，主動跑相關的檢查來確認沒有問題：
+
+- `pnpm build` 確認編譯通過
+- `pnpm lint` 確認沒有 lint 錯誤
+- `pnpm test:run` 跑測試（如果有相關的 test）
+
+測試沒過就修，不要丟回來讓使用者自己 debug。
+
+### 回覆風格
+
+- 簡潔直接，不要重複使用者說過的話
+- 先講結論或行動，再講原因
+- 一句話能說完就不要用三句
+
+---
+
 ## GitHub Issue 慣例
 
 ### 標題前綴
@@ -98,6 +122,8 @@ tachiya/
 └── translations/     # 翻譯檔（備份用）
 ```
 
+各子專案可以有自己的 `CLAUDE.md`（例如 `frontend/CLAUDE.md`），提供該區域專屬的上下文。
+
 ## 開發指令
 
 ```bash
@@ -106,6 +132,38 @@ make up     # 啟動所有服務
 make down   # 停止所有服務
 make logs   # 查看 logs
 ```
+
+## AI 分工
+
+本專案使用 Claude Code + Codex CLI 協作開發：
+
+| 角色 | 工具 | 職責 |
+|---|---|---|
+| **指揮** | Claude Code | 分析需求、規劃架構、拆解任務、審查結果、決策取捨 |
+| **執行** | Codex CLI | 實際寫程式碼、跑測試、改檔案、執行指令 |
+
+**工作流程：**
+1. Claude Code 理解需求，擬定實作計畫
+2. Claude Code 下指令給 Codex CLI 執行
+3. Codex 完成後回報結果
+4. Claude Code 審查、驗收、或進一步調整指令
+
+**委派原則（節省 Claude token）：**
+
+- 任何涉及寫程式、改檔案、跑測試的任務，一律透過 `codex:rescue` 派給 Codex 執行
+- Claude Code 只負責：理解需求、規劃架構、給 Codex 下指令、審查結果
+- 僅在極簡單的單行修改時，Claude Code 才直接動手
+
+**指令操作的分界：**
+
+| 操作 | 誰執行 | 原因 |
+|---|---|---|
+| `git status` / `git log` / `git diff` | Claude Code | 需要即時看輸出來做決策 |
+| `git commit` / `git push` / `git checkout -b` | Codex | 純執行，不需要即時輸出 |
+| 檔案搜尋（探索用） | Claude Code（用 Glob / Grep 工具） | 規劃階段，需要結果判斷下一步 |
+| 複雜 bash 腳本、批次操作 | Codex | 純執行，只需確認最終結果 |
+
+核心判斷：Claude 需要即時看輸出來決策 → 自己做；純執行 → 交給 Codex
 
 ## Claude Code 設定
 
