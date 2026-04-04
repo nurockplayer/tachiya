@@ -154,13 +154,28 @@ make logs   # 查看 logs
 - Claude Code 只負責：理解需求、規劃架構、給 Codex 下指令、審查結果
 - 僅在極簡單的單行修改時，Claude Code 才直接動手
 
+**建議優先使用的快捷指令：**
+
+- `/fix-with-codex <問題>`：debug 並盡量直接修復
+- `/implement-with-codex <需求>`：實作功能並補必要驗證
+- `/review-with-codex <PR/變更範圍>`：以 bug / regression / 測試缺口為主做 review
+- `/explore-with-codex <主題>`：快速摸清程式結構與現況
+- `/plan-with-codex <任務>`：先探索，再輸出短版可執行計畫
+- `/test-with-codex <測試範圍>`：執行最相關測試並收斂失敗原因
+
+這些指令都會刻意限制輸出格式，避免貼完整 diff、冗長 log 或大段原始碼，讓 Claude 只接收高密度摘要。
+
+完整教學請見 [docs/claude-codex-workflow.md](docs/claude-codex-workflow.md)。
+快速版可見 [docs/claude-codex-cheatsheet.md](docs/claude-codex-cheatsheet.md)。
+
 **指令操作的分界：**
 
 | 操作 | 誰執行 | 原因 |
 |---|---|---|
 | `git status` / `git log` / `git diff` | Claude Code | 需要即時看輸出來做決策 |
 | `git commit` / `git push` / `git checkout -b` | Claude Code | `codex:rescue` subagent 在 sandbox 內無 `.git` 寫入權限 |
-| 檔案搜尋（探索用） | Claude Code（用 Glob / Grep 工具） | 規劃階段，需要結果判斷下一步 |
+| 檔案搜尋——定向（知道找什麼） | Claude Code（用 Glob / Grep 工具） | 規劃階段，需要結果判斷下一步 |
+| 檔案搜尋——探索性（不確定在哪） | Codex（透過 `/explore-with-codex`） | 大範圍搜尋交給 Codex，只拿摘要回來 |
 | 複雜 bash 腳本、批次操作 | Codex | 純執行，只需確認最終結果 |
 
 核心判斷：Claude 需要即時看輸出來決策 → 自己做；純執行 → 交給 Codex
@@ -170,6 +185,14 @@ make logs   # 查看 logs
 `.claude/settings.json` 是共享設定，已 commit 進 repo，**請勿直接修改**。
 
 個人設定請放在 `.claude/settings.local.json`（已 gitignore，不會影響其他人）。
+
+Claude Code 目前不要使用 `anthropic.config.json` 來設定最大循環次數；本專案以啟動參數控制，預設請使用：
+
+```bash
+claude --max-turns 5
+```
+
+如果任務非常單純，可視情況降到 `3`；原則上請把單次執行限制在 `3-5` turns 內，避免無限制迴圈消耗 token。
 
 ## 文件放置規範
 
