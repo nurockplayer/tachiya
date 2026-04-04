@@ -1,4 +1,4 @@
-.PHONY: setup build up down migrate superuser logs shell frontend
+.PHONY: setup build up down migrate superuser logs shell frontend claude
 
 # 第一次從零跑起整個專案
 setup: .env build
@@ -46,3 +46,6 @@ shell:
 
 frontend:
 	docker compose --profile frontend up --build frontend
+
+claude:
+	./scripts/claude-max5.sh
