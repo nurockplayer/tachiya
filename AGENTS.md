@@ -92,6 +92,7 @@ Type：`feat` / `fix` / `docs` / `chore` / `refactor` / `test`
 - 本專案主要使用 `docs/` 放架構、規格、決策文件
 - 若需要過程性規劃，優先沿用 repo 既有的 `.planning/` 與 Claude Code 工作流，不另外引入 `plans/` 慣例
 - 子專案若存在自己的 `CLAUDE.md` 或其他代理文件，進入該目錄工作前先讀
+- 若更新 `docs/` 內文件，優先在文件開頭補上「文件編修註記」，至少標示 `最近更新` 與 `修改工具`（`Codex` 或 `Claude Code`），並建議加上 `修改摘要`
 
 ## 輸出格式
 

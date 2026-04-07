@@ -202,6 +202,16 @@ claude --max-turns 5
 | `docs/` | 工程師 | 架構設計、API 規格、技術決策 |
 | GitHub Wiki | 全體人員 | 產品說明、功能介紹、非技術文件 |
 
+### 文件編修註記
+
+- `docs/` 內的文件若有明顯內容更新，文件開頭應加上「文件編修註記」區塊
+- 至少記錄：
+  - `最近更新`：日期
+  - `修改工具`：`Codex` 或 `Claude Code`
+- 建議一併記錄：
+  - `修改摘要`：一句話說明這次改了什麼
+- 若是多人接力整理，可用條列往下追加最近幾次重要更新
+
 ## 架構參考
 
 見 [docs/product-decisions.md](docs/product-decisions.md)

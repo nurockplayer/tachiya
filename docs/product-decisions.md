@@ -2,6 +2,12 @@
 
 紀錄重要的產品設計決策，包含考慮過的選項與最終選擇的理由。
 
+## 文件編修註記
+
+- 最近更新：2026-04-07
+- 修改工具：Codex
+- 修改摘要：補上忠誠點數兌換折扣設計稿的入口連結
+
 ---
 
 ## 平台定位：經紀公司模式
@@ -119,6 +125,8 @@ Twitch 觀眾
   → tachiya FastAPI（銷毀 token，產生折扣碼）
   → Saleor（套用折扣碼結帳）
 ```
+
+關於「忠誠點數兌換 Saleor 折扣」的現況調查、折扣顯示路徑、Voucher 選型理由與 API contract 草案，見 [loyalty-discount-flow.md](loyalty-discount-flow.md)。
 
 ### 各服務維護方式
 
