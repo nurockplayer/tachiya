@@ -7,4 +7,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "httpx>=0.27",        # Saleor GraphQL 呼叫
     "python-dotenv>=1.0",
+    "requests>=2.32",
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
 ]
