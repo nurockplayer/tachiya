@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import Column, DateTime, Integer, String
 
-from api.database import Base
+from database import Base
 
 
 class UserCoupon(Base):

@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from api.database import get_db
-from api.models.coupon import UserCoupon
-from api.services.saleor_voucher import COUPON_CONFIG, create_voucher
+from database import get_db
+from models.coupon import UserCoupon
+from services.saleor_voucher import COUPON_CONFIG, create_voucher
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
 

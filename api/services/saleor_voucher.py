@@ -31,6 +31,8 @@ COUPON_CONFIG = {
     },
 }
 
+SALEOR_CHANNEL_ID = os.getenv("SALEOR_CHANNEL_ID", "Q2hhbm5lbDox")  # Default Channel
+
 VOUCHER_CREATE = """
 mutation VoucherCreate($input: VoucherInput!) {
   voucherCreate(input: $input) {
@@ -47,42 +49,80 @@ mutation VoucherCreate($input: VoucherInput!) {
 }
 """
 
+VOUCHER_CHANNEL_LISTING_UPDATE = """
+mutation VoucherChannelListingUpdate($id: ID!, $input: VoucherChannelListingInput!) {
+  voucherChannelListingUpdate(id: $id, input: $input) {
+    voucher {
+      id
+      code
+    }
+    errors {
+      field
+      message
+      code
+    }
+  }
+}
+"""
+
+
+def _get_session_and_token():
+    import _saleor_common as sc
+    sc.ENDPOINT = SALEOR_URL
+    sc.ADMIN_EMAIL = ADMIN_EMAIL
+    sc.ADMIN_PASSWORD = ADMIN_PASSWORD
+    session = requests.Session()
+    token = get_admin_token(session)
+    return session, token
+
 
 def create_voucher(coupon_id: str, code: str) -> dict:
     cfg = COUPON_CONFIG[coupon_id]
-    session = requests.Session()
-    session.headers.update({"Content-Type": "application/json"})
+    session, token = _get_session_and_token()
 
-    # Override endpoint for this session
-    import _saleor_common as sc
-
-    original = sc.ENDPOINT
-    sc.ENDPOINT = SALEOR_URL
-
-    try:
-        token = get_admin_token(session)
-        payload = execute_graphql(
-            session,
-            VOUCHER_CREATE,
-            {
-                "input": {
-                    "name": code,
-                    "code": code,
-                    "type": cfg["type"],
-                    "discountValueType": cfg["value_type"],
-                    "discountValue": cfg["value"],
-                    "usageLimit": 1,
-                }
-            },
-            token,
-        )
-    finally:
-        sc.ENDPOINT = original
-
+    # Step 1: create voucher (no discountValue in this Saleor version)
+    payload = execute_graphql(
+        session,
+        VOUCHER_CREATE,
+        {
+            "input": {
+                "name": code,
+                "code": code,
+                "type": cfg["type"],
+                "discountValueType": cfg["value_type"],
+                "singleUse": True,
+            }
+        },
+        token,
+    )
     result = payload["data"]["voucherCreate"]
     errors = result.get("errors") or []
     if errors:
         raise RuntimeError(f"voucherCreate errors: {errors}")
+    voucher_id = result["voucher"]["id"]
+    voucher_code = result["voucher"]["code"]
 
-    voucher = result["voucher"]
-    return {"voucher_id": voucher["id"], "code": voucher["code"]}
+    # Step 2: set discount value via channel listing
+    payload2 = execute_graphql(
+        session,
+        VOUCHER_CHANNEL_LISTING_UPDATE,
+        {
+            "id": voucher_id,
+            "input": {
+                "addChannels": [
+                    {
+                        "channelId": SALEOR_CHANNEL_ID,
+                        "discountValue": cfg["value"],
+                        "minAmountSpent": 0,
+                    }
+                ]
+            },
+        },
+        token,
+    )
+    result2 = payload2["data"]["voucherChannelListingUpdate"]
+    errors2 = result2.get("errors") or []
+    if errors2:
+        raise RuntimeError(f"voucherChannelListingUpdate errors: {errors2}")
+
+    return {"voucher_id": voucher_id, "code": voucher_code}
