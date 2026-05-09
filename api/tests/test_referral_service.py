@@ -1,5 +1,9 @@
 import asyncio
+import hashlib
+import hmac
+import json
 import sys
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from database import Base
 from models.points_ledger import PointsLedger
 from models.referral import ReferralRelationship, ReferralReward
+from models.webhook_event import WebhookEvent
 from routers import referrals
 from services.points_service import PointsService
 from services.referral_service import ReferralService
@@ -124,7 +129,57 @@ def build_client(session) -> TestClient:
     return TestClient(app)
 
 
+def signed_order_completed_request(
+    client: TestClient,
+    *,
+    payload: dict,
+    event_id: str = "evt-order-1",
+    timestamp: int | None = None,
+    secret: str = "shared-secret",
+):
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    timestamp = timestamp or int(time.time())
+    signed_payload = f"{timestamp}.".encode() + body
+    signature = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+    return client.post(
+        "/referrals/webhooks/order-completed",
+        headers={
+            "Content-Type": "application/json",
+            "X-Tachiya-Internal-Secret": secret,
+            "X-Tachiya-Webhook-Event-Id": event_id,
+            "X-Tachiya-Webhook-Timestamp": str(timestamp),
+            "X-Tachiya-Webhook-Signature": signature,
+        },
+        content=body,
+    )
+
+
 def test_order_completed_webhook_processes_referral_reward(monkeypatch):
+    session = build_session()
+    add_relationship(session)
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_completed_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "referee_id": "referee-1",
+            "order_total_amount": 1200,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["rewarded"] is True
+    assert response.json()["reward_points"] == 60
+    assert response.json()["ledger_entry_id"]
+    event = session.query(WebhookEvent).one()
+    assert event.event_id == "evt-order-1"
+    assert event.event_type == "referral.order_completed"
+    assert asyncio.run(PointsService(session).get_balance("referrer-1")) == 60
+
+
+def test_order_completed_webhook_rejects_missing_signature_headers(monkeypatch):
     session = build_session()
     add_relationship(session)
     client = build_client(session)
@@ -140,11 +195,54 @@ def test_order_completed_webhook_processes_referral_reward(monkeypatch):
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["rewarded"] is True
-    assert response.json()["reward_points"] == 60
-    assert response.json()["ledger_entry_id"]
-    assert asyncio.run(PointsService(session).get_balance("referrer-1")) == 60
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid webhook signature"
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(ReferralReward).count() == 0
+
+
+def test_order_completed_webhook_rejects_stale_timestamp(monkeypatch):
+    session = build_session()
+    add_relationship(session)
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_completed_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "referee_id": "referee-1",
+            "order_total_amount": 1200,
+        },
+        timestamp=int(time.time()) - 600,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "stale webhook timestamp"
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(ReferralReward).count() == 0
+
+
+def test_order_completed_webhook_rejects_replayed_event(monkeypatch):
+    session = build_session()
+    add_relationship(session)
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    payload = {
+        "order_id": "order-1",
+        "referee_id": "referee-1",
+        "order_total_amount": 1200,
+    }
+
+    first_response = signed_order_completed_request(client, payload=payload)
+    second_response = signed_order_completed_request(client, payload=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert second_response.json()["detail"] == "webhook event already processed"
+    assert session.query(WebhookEvent).count() == 1
+    assert session.query(ReferralReward).count() == 1
+    assert session.query(PointsLedger).count() == 1
 
 
 def test_order_completed_webhook_rejects_missing_internal_secret(monkeypatch):
