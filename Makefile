@@ -45,6 +45,7 @@ shell:
 	docker compose run --rm saleor python manage.py shell
 
 frontend:
+	cd frontend && pnpm install --frozen-lockfile && NEXT_PUBLIC_SALEOR_API_URL=http://localhost:8000/graphql/ pnpm generate:all
 	docker compose --profile frontend up --build frontend
 
 claude:

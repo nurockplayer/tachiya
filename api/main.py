@@ -1,6 +1,28 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Tachiya API")
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from database import create_tables
+from routers import coupons
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_tables()
+    yield
+
+
+app = FastAPI(title="Tachiya API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(coupons.router)
 
 
 @app.get("/health")
