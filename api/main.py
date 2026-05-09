@@ -2,8 +2,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 
-from database import create_tables
+from database import check_database_ready, create_tables
 from routers import coupons, identity_mappings, points, referrals, tachigo
 
 
@@ -32,3 +34,16 @@ app.include_router(tachigo.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    try:
+        check_database_ready()
+    except SQLAlchemyError:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "checks": {"database": "error"}},
+        )
+
+    return {"status": "ok", "checks": {"database": "ok"}}
