@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,10 @@ class StreamerCatalogProfileResponse(BaseModel):
 class StreamerCatalogResponse(BaseModel):
     streamer: StreamerCatalogProfileResponse
     saleor_product_ids: list[str]
+
+
+class StreamerListResponse(BaseModel):
+    streamers: list[StreamerCatalogProfileResponse]
 
 
 class RevenueSharePreviewLineRequest(BaseModel):
@@ -123,6 +127,28 @@ def create_streamer_profile(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return _streamer_profile_response(profile)
+
+
+@router.get(
+    "",
+    response_model=StreamerListResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_streamer_profiles(
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    profiles = StreamerService(db).list_active_profiles(limit=limit)
+    return StreamerListResponse(
+        streamers=[
+            StreamerCatalogProfileResponse(
+                slug=profile.slug,
+                display_name=profile.display_name,
+                saleor_collection_id=profile.saleor_collection_id,
+            )
+            for profile in profiles
+        ],
+    )
 
 
 @router.post(

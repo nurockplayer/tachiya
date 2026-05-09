@@ -56,6 +56,29 @@ def test_get_by_slug_normalizes_lookup():
     assert profile.slug == "streamer-one"
 
 
+def test_list_active_profiles_returns_active_profiles_in_display_order():
+    session = build_session()
+    service = StreamerService(session)
+    service.create_profile(slug="zeta", display_name="Zeta")
+    service.create_profile(slug="alpha", display_name="Alpha")
+    service.create_profile(slug="inactive", display_name="Inactive", active=False)
+
+    profiles = service.list_active_profiles(limit=10)
+
+    assert [profile.slug for profile in profiles] == ["alpha", "zeta"]
+
+
+def test_list_active_profiles_applies_limit():
+    session = build_session()
+    service = StreamerService(session)
+    service.create_profile(slug="alpha", display_name="Alpha")
+    service.create_profile(slug="beta", display_name="Beta")
+
+    profiles = service.list_active_profiles(limit=1)
+
+    assert [profile.slug for profile in profiles] == ["alpha"]
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
