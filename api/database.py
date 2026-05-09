@@ -77,6 +77,14 @@ def ensure_points_ledger_extension_columns(bind=engine):
         column_name="expires_at",
         column_definition="expires_at TIMESTAMP",
     )
+    _ensure_index(
+        bind,
+        inspector,
+        table_name="tachiya_points_ledger",
+        index_name="uq_tachiya_points_ledger_idempotency",
+        columns=["user_id", "entry_type", "reference_id"],
+        unique=True,
+    )
 
 
 def _ensure_column(
@@ -98,16 +106,39 @@ def _ensure_column(
     if index_name is None:
         return
 
+    _ensure_index(
+        bind,
+        inspector,
+        table_name=table_name,
+        index_name=index_name,
+        columns=[column_name],
+        unique=unique,
+    )
+
+
+def _ensure_index(
+    bind,
+    inspector,
+    *,
+    table_name: str,
+    index_name: str,
+    columns: list[str],
+    unique: bool = False,
+):
     indexes = {index["name"] for index in inspector.get_indexes(table_name)}
-    if index_name in indexes:
+    unique_constraints = {
+        constraint["name"] for constraint in inspector.get_unique_constraints(table_name)
+    }
+    if index_name in indexes or index_name in unique_constraints:
         return
 
     unique_sql = "UNIQUE " if unique else ""
+    column_sql = ", ".join(columns)
     with bind.begin() as conn:
         conn.execute(
             text(
                 f"CREATE {unique_sql}INDEX IF NOT EXISTS "
                 f"{index_name} "
-                f"ON {table_name} ({column_name})"
+                f"ON {table_name} ({column_sql})"
             )
         )

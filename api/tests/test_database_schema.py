@@ -79,6 +79,9 @@ def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
     columns = {column["name"] for column in inspect(engine).get_columns("tachiya_points_ledger")}
     assert "source_type" in columns
     assert "expires_at" in columns
+    indexes = {index["name"] for index in inspect(engine).get_indexes("tachiya_points_ledger")}
+    assert "ix_tachiya_points_ledger_source_type" in indexes
+    assert "uq_tachiya_points_ledger_idempotency" in indexes
 
     with engine.connect() as conn:
         row = conn.execute(

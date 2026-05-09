@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models.points_ledger import PointsLedger
@@ -20,12 +21,26 @@ class PointsService:
         expires_at: datetime | None = None,
     ) -> PointsLedger:
         self._validate_positive_amount(amount)
+        normalized_source_type = self._validate_source_type(source_type)
+        existing_entry = self._find_idempotent_entry(
+            user_id=user_id,
+            entry_type="credit",
+            reference_id=reference_id,
+        )
+        if existing_entry is not None:
+            return self._ensure_idempotent_entry_matches(
+                existing_entry,
+                amount=amount,
+                source_type=normalized_source_type,
+                expires_at=expires_at,
+            )
+
         return self._create_entry(
             user_id=user_id,
             amount=amount,
             entry_type="credit",
             reference_id=reference_id,
-            source_type=source_type,
+            source_type=normalized_source_type,
             expires_at=expires_at,
         )
 
@@ -39,6 +54,20 @@ class PointsService:
         expires_at: datetime | None = None,
     ) -> PointsLedger:
         self._validate_positive_amount(amount)
+        normalized_source_type = self._validate_source_type(source_type)
+        existing_entry = self._find_idempotent_entry(
+            user_id=user_id,
+            entry_type="debit",
+            reference_id=reference_id,
+        )
+        if existing_entry is not None:
+            return self._ensure_idempotent_entry_matches(
+                existing_entry,
+                amount=-amount,
+                source_type=normalized_source_type,
+                expires_at=expires_at,
+            )
+
         balance = await self.get_balance(user_id)
         if balance < amount:
             raise ValueError("insufficient balance")
@@ -48,7 +77,7 @@ class PointsService:
             amount=-amount,
             entry_type="debit",
             reference_id=reference_id,
-            source_type=source_type,
+            source_type=normalized_source_type,
             expires_at=expires_at,
         )
 
@@ -70,18 +99,66 @@ class PointsService:
         source_type: str,
         expires_at: datetime | None,
     ) -> PointsLedger:
-        normalized_source_type = self._validate_source_type(source_type)
         entry = PointsLedger(
             user_id=user_id,
             amount=amount,
             entry_type=entry_type,
             reference_id=reference_id,
-            source_type=normalized_source_type,
+            source_type=source_type,
             expires_at=expires_at,
         )
         self.db.add(entry)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            existing_entry = self._find_idempotent_entry(
+                user_id=user_id,
+                entry_type=entry_type,
+                reference_id=reference_id,
+            )
+            if existing_entry is None:
+                raise
+            return self._ensure_idempotent_entry_matches(
+                existing_entry,
+                amount=amount,
+                source_type=source_type,
+                expires_at=expires_at,
+            )
         self.db.refresh(entry)
+        return entry
+
+    def _find_idempotent_entry(
+        self,
+        *,
+        user_id: str,
+        entry_type: str,
+        reference_id: str,
+    ) -> PointsLedger | None:
+        return (
+            self.db.query(PointsLedger)
+            .filter(
+                PointsLedger.user_id == user_id,
+                PointsLedger.entry_type == entry_type,
+                PointsLedger.reference_id == reference_id,
+            )
+            .one_or_none()
+        )
+
+    @staticmethod
+    def _ensure_idempotent_entry_matches(
+        entry: PointsLedger,
+        *,
+        amount: int,
+        source_type: str,
+        expires_at: datetime | None,
+    ) -> PointsLedger:
+        if (
+            entry.amount != amount
+            or entry.source_type != source_type
+            or entry.expires_at != expires_at
+        ):
+            raise ValueError("idempotency key conflict")
         return entry
 
     @staticmethod
