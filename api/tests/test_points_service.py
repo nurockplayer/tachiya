@@ -1,0 +1,84 @@
+import asyncio
+import sys
+from pathlib import Path
+
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from database import Base
+from models.points_ledger import PointsLedger
+from services.points_service import PointsService
+
+
+def build_session():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
+
+
+def test_credit_writes_ledger_entry_and_updates_balance():
+    session = build_session()
+    service = PointsService(session)
+
+    entry = asyncio.run(
+        service.credit(user_id="user-1", amount=120, reference_id="order-1"),
+    )
+
+    assert entry.user_id == "user-1"
+    assert entry.amount == 120
+    assert entry.entry_type == "credit"
+    assert entry.reference_id == "order-1"
+    assert asyncio.run(service.get_balance("user-1")) == 120
+
+
+def test_debit_writes_negative_ledger_entry_and_updates_balance():
+    session = build_session()
+    service = PointsService(session)
+    asyncio.run(service.credit(user_id="user-1", amount=120, reference_id="order-1"))
+
+    entry = asyncio.run(
+        service.debit(user_id="user-1", amount=45, reference_id="checkout-1"),
+    )
+
+    assert entry.user_id == "user-1"
+    assert entry.amount == -45
+    assert entry.entry_type == "debit"
+    assert entry.reference_id == "checkout-1"
+    assert asyncio.run(service.get_balance("user-1")) == 75
+
+
+def test_get_balance_only_sums_requested_user():
+    session = build_session()
+    service = PointsService(session)
+    asyncio.run(service.credit(user_id="user-1", amount=120, reference_id="order-1"))
+    asyncio.run(service.credit(user_id="user-2", amount=999, reference_id="order-2"))
+    asyncio.run(service.debit(user_id="user-1", amount=20, reference_id="checkout-1"))
+
+    assert asyncio.run(service.get_balance("user-1")) == 100
+    assert asyncio.run(service.get_balance("user-2")) == 999
+
+
+@pytest.mark.parametrize("method", ["credit", "debit"])
+def test_credit_and_debit_reject_non_positive_amounts(method):
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="amount must be positive"):
+        asyncio.run(getattr(service, method)("user-1", 0, "bad-reference"))
+
+    assert session.query(PointsLedger).count() == 0
+
+
+def test_debit_rejects_insufficient_balance():
+    session = build_session()
+    service = PointsService(session)
+    asyncio.run(service.credit(user_id="user-1", amount=30, reference_id="order-1"))
+
+    with pytest.raises(ValueError, match="insufficient balance"):
+        asyncio.run(service.debit(user_id="user-1", amount=31, reference_id="checkout-1"))
+
+    assert asyncio.run(service.get_balance("user-1")) == 30
