@@ -61,6 +61,19 @@ class StreamerProductAssignmentService:
             .one_or_none()
         )
 
+    def list_product_ids_for_streamer(self, streamer_slug: str) -> list[str]:
+        normalized_slug = StreamerService._normalize_slug(streamer_slug)
+        assignments = (
+            self.db.query(StreamerProductAssignment)
+            .filter(StreamerProductAssignment.streamer_slug == normalized_slug)
+            .order_by(
+                StreamerProductAssignment.created_at.asc(),
+                StreamerProductAssignment.id.asc(),
+            )
+            .all()
+        )
+        return [assignment.saleor_product_id for assignment in assignments]
+
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
         normalized = value.strip()

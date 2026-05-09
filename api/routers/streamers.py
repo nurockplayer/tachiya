@@ -51,6 +51,17 @@ class StreamerProductAssignmentResponse(BaseModel):
     updated_at: datetime
 
 
+class StreamerCatalogProfileResponse(BaseModel):
+    slug: str
+    display_name: str
+    saleor_collection_id: str | None = None
+
+
+class StreamerCatalogResponse(BaseModel):
+    streamer: StreamerCatalogProfileResponse
+    saleor_product_ids: list[str]
+
+
 class RevenueSharePreviewLineRequest(BaseModel):
     saleor_product_id: NonBlankStr
     gross_amount: int = Field(gt=0)
@@ -231,6 +242,32 @@ def get_streamer_product_assignment(
         raise HTTPException(status_code=404, detail="streamer product assignment not found")
 
     return _streamer_product_assignment_response(assignment)
+
+
+@router.get(
+    "/{slug}/catalog",
+    response_model=StreamerCatalogResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def get_streamer_catalog(
+    slug: str = Path(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    profile = StreamerService(db).get_by_slug(slug)
+    if profile is None or not profile.active:
+        raise HTTPException(status_code=404, detail="streamer catalog not found")
+
+    saleor_product_ids = StreamerProductAssignmentService(db).list_product_ids_for_streamer(
+        profile.slug,
+    )
+    return StreamerCatalogResponse(
+        streamer=StreamerCatalogProfileResponse(
+            slug=profile.slug,
+            display_name=profile.display_name,
+            saleor_collection_id=profile.saleor_collection_id,
+        ),
+        saleor_product_ids=saleor_product_ids,
+    )
 
 
 @router.get(

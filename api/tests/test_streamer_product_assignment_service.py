@@ -93,6 +93,20 @@ def test_get_by_product_id_normalizes_lookup():
     assert assignment.saleor_product_id == "product-1"
 
 
+def test_list_product_ids_for_streamer_catalog():
+    session = build_session()
+    create_streamer(session)
+    create_streamer(session, slug="streamer-two")
+    service = StreamerProductAssignmentService(session)
+    service.assign_product(saleor_product_id="product-2", streamer_slug="streamer-one")
+    service.assign_product(saleor_product_id="product-1", streamer_slug="streamer-one")
+    service.assign_product(saleor_product_id="other-product", streamer_slug="streamer-two")
+
+    product_ids = service.list_product_ids_for_streamer(" Streamer-One ")
+
+    assert product_ids == ["product-2", "product-1"]
+
+
 def test_assign_product_rejects_missing_streamer():
     session = build_session()
 
