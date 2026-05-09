@@ -12,6 +12,19 @@ def test_health_returns_liveness_status():
     assert main.health() == {"status": "ok"}
 
 
+def test_app_uses_configured_cors_allowed_origins():
+    cors_middleware = next(
+        middleware
+        for middleware in main.app.user_middleware
+        if middleware.cls.__name__ == "CORSMiddleware"
+    )
+
+    assert cors_middleware.kwargs["allow_origins"] == (
+        "http://localhost:3000",
+        "http://localhost:3001",
+    )
+
+
 def test_ready_returns_database_status(monkeypatch):
     monkeypatch.setattr(main, "check_database_ready", lambda: True)
 

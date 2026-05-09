@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
+from config import get_settings
 from database import check_database_ready, create_tables
 from routers import coupons, identity_mappings, points, referrals, tachigo
 
@@ -16,10 +17,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Tachiya API", lifespan=lifespan)
+settings = get_settings()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
