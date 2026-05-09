@@ -20,12 +20,14 @@ class PointsService:
         source_type: str = "manual",
         expires_at: datetime | None = None,
     ) -> PointsLedger:
+        normalized_user_id = self._validate_required(user_id, "user_id is required")
+        normalized_reference_id = self._validate_required(reference_id, "reference_id is required")
         self._validate_positive_amount(amount)
         normalized_source_type = self._validate_source_type(source_type)
         existing_entry = self._find_idempotent_entry(
-            user_id=user_id,
+            user_id=normalized_user_id,
             entry_type="credit",
-            reference_id=reference_id,
+            reference_id=normalized_reference_id,
         )
         if existing_entry is not None:
             return self._ensure_idempotent_entry_matches(
@@ -36,10 +38,10 @@ class PointsService:
             )
 
         return self._create_entry(
-            user_id=user_id,
+            user_id=normalized_user_id,
             amount=amount,
             entry_type="credit",
-            reference_id=reference_id,
+            reference_id=normalized_reference_id,
             source_type=normalized_source_type,
             expires_at=expires_at,
         )
@@ -53,12 +55,14 @@ class PointsService:
         source_type: str = "manual",
         expires_at: datetime | None = None,
     ) -> PointsLedger:
+        normalized_user_id = self._validate_required(user_id, "user_id is required")
+        normalized_reference_id = self._validate_required(reference_id, "reference_id is required")
         self._validate_positive_amount(amount)
         normalized_source_type = self._validate_source_type(source_type)
         existing_entry = self._find_idempotent_entry(
-            user_id=user_id,
+            user_id=normalized_user_id,
             entry_type="debit",
-            reference_id=reference_id,
+            reference_id=normalized_reference_id,
         )
         if existing_entry is not None:
             return self._ensure_idempotent_entry_matches(
@@ -68,15 +72,15 @@ class PointsService:
                 expires_at=expires_at,
             )
 
-        balance = await self.get_balance(user_id)
+        balance = await self.get_balance(normalized_user_id)
         if balance < amount:
             raise ValueError("insufficient balance")
 
         return self._create_entry(
-            user_id=user_id,
+            user_id=normalized_user_id,
             amount=-amount,
             entry_type="debit",
-            reference_id=reference_id,
+            reference_id=normalized_reference_id,
             source_type=normalized_source_type,
             expires_at=expires_at,
         )
@@ -180,4 +184,11 @@ class PointsService:
         normalized = source_type.strip()
         if not normalized:
             raise ValueError("source_type is required")
+        return normalized
+
+    @staticmethod
+    def _validate_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
         return normalized
