@@ -17,6 +17,12 @@ def get_db():
         db.close()
 
 
+def check_database_ready(bind=engine) -> bool:
+    with bind.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return True
+
+
 def create_tables():
     import_models()
     Base.metadata.create_all(bind=engine)
