@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import httpx
 
@@ -9,6 +10,14 @@ from config import Settings
 @dataclass(frozen=True)
 class TachigoPoints:
     email: str
+    spendable_balance: int
+    cumulative_total: int
+
+
+@dataclass(frozen=True)
+class TachigoIdentityPoints:
+    provider: str
+    external_subject: str
     spendable_balance: int
     cumulative_total: int
 
@@ -46,6 +55,46 @@ async def get_user_points(
     try:
         return TachigoPoints(
             email=str(payload["email"]),
+            spendable_balance=int(payload["spendable_balance"]),
+            cumulative_total=int(payload["cumulative_total"]),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TachigoUpstreamError("tachigo upstream returned invalid points payload") from exc
+
+
+async def get_identity_points(
+    provider: str,
+    external_subject: str,
+    settings: Settings,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> TachigoIdentityPoints:
+    close_client = client is None
+    if client is None:
+        client = httpx.AsyncClient(timeout=5)
+
+    provider_path = quote(provider.strip().lower(), safe="")
+    subject_path = quote(external_subject.strip(), safe="")
+    try:
+        response = await client.get(
+            f"{settings.tachigo_api_url.rstrip('/')}/internal/identity/"
+            f"{provider_path}/{subject_path}/points",
+            headers=_internal_headers(),
+        )
+    except httpx.HTTPError as exc:
+        raise TachigoUpstreamError("tachigo upstream request failed") from exc
+    finally:
+        if close_client:
+            await client.aclose()
+
+    if response.status_code != 200:
+        raise TachigoUpstreamError(f"tachigo upstream returned {response.status_code}")
+
+    payload = response.json()
+    try:
+        return TachigoIdentityPoints(
+            provider=str(payload.get("provider", provider.strip().lower())),
+            external_subject=str(payload.get("external_subject", external_subject.strip())),
             spendable_balance=int(payload["spendable_balance"]),
             cumulative_total=int(payload["cumulative_total"]),
         )
