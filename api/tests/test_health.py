@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -23,6 +24,36 @@ def test_app_uses_configured_cors_allowed_origins():
         "http://localhost:3000",
         "http://localhost:3001",
     )
+
+
+def test_cors_preflight_allows_configured_origin():
+    client = TestClient(main.app)
+
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_cors_preflight_rejects_unconfigured_origin():
+    client = TestClient(main.app)
+
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "https://evil.example.com",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "access-control-allow-origin" not in response.headers
 
 
 def test_ready_returns_database_status(monkeypatch):
