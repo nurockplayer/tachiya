@@ -166,3 +166,49 @@ def test_metadata_includes_streamer_product_assignments_table():
     assert "ix_tachiya_streamer_product_assignments_streamer_slug" in indexes
     assert indexes["ix_tachiya_streamer_product_assignments_saleor_product_id"]["unique"] == 1
     assert foreign_keys[0]["referred_table"] == "tachiya_streamer_profiles"
+
+
+def test_metadata_includes_streamer_revenue_share_records_table():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    inspector = inspect(engine)
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("tachiya_streamer_revenue_share_records")
+    }
+    indexes = {
+        index["name"]: index
+        for index in inspector.get_indexes("tachiya_streamer_revenue_share_records")
+    }
+    unique_constraints = {
+        constraint["name"]: constraint
+        for constraint in inspector.get_unique_constraints(
+            "tachiya_streamer_revenue_share_records",
+        )
+    }
+    foreign_keys = inspector.get_foreign_keys("tachiya_streamer_revenue_share_records")
+
+    assert {
+        "id",
+        "order_id",
+        "streamer_profile_id",
+        "streamer_slug",
+        "gross_amount",
+        "commission_bps",
+        "share_amount",
+        "status",
+        "created_at",
+        "updated_at",
+    }.issubset(columns)
+    assert "ix_tachiya_streamer_revenue_share_records_order_id" in indexes
+    assert "ix_tachiya_streamer_revenue_share_records_status" in indexes
+    assert "ix_tachiya_streamer_revenue_share_records_streamer_profile_id" in indexes
+    assert "ix_tachiya_streamer_revenue_share_records_streamer_slug" in indexes
+    assert (
+        unique_constraints["uq_tachiya_streamer_revenue_share_order_streamer"]["column_names"]
+        == ["order_id", "streamer_slug"]
+    )
+    assert foreign_keys[0]["referred_table"] == "tachiya_streamer_profiles"

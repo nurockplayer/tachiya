@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
+from models.streamer import StreamerRevenueShareRecord
 from services.revenue_share_service import RevenueShareLine, RevenueShareService
 from services.streamer_product_assignment_service import StreamerProductAssignmentService
 from services.streamer_service import StreamerService
@@ -112,3 +113,63 @@ def test_preview_order_share_rejects_invalid_input(order_id, line, message):
 
     with pytest.raises(ValueError, match=message):
         RevenueShareService(session).preview_order_share(order_id=order_id, lines=[line])
+
+
+def test_record_order_share_persists_pending_records():
+    session = build_session()
+    create_streamer_with_assignment(session, commission_bps=1250)
+
+    result = RevenueShareService(session).record_order_share(
+        order_id=" saleor-order-1 ",
+        lines=[
+            RevenueShareLine(saleor_product_id=" product-1 ", gross_amount=1200),
+            RevenueShareLine(saleor_product_id="missing-product", gross_amount=300),
+        ],
+    )
+
+    assert result.order_id == "saleor-order-1"
+    assert result.unassigned_product_ids == ["missing-product"]
+    assert len(result.records) == 1
+    record = result.records[0]
+    assert record.streamer_slug == "streamer-one"
+    assert record.gross_amount == 1200
+    assert record.commission_bps == 1250
+    assert record.share_amount == 150
+    assert record.status == "pending"
+    assert session.query(StreamerRevenueShareRecord).count() == 1
+
+
+def test_record_order_share_is_idempotent_for_same_result():
+    session = build_session()
+    create_streamer_with_assignment(session, commission_bps=1000)
+    service = RevenueShareService(session)
+
+    first_result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+    second_result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+
+    assert second_result.records[0].id == first_result.records[0].id
+    assert session.query(StreamerRevenueShareRecord).count() == 1
+
+
+def test_record_order_share_rejects_conflicting_replay():
+    session = build_session()
+    create_streamer_with_assignment(session, commission_bps=1000)
+    service = RevenueShareService(session)
+    service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+
+    with pytest.raises(ValueError, match="revenue share record conflict"):
+        service.record_order_share(
+            order_id="order-1",
+            lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1300)],
+        )
+
+    assert session.query(StreamerRevenueShareRecord).count() == 1
