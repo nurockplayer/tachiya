@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -10,12 +11,14 @@ from services.identity_mapping_service import IdentityMappingService
 
 router = APIRouter(prefix="/identity-mappings", tags=["identity-mappings"])
 
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
 
 class IdentityMappingCreateRequest(BaseModel):
-    saleor_customer_id: str
-    provider: str
-    external_subject: str
-    actor: str = "system"
+    saleor_customer_id: NonBlankStr
+    provider: NonBlankStr
+    external_subject: NonBlankStr
+    actor: NonBlankStr = "system"
     reason: str | None = None
 
 
