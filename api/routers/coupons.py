@@ -18,6 +18,7 @@ VALID_COUPON_IDS = list(COUPON_CONFIG.keys())
 class RedeemRequest(BaseModel):
     coupon_id: str
     tcg_cost: int
+    idempotency_key: str | None = None
 
 
 class RedeemResponse(BaseModel):
@@ -47,6 +48,15 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
     if req.coupon_id not in VALID_COUPON_IDS:
         raise HTTPException(status_code=400, detail=f"unknown coupon_id: {req.coupon_id}")
 
+    if req.idempotency_key:
+        existing = (
+            db.query(UserCoupon)
+            .filter(UserCoupon.idempotency_key == req.idempotency_key)
+            .first()
+        )
+        if existing:
+            return RedeemResponse(voucher_code=existing.voucher_code)
+
     code = f"DEMO-{uuid.uuid4().hex[:6].upper()}"
     try:
         result = create_voucher(req.coupon_id, code)
@@ -58,6 +68,7 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
         coupon_id=req.coupon_id,
         voucher_code=result["code"],
         saleor_voucher_id=result["voucher_id"],
+        idempotency_key=req.idempotency_key,
         coupon_type=coupon_type,
         tcg_cost=req.tcg_cost,
     )
