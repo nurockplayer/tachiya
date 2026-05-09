@@ -1,13 +1,12 @@
-import hmac
-import os
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.coupon import UserCoupon
+from security import verify_internal_secret
 from services.saleor_voucher import COUPON_CONFIG, create_voucher
 
 router = APIRouter(prefix="/coupons", tags=["coupons"])
@@ -25,19 +24,6 @@ class RedeemResponse(BaseModel):
     voucher_code: str
     redemption_token: str
     status: str = "ok"
-
-
-def verify_internal_secret(
-    x_tachiya_internal_secret: str | None = Header(default=None),
-):
-    expected = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
-    if not expected:
-        return
-    if not x_tachiya_internal_secret or not hmac.compare_digest(
-        x_tachiya_internal_secret,
-        expected,
-    ):
-        raise HTTPException(status_code=401, detail="invalid internal secret")
 
 
 @router.post(
