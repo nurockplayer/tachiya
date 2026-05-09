@@ -48,6 +48,8 @@ def test_create_and_resolve_identity_mapping(monkeypatch):
             "saleor_customer_id": "saleor-user-1",
             "provider": "tachigo",
             "external_subject": "tachigo-user-1",
+            "actor": "ops-user-1",
+            "reason": "initial link",
         },
     )
     resolve_response = client.get(
@@ -63,6 +65,35 @@ def test_create_and_resolve_identity_mapping(monkeypatch):
         "saleor_customer_id": "saleor-user-1",
         "provider": "tachigo",
         "external_subject": "tachigo-user-1",
+    }
+
+
+def test_list_identity_audit_events(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+            "actor": "ops-user-1",
+            "reason": "initial link",
+        },
+    )
+
+    response = client.get("/identity-mappings/audit-events", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["events"][0] == {
+        "action": "identity.linked",
+        "actor": "ops-user-1",
+        "source": "tachigo:tachigo-user-1",
+        "target": "saleor:saleor-user-1",
+        "reason": "initial link",
     }
 
 
@@ -96,7 +127,11 @@ def test_unlink_identity_mapping(monkeypatch):
         },
     )
 
-    response = client.delete(f"/identity-mappings/{create_response.json()['id']}", headers=headers)
+    response = client.delete(
+        f"/identity-mappings/{create_response.json()['id']}",
+        headers=headers,
+        params={"actor": "ops-user-1", "reason": "user requested unlink"},
+    )
 
     assert response.status_code == 200
     assert response.json()["unlinked"] is True

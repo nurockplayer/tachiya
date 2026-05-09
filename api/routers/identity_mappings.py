@@ -15,6 +15,8 @@ class IdentityMappingCreateRequest(BaseModel):
     saleor_customer_id: str
     provider: str
     external_subject: str
+    actor: str = "system"
+    reason: str | None = None
 
 
 class IdentityMappingResponse(BaseModel):
@@ -38,6 +40,18 @@ class IdentityMappingUnlinkResponse(BaseModel):
     unlinked_at: datetime
 
 
+class IdentityAuditEventResponse(BaseModel):
+    action: str
+    actor: str
+    source: str
+    target: str
+    reason: str | None = None
+
+
+class IdentityAuditEventsResponse(BaseModel):
+    events: list[IdentityAuditEventResponse]
+
+
 @router.post(
     "",
     response_model=IdentityMappingResponse,
@@ -52,6 +66,8 @@ def create_identity_mapping(
             saleor_customer_id=req.saleor_customer_id,
             provider=req.provider,
             external_subject=req.external_subject,
+            actor=req.actor,
+            reason=req.reason,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -88,6 +104,30 @@ def resolve_identity_mapping(
     )
 
 
+@router.get(
+    "/audit-events",
+    response_model=IdentityAuditEventsResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_identity_audit_events(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    events = IdentityMappingService(db).list_audit_events(limit)
+    return IdentityAuditEventsResponse(
+        events=[
+            IdentityAuditEventResponse(
+                action=event.action,
+                actor=event.actor,
+                source=event.source,
+                target=event.target,
+                reason=event.reason,
+            )
+            for event in events
+        ],
+    )
+
+
 @router.delete(
     "/{mapping_id}",
     response_model=IdentityMappingUnlinkResponse,
@@ -95,10 +135,16 @@ def resolve_identity_mapping(
 )
 def unlink_identity_mapping(
     mapping_id: str,
+    actor: str = Query("system", min_length=1),
+    reason: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     try:
-        mapping = IdentityMappingService(db).unlink_identity(mapping_id)
+        mapping = IdentityMappingService(db).unlink_identity(
+            mapping_id,
+            actor=actor,
+            reason=reason,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
