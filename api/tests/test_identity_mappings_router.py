@@ -10,6 +10,8 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
+from models.identity_audit_event import IdentityAuditEvent
+from models.identity_mapping import IdentityMapping
 from routers import identity_mappings
 
 
@@ -66,6 +68,39 @@ def test_create_and_resolve_identity_mapping(monkeypatch):
         "provider": "tachigo",
         "external_subject": "tachigo-user-1",
     }
+
+
+def test_create_identity_mapping_rejects_blank_fields_before_writing(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    valid_payload = {
+        "saleor_customer_id": "saleor-user-1",
+        "provider": "tachigo",
+        "external_subject": "tachigo-user-1",
+        "actor": "ops-user-1",
+        "reason": "initial link",
+    }
+    invalid_fields = {
+        "saleor_customer_id": " ",
+        "provider": " ",
+        "external_subject": " ",
+        "actor": " ",
+    }
+
+    for field, value in invalid_fields.items():
+        session = build_session()
+        client = build_client(session)
+        payload = valid_payload | {field: value}
+
+        response = client.post(
+            "/identity-mappings",
+            headers=headers,
+            json=payload,
+        )
+
+        assert response.status_code == 422
+        assert session.query(IdentityMapping).count() == 0
+        assert session.query(IdentityAuditEvent).count() == 0
 
 
 def test_list_identity_audit_events(monkeypatch):
