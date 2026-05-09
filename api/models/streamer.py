@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 
 from database import Base
 
@@ -19,5 +19,22 @@ class StreamerProfile(Base):
     saleor_collection_id = Column(String, nullable=True, unique=True, index=True)
     commission_bps = Column(Integer, nullable=False, default=1000)
     active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class StreamerProductAssignment(Base):
+    __tablename__ = "tachiya_streamer_product_assignments"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    saleor_product_id = Column(String, nullable=False, unique=True, index=True)
+    streamer_profile_id = Column(
+        String,
+        ForeignKey("tachiya_streamer_profiles.id"),
+        nullable=False,
+        index=True,
+    )
+    streamer_slug = Column(String, nullable=False, index=True)
+    source = Column(String, nullable=False, default="manual")
     created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)

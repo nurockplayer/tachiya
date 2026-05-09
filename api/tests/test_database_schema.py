@@ -133,3 +133,36 @@ def test_metadata_includes_streamer_profiles_table():
     assert "ix_tachiya_streamer_profiles_saleor_collection_id" in indexes
     assert indexes["ix_tachiya_streamer_profiles_slug"]["unique"] == 1
     assert indexes["ix_tachiya_streamer_profiles_saleor_collection_id"]["unique"] == 1
+
+
+def test_metadata_includes_streamer_product_assignments_table():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    inspector = inspect(engine)
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("tachiya_streamer_product_assignments")
+    }
+    indexes = {
+        index["name"]: index
+        for index in inspector.get_indexes("tachiya_streamer_product_assignments")
+    }
+    foreign_keys = inspector.get_foreign_keys("tachiya_streamer_product_assignments")
+
+    assert {
+        "id",
+        "saleor_product_id",
+        "streamer_profile_id",
+        "streamer_slug",
+        "source",
+        "created_at",
+        "updated_at",
+    }.issubset(columns)
+    assert "ix_tachiya_streamer_product_assignments_saleor_product_id" in indexes
+    assert "ix_tachiya_streamer_product_assignments_streamer_profile_id" in indexes
+    assert "ix_tachiya_streamer_product_assignments_streamer_slug" in indexes
+    assert indexes["ix_tachiya_streamer_product_assignments_saleor_product_id"]["unique"] == 1
+    assert foreign_keys[0]["referred_table"] == "tachiya_streamer_profiles"
