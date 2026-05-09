@@ -89,6 +89,15 @@ class PointsService:
         )
         return int(balance or 0)
 
+    async def list_entries(self, user_id: str, limit: int = 20) -> list[PointsLedger]:
+        return (
+            self.db.query(PointsLedger)
+            .filter(PointsLedger.user_id == user_id)
+            .order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
+            .limit(limit)
+            .all()
+        )
+
     def _create_entry(
         self,
         *,
