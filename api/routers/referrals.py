@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.webhook_event import WebhookEvent
 from security import VerifiedWebhookRequest, verify_internal_secret, verify_webhook_signature
 from services.referral_service import ReferralService
+from services.webhook_event_service import WebhookEventReplayError, WebhookEventService
 
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
@@ -60,16 +59,10 @@ def _reject_replayed_webhook_event(
     db: Session,
     webhook: VerifiedWebhookRequest | None,
 ) -> None:
-    if webhook is None:
-        return
-
-    existing_event = (
-        db.query(WebhookEvent)
-        .filter(WebhookEvent.event_id == webhook.event_id)
-        .first()
-    )
-    if existing_event is not None:
-        raise HTTPException(status_code=409, detail="webhook event already processed")
+    try:
+        WebhookEventService(db).reject_replayed_event(webhook)
+    except WebhookEventReplayError as exc:
+        raise HTTPException(status_code=409, detail="webhook event already processed") from exc
 
 
 def _record_webhook_event(
@@ -78,19 +71,9 @@ def _record_webhook_event(
     *,
     event_type: str,
 ) -> None:
-    if webhook is None:
-        return
-
-    event = WebhookEvent(
-        event_id=webhook.event_id,
-        event_type=event_type,
-        occurred_at=webhook.occurred_at,
-    )
-    db.add(event)
     try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
+        WebhookEventService(db).record_event(webhook, event_type=event_type)
+    except WebhookEventReplayError as exc:
         raise HTTPException(
             status_code=409,
             detail="webhook event already processed",
