@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import create_tables
-from routers import coupons, points, referrals, tachigo
+from routers import coupons, identity_mappings, points, referrals, tachigo
 
 
 @asynccontextmanager
@@ -23,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(coupons.router)
+app.include_router(identity_mappings.router)
 app.include_router(points.router)
 app.include_router(referrals.router)
 app.include_router(tachigo.router)

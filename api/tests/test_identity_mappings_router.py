@@ -1,0 +1,120 @@
+import sys
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from database import Base
+from routers import identity_mappings
+
+
+def build_session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
+
+
+def build_client(session) -> TestClient:
+    app = FastAPI()
+    app.include_router(identity_mappings.router)
+
+    def override_db():
+        yield session
+
+    app.dependency_overrides[identity_mappings.get_db] = override_db
+    return TestClient(app)
+
+
+def test_create_and_resolve_identity_mapping(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+
+    create_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+        },
+    )
+    resolve_response = client.get(
+        "/identity-mappings/resolve",
+        headers=headers,
+        params={"provider": "tachigo", "external_subject": "tachigo-user-1"},
+    )
+
+    assert create_response.status_code == 200
+    assert create_response.json()["saleor_customer_id"] == "saleor-user-1"
+    assert resolve_response.status_code == 200
+    assert resolve_response.json() == {
+        "saleor_customer_id": "saleor-user-1",
+        "provider": "tachigo",
+        "external_subject": "tachigo-user-1",
+    }
+
+
+def test_resolve_identity_mapping_returns_404_for_missing_mapping(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings/resolve",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"provider": "tachigo", "external_subject": "unknown"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "identity mapping not found"
+
+
+def test_unlink_identity_mapping(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    create_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+        },
+    )
+
+    response = client.delete(f"/identity-mappings/{create_response.json()['id']}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["unlinked"] is True
+
+
+def test_identity_mapping_rejects_missing_internal_secret(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/identity-mappings",
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid internal secret"
