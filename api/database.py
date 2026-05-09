@@ -18,8 +18,13 @@ def get_db():
 
 
 def create_tables():
+    import_models()
     Base.metadata.create_all(bind=engine)
     ensure_coupon_extension_columns(engine)
+
+
+def import_models():
+    from models import coupon, points_ledger  # noqa: F401
 
 
 def ensure_coupon_extension_columns(bind=engine):
