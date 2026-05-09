@@ -155,6 +155,52 @@ def test_get_balance_only_sums_requested_user():
     assert asyncio.run(service.get_balance("user-2")) == 999
 
 
+def test_list_entries_returns_requested_user_newest_first():
+    session = build_session()
+    service = PointsService(session)
+    session.add_all(
+        [
+            PointsLedger(
+                id="old-entry",
+                user_id="user-1",
+                amount=120,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:redemption-1",
+                created_at=datetime(2026, 1, 1, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="other-user-entry",
+                user_id="user-2",
+                amount=999,
+                entry_type="credit",
+                source_type="manual",
+                reference_id="order-2",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="new-entry",
+                user_id="user-1",
+                amount=-20,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout-1",
+                expires_at=datetime(2026, 12, 31, 23, 59, 59),
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+        ],
+    )
+    session.commit()
+
+    entries = asyncio.run(service.list_entries("user-1", limit=10))
+
+    assert [entry.id for entry in entries] == ["new-entry", "old-entry"]
+    assert entries[0].amount == -20
+    assert entries[0].source_type == "checkout"
+    assert entries[0].reference_id == "checkout-1"
+    assert entries[0].expires_at == datetime(2026, 12, 31, 23, 59, 59)
+
+
 @pytest.mark.parametrize("method", ["credit", "debit"])
 def test_credit_and_debit_reject_non_positive_amounts(method):
     session = build_session()
