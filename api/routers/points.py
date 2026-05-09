@@ -3,10 +3,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
-from security import verify_internal_secret
+from models.webhook_event import WebhookEvent
+from security import VerifiedWebhookRequest, verify_internal_secret, verify_webhook_signature
 from services.points_service import PointsService
 
 router = APIRouter(prefix="/points", tags=["points"])
@@ -44,6 +46,18 @@ class PointsTransactionRequest(BaseModel):
 class PointsTransactionResponse(BaseModel):
     entry: PointsLedgerEntryResponse
     balance: int
+
+
+class OrderRewardRequest(BaseModel):
+    order_id: str
+    user_id: str
+    reward_points: int
+
+
+class OrderRewardResponse(BaseModel):
+    rewarded: bool
+    reward_points: int | None = None
+    ledger_entry_id: str | None = None
 
 
 @router.get(
@@ -96,6 +110,36 @@ async def create_points_transaction(
     )
 
 
+@router.post(
+    "/webhooks/order-rewarded",
+    response_model=OrderRewardResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+async def order_rewarded_webhook(
+    req: OrderRewardRequest,
+    webhook: VerifiedWebhookRequest | None = Depends(verify_webhook_signature),
+    db: Session = Depends(get_db),
+):
+    _reject_replayed_webhook_event(db, webhook)
+    service = PointsService(db)
+    try:
+        entry = await service.credit(
+            user_id=req.user_id,
+            amount=req.reward_points,
+            reference_id=f"order-reward:{req.order_id}",
+            source_type="order-reward",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    _record_webhook_event(db, webhook, event_type="points.order_rewarded")
+    return OrderRewardResponse(
+        rewarded=True,
+        reward_points=req.reward_points,
+        ledger_entry_id=entry.id,
+    )
+
+
 @router.get(
     "/ledger",
     response_model=PointsLedgerResponse,
@@ -123,3 +167,44 @@ def _ledger_entry_response(entry) -> PointsLedgerEntryResponse:
         expires_at=entry.expires_at,
         created_at=entry.created_at,
     )
+
+
+def _reject_replayed_webhook_event(
+    db: Session,
+    webhook: VerifiedWebhookRequest | None,
+) -> None:
+    if webhook is None:
+        return
+
+    existing_event = (
+        db.query(WebhookEvent)
+        .filter(WebhookEvent.event_id == webhook.event_id)
+        .first()
+    )
+    if existing_event is not None:
+        raise HTTPException(status_code=409, detail="webhook event already processed")
+
+
+def _record_webhook_event(
+    db: Session,
+    webhook: VerifiedWebhookRequest | None,
+    *,
+    event_type: str,
+) -> None:
+    if webhook is None:
+        return
+
+    event = WebhookEvent(
+        event_id=webhook.event_id,
+        event_type=event_type,
+        occurred_at=webhook.occurred_at,
+    )
+    db.add(event)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="webhook event already processed",
+        ) from exc
