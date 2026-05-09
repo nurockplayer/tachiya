@@ -62,6 +62,16 @@ def test_ready_returns_database_status(monkeypatch):
     assert main.ready() == {"status": "ok", "checks": {"database": "ok"}}
 
 
+def test_ready_endpoint_returns_database_status(monkeypatch):
+    monkeypatch.setattr(main, "check_database_ready", lambda: True)
+    client = TestClient(main.app)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "checks": {"database": "ok"}}
+
+
 def test_ready_returns_503_when_database_check_fails(monkeypatch):
     def fail_database_check():
         raise SQLAlchemyError("database unavailable")
@@ -72,3 +82,16 @@ def test_ready_returns_503_when_database_check_fails(monkeypatch):
 
     assert response.status_code == 503
     assert response.body == b'{"status":"unavailable","checks":{"database":"error"}}'
+
+
+def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):
+    def fail_database_check():
+        raise SQLAlchemyError("database unavailable")
+
+    monkeypatch.setattr(main, "check_database_ready", fail_database_check)
+    client = TestClient(main.app)
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "unavailable", "checks": {"database": "error"}}
