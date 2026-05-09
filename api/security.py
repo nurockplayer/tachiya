@@ -45,7 +45,7 @@ async def verify_webhook_signature(
     except ValueError as exc:
         raise HTTPException(status_code=401, detail="invalid webhook signature") from exc
 
-    tolerance_seconds = int(os.getenv("TACHIYA_WEBHOOK_TOLERANCE_SECONDS", "300"))
+    tolerance_seconds = _get_webhook_tolerance_seconds()
     if abs(int(time.time()) - timestamp) > tolerance_seconds:
         raise HTTPException(status_code=401, detail="stale webhook timestamp")
 
@@ -73,3 +73,22 @@ def _get_required_internal_secret() -> str:
             detail="internal shared secret is not configured",
         )
     return secret
+
+
+def _get_webhook_tolerance_seconds() -> int:
+    raw_tolerance = os.getenv("TACHIYA_WEBHOOK_TOLERANCE_SECONDS", "300")
+    try:
+        tolerance_seconds = int(raw_tolerance)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="webhook tolerance is not configured correctly",
+        ) from exc
+
+    if tolerance_seconds <= 0:
+        raise HTTPException(
+            status_code=500,
+            detail="webhook tolerance is not configured correctly",
+        )
+
+    return tolerance_seconds
