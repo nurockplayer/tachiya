@@ -1,4 +1,4 @@
-.PHONY: setup build up down migrate superuser logs shell frontend claude
+.PHONY: setup build up down migrate api-migrate superuser logs shell frontend claude
 
 # 第一次從零跑起整個專案
 setup: .env build
@@ -34,6 +34,9 @@ down:
 
 migrate:
 	docker compose run --rm saleor python manage.py migrate
+
+api-migrate:
+	docker compose run --rm api uv run --no-dev alembic upgrade head
 
 superuser:
 	docker compose run --rm saleor python manage.py createsuperuser --noinput

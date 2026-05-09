@@ -55,9 +55,17 @@ make frontend     # 另開終端機跑 storefront（本機 pnpm dev）
 make up           # 啟動所有服務
 make down         # 停止所有服務
 make migrate      # 跑 Saleor migration
+make api-migrate  # 跑 Tachiya API Alembic migration
 make superuser    # 建立 Saleor 管理員帳號
 make logs         # 看所有 log
 make shell        # 進 Saleor Django shell
+```
+
+Tachiya API migration 可在本機直接執行：
+
+```bash
+cd api
+uv run alembic upgrade head
 ```
 
 ## 目錄結構
