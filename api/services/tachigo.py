@@ -32,6 +32,7 @@ async def get_user_points(
     *,
     client: httpx.AsyncClient | None = None,
 ) -> TachigoPoints:
+    internal_headers = _internal_headers()
     close_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=5)
@@ -40,7 +41,7 @@ async def get_user_points(
         response = await client.get(
             f"{settings.tachigo_api_url.rstrip('/')}/internal/users/points",
             params={"email": email},
-            headers=_internal_headers(),
+            headers=internal_headers,
         )
     except httpx.HTTPError as exc:
         raise TachigoUpstreamError("tachigo upstream request failed") from exc
@@ -69,6 +70,7 @@ async def get_identity_points(
     *,
     client: httpx.AsyncClient | None = None,
 ) -> TachigoIdentityPoints:
+    internal_headers = _internal_headers()
     close_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=5)
@@ -79,7 +81,7 @@ async def get_identity_points(
         response = await client.get(
             f"{settings.tachigo_api_url.rstrip('/')}/internal/identity/"
             f"{provider_path}/{subject_path}/points",
-            headers=_internal_headers(),
+            headers=internal_headers,
         )
     except httpx.HTTPError as exc:
         raise TachigoUpstreamError("tachigo upstream request failed") from exc
@@ -105,5 +107,5 @@ async def get_identity_points(
 def _internal_headers() -> dict[str, str]:
     secret = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
     if not secret:
-        return {}
+        raise TachigoUpstreamError("tachigo internal secret is not configured")
     return {"X-Tachiya-Internal-Secret": secret}
