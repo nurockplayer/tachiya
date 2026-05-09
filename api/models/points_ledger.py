@@ -17,5 +17,7 @@ class PointsLedger(Base):
     user_id = Column(String, nullable=False, index=True)
     amount = Column(Integer, nullable=False)
     entry_type = Column(String, nullable=False)
+    source_type = Column(String, nullable=False, default="manual", server_default="manual", index=True)
     reference_id = Column(String, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)

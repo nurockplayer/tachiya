@@ -59,6 +59,9 @@ def test_process_referral_reward_credits_referrer_on_first_purchase():
     assert reward.order_total_amount == 1200
     assert reward.reward_points == 60
     assert reward.ledger_entry_id
+    ledger_entry = session.get(PointsLedger, reward.ledger_entry_id)
+    assert ledger_entry.source_type == "referral"
+    assert ledger_entry.expires_at is None
     assert asyncio.run(PointsService(session).get_balance("referrer-1")) == 60
 
 
