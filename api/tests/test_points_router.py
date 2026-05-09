@@ -1,5 +1,9 @@
 import asyncio
+import hashlib
+import hmac
+import json
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
 from models.points_ledger import PointsLedger
+from models.webhook_event import WebhookEvent
 from routers import points
 from services.points_service import PointsService
 
@@ -230,6 +235,120 @@ def test_points_transaction_rejects_invalid_entry_type(monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+def signed_order_reward_request(
+    client: TestClient,
+    *,
+    payload: dict,
+    event_id: str = "evt-order-reward-1",
+    timestamp: int | None = None,
+    secret: str = "shared-secret",
+):
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    timestamp = timestamp or int(time.time())
+    signed_payload = f"{timestamp}.".encode() + body
+    signature = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+    return client.post(
+        "/points/webhooks/order-rewarded",
+        headers={
+            "Content-Type": "application/json",
+            "X-Tachiya-Internal-Secret": secret,
+            "X-Tachiya-Webhook-Event-Id": event_id,
+            "X-Tachiya-Webhook-Timestamp": str(timestamp),
+            "X-Tachiya-Webhook-Signature": signature,
+        },
+        content=body,
+    )
+
+
+def test_order_reward_webhook_credits_customer_points(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_reward_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "user_id": "saleor-user-1",
+            "reward_points": 120,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["rewarded"] is True
+    assert response.json()["reward_points"] == 120
+    assert response.json()["ledger_entry_id"]
+    event = session.query(WebhookEvent).one()
+    assert event.event_id == "evt-order-reward-1"
+    assert event.event_type == "points.order_rewarded"
+    ledger_entry = session.query(PointsLedger).one()
+    assert ledger_entry.user_id == "saleor-user-1"
+    assert ledger_entry.amount == 120
+    assert ledger_entry.source_type == "order-reward"
+    assert ledger_entry.reference_id == "order-reward:order-1"
+
+
+def test_order_reward_webhook_rejects_missing_signature_headers(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/webhooks/order-rewarded",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "order_id": "order-1",
+            "user_id": "saleor-user-1",
+            "reward_points": 120,
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid webhook signature"
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
+def test_order_reward_webhook_rejects_replayed_event(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    payload = {
+        "order_id": "order-1",
+        "user_id": "saleor-user-1",
+        "reward_points": 120,
+    }
+
+    first_response = signed_order_reward_request(client, payload=payload)
+    second_response = signed_order_reward_request(client, payload=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert second_response.json()["detail"] == "webhook event already processed"
+    assert session.query(WebhookEvent).count() == 1
+    assert session.query(PointsLedger).count() == 1
+
+
+def test_order_reward_webhook_rejects_non_positive_reward_points(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_reward_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "user_id": "saleor-user-1",
+            "reward_points": 0,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "amount must be positive"
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(PointsLedger).count() == 0
 
 
 def test_points_ledger_requires_internal_secret(monkeypatch):
