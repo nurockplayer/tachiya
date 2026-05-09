@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -34,11 +34,11 @@ class PointsLedgerResponse(BaseModel):
 
 
 class PointsTransactionRequest(BaseModel):
-    user_id: str
+    user_id: str = Field(min_length=1)
     entry_type: Literal["credit", "debit"]
-    amount: int
-    reference_id: str
-    source_type: str = "manual"
+    amount: int = Field(gt=0)
+    reference_id: str = Field(min_length=1)
+    source_type: str = Field(default="manual", min_length=1)
     expires_at: datetime | None = None
 
 
@@ -48,9 +48,9 @@ class PointsTransactionResponse(BaseModel):
 
 
 class OrderRewardRequest(BaseModel):
-    order_id: str
-    user_id: str
-    reward_points: int
+    order_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1)
+    reward_points: int = Field(gt=0)
 
 
 class OrderRewardResponse(BaseModel):
