@@ -266,6 +266,51 @@ Request：
 
 找不到時回傳 `404 streamer product assignment not found`。
 
+### `POST /streamers/revenue-shares/preview`
+
+用途：依訂單行項、product assignment 與 streamer `commission_bps` 預覽分潤結果。此 endpoint 不寫入結算表。
+
+Request：
+
+```json
+{
+  "order_id": "saleor-order-1",
+  "lines": [
+    {
+      "saleor_product_id": "product-1",
+      "gross_amount": 1200
+    }
+  ]
+}
+```
+
+規則：
+
+- `order_id` 會 trim，且不可為空。
+- `lines` 至少 1 筆。
+- `saleor_product_id` 會 trim，且不可為空。
+- `gross_amount` 必須大於 0，單位由 caller 保持一致，建議用最小貨幣單位。
+- 分潤金額使用 `floor(gross_amount * commission_bps / 10000)`。
+- 同 streamer 多行會彙總 `gross_amount` 與 `share_amount`。
+- 找不到 assignment 或 streamer inactive 時，商品 id 會進入 `unassigned_product_ids`。
+
+Response：
+
+```json
+{
+  "order_id": "saleor-order-1",
+  "shares": [
+    {
+      "streamer_slug": "streamer-one",
+      "gross_amount": 1200,
+      "commission_bps": 1000,
+      "share_amount": 120
+    }
+  ],
+  "unassigned_product_ids": []
+}
+```
+
 ## Identity Mappings
 
 Identity mapping 將外部身份連到 Tachiya canonical user id，也就是 Saleor customer id。

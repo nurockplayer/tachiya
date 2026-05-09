@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from security import verify_internal_secret
+from services.revenue_share_service import RevenueShareLine, RevenueShareService
 from services.streamer_product_assignment_service import StreamerProductAssignmentService
 from services.streamer_service import StreamerService
 
@@ -48,6 +49,29 @@ class StreamerProductAssignmentResponse(BaseModel):
     source: str
     created_at: datetime
     updated_at: datetime
+
+
+class RevenueSharePreviewLineRequest(BaseModel):
+    saleor_product_id: NonBlankStr
+    gross_amount: int = Field(gt=0)
+
+
+class RevenueSharePreviewRequest(BaseModel):
+    order_id: NonBlankStr
+    lines: list[RevenueSharePreviewLineRequest] = Field(min_length=1)
+
+
+class StreamerRevenueShareResponse(BaseModel):
+    streamer_slug: str
+    gross_amount: int
+    commission_bps: int
+    share_amount: int
+
+
+class RevenueSharePreviewResponse(BaseModel):
+    order_id: str
+    shares: list[StreamerRevenueShareResponse]
+    unassigned_product_ids: list[str]
 
 
 @router.post(
@@ -94,6 +118,44 @@ def assign_streamer_product(
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
     return _streamer_product_assignment_response(assignment)
+
+
+@router.post(
+    "/revenue-shares/preview",
+    response_model=RevenueSharePreviewResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def preview_streamer_revenue_shares(
+    req: RevenueSharePreviewRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        preview = RevenueShareService(db).preview_order_share(
+            order_id=req.order_id,
+            lines=[
+                RevenueShareLine(
+                    saleor_product_id=line.saleor_product_id,
+                    gross_amount=line.gross_amount,
+                )
+                for line in req.lines
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return RevenueSharePreviewResponse(
+        order_id=preview.order_id,
+        shares=[
+            StreamerRevenueShareResponse(
+                streamer_slug=share.streamer_slug,
+                gross_amount=share.gross_amount,
+                commission_bps=share.commission_bps,
+                share_amount=share.share_amount,
+            )
+            for share in preview.shares
+        ],
+        unassigned_product_ids=preview.unassigned_product_ids,
+    )
 
 
 @router.get(
