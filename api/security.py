@@ -17,9 +17,7 @@ class VerifiedWebhookRequest:
 def verify_internal_secret(
     x_tachiya_internal_secret: str | None = Header(default=None),
 ):
-    expected = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
-    if not expected:
-        return
+    expected = _get_required_internal_secret()
     if not x_tachiya_internal_secret or not hmac.compare_digest(
         x_tachiya_internal_secret,
         expected,
@@ -33,9 +31,7 @@ async def verify_webhook_signature(
     x_tachiya_webhook_timestamp: str | None = Header(default=None),
     x_tachiya_webhook_signature: str | None = Header(default=None),
 ) -> VerifiedWebhookRequest | None:
-    secret = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
-    if not secret:
-        return None
+    secret = _get_required_internal_secret()
 
     if (
         not x_tachiya_webhook_event_id
@@ -67,3 +63,13 @@ async def verify_webhook_signature(
         event_id=x_tachiya_webhook_event_id,
         occurred_at=datetime.fromtimestamp(timestamp, UTC).replace(tzinfo=None),
     )
+
+
+def _get_required_internal_secret() -> str:
+    secret = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
+    if not secret:
+        raise HTTPException(
+            status_code=500,
+            detail="internal shared secret is not configured",
+        )
+    return secret
