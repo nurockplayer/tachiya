@@ -17,9 +17,10 @@ class WebhookEventService:
         if webhook is None:
             return
 
+        event_id = self._validate_required(webhook.event_id, "webhook event_id is required")
         existing_event = (
             self.db.query(WebhookEvent)
-            .filter(WebhookEvent.event_id == webhook.event_id)
+            .filter(WebhookEvent.event_id == event_id)
             .first()
         )
         if existing_event is not None:
@@ -34,9 +35,14 @@ class WebhookEventService:
         if webhook is None:
             return
 
+        event_id = self._validate_required(webhook.event_id, "webhook event_id is required")
+        normalized_event_type = self._validate_required(
+            event_type,
+            "webhook event_type is required",
+        )
         event = WebhookEvent(
-            event_id=webhook.event_id,
-            event_type=event_type,
+            event_id=event_id,
+            event_type=normalized_event_type,
             occurred_at=webhook.occurred_at,
         )
         self.db.add(event)
@@ -45,3 +51,10 @@ class WebhookEventService:
         except IntegrityError as exc:
             self.db.rollback()
             raise WebhookEventReplayError("webhook event already processed") from exc
+
+    @staticmethod
+    def _validate_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
