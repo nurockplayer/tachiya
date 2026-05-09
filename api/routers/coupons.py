@@ -1,6 +1,8 @@
+import hmac
+import os
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -23,7 +25,24 @@ class RedeemResponse(BaseModel):
     status: str = "ok"
 
 
-@router.post("/redeem", response_model=RedeemResponse)
+def verify_internal_secret(
+    x_tachiya_internal_secret: str | None = Header(default=None),
+):
+    expected = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
+    if not expected:
+        return
+    if not x_tachiya_internal_secret or not hmac.compare_digest(
+        x_tachiya_internal_secret,
+        expected,
+    ):
+        raise HTTPException(status_code=401, detail="invalid internal secret")
+
+
+@router.post(
+    "/redeem",
+    response_model=RedeemResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
 def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
     if req.coupon_id not in VALID_COUPON_IDS:
         raise HTTPException(status_code=400, detail=f"unknown coupon_id: {req.coupon_id}")
