@@ -19,30 +19,48 @@ def get_db():
 
 def create_tables():
     Base.metadata.create_all(bind=engine)
-    ensure_coupon_idempotency_key_column(engine)
+    ensure_coupon_extension_columns(engine)
 
 
-def ensure_coupon_idempotency_key_column(bind=engine):
+def ensure_coupon_extension_columns(bind=engine):
     inspector = inspect(bind)
     if "tachiya_demo_coupons" not in inspector.get_table_names():
         return
 
+    _ensure_column(
+        bind,
+        inspector,
+        column_name="idempotency_key",
+        index_name="ix_tachiya_demo_coupons_idempotency_key",
+    )
+    _ensure_column(
+        bind,
+        inspector,
+        column_name="redemption_token",
+        index_name="ix_tachiya_demo_coupons_redemption_token",
+    )
+
+
+def ensure_coupon_idempotency_key_column(bind=engine):
+    ensure_coupon_extension_columns(bind)
+
+
+def _ensure_column(bind, inspector, *, column_name: str, index_name: str):
     columns = {column["name"] for column in inspector.get_columns("tachiya_demo_coupons")}
-    if "idempotency_key" not in columns:
+    if column_name not in columns:
         with bind.begin() as conn:
-            conn.execute(
-                text("ALTER TABLE tachiya_demo_coupons ADD COLUMN idempotency_key VARCHAR")
-            )
+            conn.execute(text(f"ALTER TABLE tachiya_demo_coupons ADD COLUMN {column_name} VARCHAR"))
+        inspector = inspect(bind)
 
     indexes = {index["name"] for index in inspector.get_indexes("tachiya_demo_coupons")}
-    if "ix_tachiya_demo_coupons_idempotency_key" in indexes:
+    if index_name in indexes:
         return
 
     with bind.begin() as conn:
         conn.execute(
             text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS "
-                "ix_tachiya_demo_coupons_idempotency_key "
-                "ON tachiya_demo_coupons (idempotency_key)"
+                f"{index_name} "
+                f"ON tachiya_demo_coupons ({column_name})"
             )
         )

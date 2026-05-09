@@ -5,10 +5,10 @@ from sqlalchemy import create_engine, inspect, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from database import ensure_coupon_idempotency_key_column
+from database import ensure_coupon_extension_columns
 
 
-def test_ensure_coupon_idempotency_key_column_adds_missing_column():
+def test_ensure_coupon_extension_columns_adds_missing_columns():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as conn:
         conn.execute(
@@ -28,7 +28,8 @@ def test_ensure_coupon_idempotency_key_column_adds_missing_column():
             )
         )
 
-    ensure_coupon_idempotency_key_column(engine)
+    ensure_coupon_extension_columns(engine)
 
     columns = {column["name"] for column in inspect(engine).get_columns("tachiya_demo_coupons")}
     assert "idempotency_key" in columns
+    assert "redemption_token" in columns

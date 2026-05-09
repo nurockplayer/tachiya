@@ -2,7 +2,7 @@ import hmac
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ class RedeemRequest(BaseModel):
 
 class RedeemResponse(BaseModel):
     voucher_code: str
+    redemption_token: str
     status: str = "ok"
 
 
@@ -55,9 +56,13 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
             .first()
         )
         if existing:
-            return RedeemResponse(voucher_code=existing.voucher_code)
+            return RedeemResponse(
+                voucher_code=existing.voucher_code,
+                redemption_token=existing.redemption_token,
+            )
 
     code = f"DEMO-{uuid.uuid4().hex[:6].upper()}"
+    redemption_token = str(uuid.uuid4())
     try:
         result = create_voucher(req.coupon_id, code)
     except Exception as e:
@@ -69,30 +74,46 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
         voucher_code=result["code"],
         saleor_voucher_id=result["voucher_id"],
         idempotency_key=req.idempotency_key,
+        redemption_token=redemption_token,
         coupon_type=coupon_type,
         tcg_cost=req.tcg_cost,
     )
     db.add(record)
     db.commit()
 
-    return RedeemResponse(voucher_code=result["code"])
+    return RedeemResponse(voucher_code=result["code"], redemption_token=redemption_token)
 
 
 @router.get("")
 @router.get("/")
-def list_coupons(db: Session = Depends(get_db)):
+def list_coupons(
+    redemption_token: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    if redemption_token:
+        coupon = (
+            db.query(UserCoupon)
+            .filter(
+                UserCoupon.redemption_token == redemption_token,
+                UserCoupon.status == "active",
+            )
+            .first()
+        )
+        return [] if coupon is None else [_coupon_response(coupon)]
+
     coupons = (
         db.query(UserCoupon)
         .filter(UserCoupon.status == "active")
         .order_by(UserCoupon.created_at.desc())
         .all()
     )
-    return [
-        {
-            "voucher_code": c.voucher_code,
-            "coupon_type": c.coupon_type,
-            "tcg_cost": c.tcg_cost,
-            "status": c.status,
-        }
-        for c in coupons
-    ]
+    return [_coupon_response(c) for c in coupons]
+
+
+def _coupon_response(coupon: UserCoupon) -> dict:
+    return {
+        "voucher_code": coupon.voucher_code,
+        "coupon_type": coupon.coupon_type,
+        "tcg_cost": coupon.tcg_cost,
+        "status": coupon.status,
+    }
