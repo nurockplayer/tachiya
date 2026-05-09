@@ -38,6 +38,9 @@ class FakeQuery:
     def order_by(self, *criteria):
         return self
 
+    def limit(self, limit):
+        return self
+
     def first(self):
         return self.existing_coupon
 
@@ -125,6 +128,7 @@ def test_redeem_accepts_matching_internal_secret(monkeypatch):
 
 def test_redeem_reuses_existing_coupon_for_same_idempotency_key(monkeypatch):
     existing_coupon = SimpleNamespace(
+        coupon_id="tachiya-95",
         voucher_code="DEMO-EXISTING",
         redemption_token="token-existing",
     )
@@ -150,8 +154,9 @@ def test_redeem_reuses_existing_coupon_for_same_idempotency_key(monkeypatch):
     assert response.status_code == 200
     assert response.json()["voucher_code"] == "DEMO-EXISTING"
     assert response.json()["redemption_token"] == "token-existing"
-    assert fake_db.records == []
-    assert fake_db.commits == 0
+    assert fake_db.records[0].status == "replayed"
+    assert fake_db.records[0].redemption_token == "token-existing"
+    assert fake_db.commits == 1
 
 
 def test_redeem_persists_idempotency_key_on_first_request(monkeypatch):
@@ -176,6 +181,34 @@ def test_redeem_persists_idempotency_key_on_first_request(monkeypatch):
 
     assert response.status_code == 200
     assert fake_db.records[0].idempotency_key == "redeem-1"
+    assert fake_db.records[1].status == "succeeded"
+    assert fake_db.records[1].idempotency_key == "redeem-1"
+    assert fake_db.commits == 1
+
+
+def test_redeem_records_failed_audit_when_saleor_voucher_fails(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fail_create_voucher(coupon_id: str, code: str):
+        raise RuntimeError("saleor unavailable")
+
+    monkeypatch.setattr(coupons, "create_voucher", fail_create_voucher)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "coupon_id": "tachiya-95",
+            "tcg_cost": 18,
+            "idempotency_key": "redeem-1",
+        },
+    )
+
+    assert response.status_code == 500
+    assert fake_db.records[0].status == "failed"
+    assert fake_db.records[0].reason == "saleor unavailable"
     assert fake_db.commits == 1
 
 
@@ -210,3 +243,43 @@ def test_list_coupons_returns_empty_for_unknown_redemption_token():
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_list_redemption_audit_events_requires_internal_secret(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get("/coupons/redemption-audit-events")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid internal secret"
+
+
+def test_list_redemption_audit_events_returns_recent_events(monkeypatch):
+    event = SimpleNamespace(
+        coupon_id="tachiya-95",
+        idempotency_key="redeem-1",
+        redemption_token="token-1",
+        status="succeeded",
+        reason=None,
+        created_at="2026-01-01T00:00:00",
+    )
+    fake_db = FakeDB(list_coupons=[event])
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/redemption-audit-events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["events"][0] == {
+        "coupon_id": "tachiya-95",
+        "idempotency_key": "redeem-1",
+        "redemption_token": "token-1",
+        "status": "succeeded",
+        "reason": None,
+        "created_at": "2026-01-01T00:00:00",
+    }
