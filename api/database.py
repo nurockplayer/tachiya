@@ -33,6 +33,7 @@ def create_tables():
 def import_models():
     from models import (  # noqa: F401
         coupon,
+        coupon_redemption_audit,
         identity_audit_event,
         identity_mapping,
         points_ledger,
