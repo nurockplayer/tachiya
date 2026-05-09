@@ -13,6 +13,7 @@ class UserCoupon(Base):
     coupon_id = Column(String, nullable=False)
     voucher_code = Column(String, unique=True, nullable=False)
     saleor_voucher_id = Column(String)
+    idempotency_key = Column(String, unique=True)
     coupon_type = Column(String, nullable=False)
     tcg_cost = Column(Integer, nullable=False)
     status = Column(String, default="active")
