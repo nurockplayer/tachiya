@@ -179,6 +179,44 @@ def test_order_completed_webhook_processes_referral_reward(monkeypatch):
     assert asyncio.run(PointsService(session).get_balance("referrer-1")) == 60
 
 
+def test_order_completed_webhook_rejects_invalid_payload_before_processing(monkeypatch):
+    session = build_session()
+    add_relationship(session)
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    invalid_payloads = [
+        {
+            "order_id": "",
+            "referee_id": "referee-1",
+            "order_total_amount": 1200,
+        },
+        {
+            "order_id": "order-1",
+            "referee_id": "",
+            "order_total_amount": 1200,
+        },
+        {
+            "order_id": "order-1",
+            "referee_id": "referee-1",
+            "order_total_amount": 0,
+        },
+    ]
+
+    for index, payload in enumerate(invalid_payloads, start=1):
+        response = signed_order_completed_request(
+            client,
+            payload=payload,
+            event_id=f"evt-invalid-{index}",
+        )
+
+        assert response.status_code == 422
+
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(ReferralReward).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
 def test_order_completed_webhook_rejects_missing_signature_headers(monkeypatch):
     session = build_session()
     add_relationship(session)
