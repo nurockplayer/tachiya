@@ -5,7 +5,12 @@ from sqlalchemy import create_engine, inspect, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from database import ensure_coupon_extension_columns, ensure_points_ledger_extension_columns
+from database import (
+    Base,
+    ensure_coupon_extension_columns,
+    ensure_points_ledger_extension_columns,
+    import_models,
+)
 
 
 def test_ensure_coupon_extension_columns_adds_missing_columns():
@@ -96,3 +101,35 @@ def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
 
     assert row.source_type == "manual"
     assert row.expires_at is None
+
+
+def test_metadata_includes_streamer_profiles_table():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    inspector = inspect(engine)
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("tachiya_streamer_profiles")
+    }
+    indexes = {
+        index["name"]: index
+        for index in inspector.get_indexes("tachiya_streamer_profiles")
+    }
+
+    assert {
+        "id",
+        "slug",
+        "display_name",
+        "saleor_collection_id",
+        "commission_bps",
+        "active",
+        "created_at",
+        "updated_at",
+    }.issubset(columns)
+    assert "ix_tachiya_streamer_profiles_slug" in indexes
+    assert "ix_tachiya_streamer_profiles_saleor_collection_id" in indexes
+    assert indexes["ix_tachiya_streamer_profiles_slug"]["unique"] == 1
+    assert indexes["ix_tachiya_streamer_profiles_saleor_collection_id"]["unique"] == 1

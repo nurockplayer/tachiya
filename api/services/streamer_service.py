@@ -1,0 +1,73 @@
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from models.streamer import StreamerProfile
+
+
+class StreamerService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def create_profile(
+        self,
+        *,
+        slug: str,
+        display_name: str,
+        saleor_collection_id: str | None = None,
+        commission_bps: int = 1000,
+        active: bool = True,
+    ) -> StreamerProfile:
+        normalized_slug = self._normalize_slug(slug)
+        normalized_display_name = self._validate_required(
+            display_name,
+            "display_name is required",
+        )
+        normalized_collection_id = self._normalize_optional(saleor_collection_id)
+        self._validate_commission_bps(commission_bps)
+
+        profile = StreamerProfile(
+            slug=normalized_slug,
+            display_name=normalized_display_name,
+            saleor_collection_id=normalized_collection_id,
+            commission_bps=commission_bps,
+            active=active,
+        )
+        self.db.add(profile)
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ValueError("streamer profile already exists") from exc
+        self.db.refresh(profile)
+        return profile
+
+    def get_by_slug(self, slug: str) -> StreamerProfile | None:
+        normalized_slug = self._normalize_slug(slug)
+        return (
+            self.db.query(StreamerProfile)
+            .filter(StreamerProfile.slug == normalized_slug)
+            .one_or_none()
+        )
+
+    @staticmethod
+    def _normalize_slug(slug: str) -> str:
+        return StreamerService._validate_required(slug, "slug is required").lower()
+
+    @staticmethod
+    def _normalize_optional(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @staticmethod
+    def _validate_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
+
+    @staticmethod
+    def _validate_commission_bps(commission_bps: int) -> None:
+        if commission_bps < 0 or commission_bps > 10000:
+            raise ValueError("commission_bps must be between 0 and 10000")

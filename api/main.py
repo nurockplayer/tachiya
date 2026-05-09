@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from config import get_settings
 from database import check_database_ready, create_tables
-from routers import coupons, identity_mappings, points, referrals, tachigo
+from routers import coupons, identity_mappings, points, referrals, streamers, tachigo
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app.include_router(coupons.router)
 app.include_router(identity_mappings.router)
 app.include_router(points.router)
 app.include_router(referrals.router)
+app.include_router(streamers.router)
 app.include_router(tachigo.router)
 
 
