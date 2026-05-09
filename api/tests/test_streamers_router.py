@@ -217,3 +217,63 @@ def test_get_streamer_product_assignment_returns_404(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "streamer product assignment not found"
+
+
+def test_preview_streamer_revenue_shares(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One", "commission_bps": 1250},
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+
+    response = client.post(
+        "/streamers/revenue-shares/preview",
+        headers=headers,
+        json={
+            "order_id": " saleor-order-1 ",
+            "lines": [
+                {"saleor_product_id": " product-1 ", "gross_amount": 1200},
+                {"saleor_product_id": "missing-product", "gross_amount": 300},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "order_id": "saleor-order-1",
+        "shares": [
+            {
+                "streamer_slug": "streamer-one",
+                "gross_amount": 1200,
+                "commission_bps": 1250,
+                "share_amount": 150,
+            },
+        ],
+        "unassigned_product_ids": ["missing-product"],
+    }
+
+
+def test_preview_streamer_revenue_shares_rejects_invalid_payload(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/streamers/revenue-shares/preview",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "order_id": "order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 0}],
+        },
+    )
+
+    assert response.status_code == 422
