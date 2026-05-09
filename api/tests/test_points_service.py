@@ -231,3 +231,28 @@ def test_credit_rejects_blank_source_type():
         asyncio.run(service.credit("user-1", 10, "order-1", source_type=" "))
 
     assert session.query(PointsLedger).count() == 0
+
+
+@pytest.mark.parametrize("method", ["credit", "debit"])
+def test_credit_and_debit_reject_blank_user_id(method):
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="user_id is required"):
+        asyncio.run(getattr(service, method)(" ", 10, "order-1"))
+
+    assert session.query(PointsLedger).count() == 0
+
+
+@pytest.mark.parametrize("method", ["credit", "debit"])
+def test_credit_and_debit_reject_blank_reference_id(method):
+    session = build_session()
+    service = PointsService(session)
+    if method == "debit":
+        asyncio.run(service.credit("user-1", 20, "seed-credit"))
+
+    with pytest.raises(ValueError, match="reference_id is required"):
+        asyncio.run(getattr(service, method)("user-1", 10, " "))
+
+    expected_entries = 1 if method == "debit" else 0
+    assert session.query(PointsLedger).count() == expected_entries
