@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -11,9 +11,9 @@ router = APIRouter(prefix="/referrals", tags=["referrals"])
 
 
 class OrderCompletedRequest(BaseModel):
-    order_id: str
-    referee_id: str
-    order_total_amount: int
+    order_id: str = Field(min_length=1)
+    referee_id: str = Field(min_length=1)
+    order_total_amount: int = Field(gt=0)
 
 
 class ReferralRewardResponse(BaseModel):
