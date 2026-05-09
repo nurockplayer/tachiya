@@ -266,6 +266,31 @@ Request：
 
 找不到時回傳 `404 streamer product assignment not found`。
 
+### `GET /streamers/{slug}/catalog`
+
+用途：Storefront 依 streamer slug 取得可展示的實況主 catalog 摘要，再用回傳的 Saleor product ids 向 Saleor 查商品詳情。
+
+Response：
+
+```json
+{
+  "streamer": {
+    "slug": "streamer-one",
+    "display_name": "Streamer One",
+    "saleor_collection_id": "collection-1"
+  },
+  "saleor_product_ids": ["product-1", "product-2"]
+}
+```
+
+規則：
+
+- `slug` 查詢時會 trim 並轉小寫。
+- 只回傳 active streamer 的 catalog。
+- streamer 不存在或 inactive 時回傳 `404 streamer catalog not found`。
+- `saleor_product_ids` 依 product assignment 建立時間排序。
+- 此 endpoint 只回傳前台展示所需欄位，不暴露 commission 或 revenue share 資訊。
+
 ### `POST /streamers/revenue-shares/preview`
 
 用途：依訂單行項、product assignment 與 streamer `commission_bps` 預覽分潤結果。此 endpoint 不寫入結算表。
