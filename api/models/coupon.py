@@ -14,6 +14,7 @@ class UserCoupon(Base):
     voucher_code = Column(String, unique=True, nullable=False)
     saleor_voucher_id = Column(String)
     idempotency_key = Column(String, unique=True)
+    redemption_token = Column(String, unique=True, default=lambda: str(uuid.uuid4()))
     coupon_type = Column(String, nullable=False)
     tcg_cost = Column(Integer, nullable=False)
     status = Column(String, default="active")
