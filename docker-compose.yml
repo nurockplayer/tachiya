@@ -64,6 +64,18 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   dashboard:
     image: ghcr.io/nurockplayer/tachiya-dashboard:3.22
