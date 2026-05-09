@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -31,6 +32,20 @@ class PointsLedgerResponse(BaseModel):
     entries: list[PointsLedgerEntryResponse]
 
 
+class PointsTransactionRequest(BaseModel):
+    user_id: str
+    entry_type: Literal["credit", "debit"]
+    amount: int
+    reference_id: str
+    source_type: str = "manual"
+    expires_at: datetime | None = None
+
+
+class PointsTransactionResponse(BaseModel):
+    entry: PointsLedgerEntryResponse
+    balance: int
+
+
 @router.get(
     "/balance",
     response_model=PointsBalanceResponse,
@@ -42,6 +57,43 @@ async def get_points_balance(
 ):
     balance = await PointsService(db).get_balance(user_id)
     return PointsBalanceResponse(user_id=user_id, balance=balance)
+
+
+@router.post(
+    "/transactions",
+    response_model=PointsTransactionResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+async def create_points_transaction(
+    req: PointsTransactionRequest,
+    db: Session = Depends(get_db),
+):
+    service = PointsService(db)
+    try:
+        if req.entry_type == "credit":
+            entry = await service.credit(
+                user_id=req.user_id,
+                amount=req.amount,
+                reference_id=req.reference_id,
+                source_type=req.source_type,
+                expires_at=req.expires_at,
+            )
+        else:
+            entry = await service.debit(
+                user_id=req.user_id,
+                amount=req.amount,
+                reference_id=req.reference_id,
+                source_type=req.source_type,
+                expires_at=req.expires_at,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    balance = await service.get_balance(req.user_id)
+    return PointsTransactionResponse(
+        entry=_ledger_entry_response(entry),
+        balance=balance,
+    )
 
 
 @router.get(
@@ -57,16 +109,17 @@ async def list_points_ledger(
     entries = await PointsService(db).list_entries(user_id, limit)
     return PointsLedgerResponse(
         user_id=user_id,
-        entries=[
-            PointsLedgerEntryResponse(
-                id=entry.id,
-                amount=entry.amount,
-                entry_type=entry.entry_type,
-                source_type=entry.source_type,
-                reference_id=entry.reference_id,
-                expires_at=entry.expires_at,
-                created_at=entry.created_at,
-            )
-            for entry in entries
-        ],
+        entries=[_ledger_entry_response(entry) for entry in entries],
+    )
+
+
+def _ledger_entry_response(entry) -> PointsLedgerEntryResponse:
+    return PointsLedgerEntryResponse(
+        id=entry.id,
+        amount=entry.amount,
+        entry_type=entry.entry_type,
+        source_type=entry.source_type,
+        reference_id=entry.reference_id,
+        expires_at=entry.expires_at,
+        created_at=entry.created_at,
     )

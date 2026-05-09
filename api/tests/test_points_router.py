@@ -82,6 +82,156 @@ def test_points_balance_rejects_missing_internal_secret(monkeypatch):
     assert response.json()["detail"] == "invalid internal secret"
 
 
+def test_points_transaction_requires_internal_secret(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        json={
+            "user_id": "user-1",
+            "entry_type": "credit",
+            "amount": 120,
+            "reference_id": "order-1",
+            "source_type": "order-reward",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid internal secret"
+
+
+def test_points_transaction_creates_credit_and_returns_balance(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": "user-1",
+            "entry_type": "credit",
+            "amount": 120,
+            "reference_id": "order-1",
+            "source_type": "order-reward",
+            "expires_at": "2026-12-31T23:59:59",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["balance"] == 120
+    assert body["entry"] == {
+        "id": body["entry"]["id"],
+        "amount": 120,
+        "entry_type": "credit",
+        "source_type": "order-reward",
+        "reference_id": "order-1",
+        "expires_at": "2026-12-31T23:59:59",
+        "created_at": body["entry"]["created_at"],
+    }
+
+
+def test_points_transaction_creates_debit_and_returns_balance(monkeypatch):
+    session = build_session()
+    asyncio.run(PointsService(session).credit("user-1", 120, "order-1"))
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": "user-1",
+            "entry_type": "debit",
+            "amount": 45,
+            "reference_id": "checkout-1",
+            "source_type": "checkout",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["balance"] == 75
+    assert body["entry"]["amount"] == -45
+    assert body["entry"]["entry_type"] == "debit"
+    assert body["entry"]["source_type"] == "checkout"
+    assert body["entry"]["reference_id"] == "checkout-1"
+
+
+def test_points_transaction_replays_same_reference(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    payload = {
+        "user_id": "user-1",
+        "entry_type": "credit",
+        "amount": 120,
+        "reference_id": "order-1",
+        "source_type": "order-reward",
+    }
+
+    first = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json=payload,
+    )
+    second = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json=payload,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["entry"]["id"] == first.json()["entry"]["id"]
+    assert second.json()["balance"] == 120
+    assert session.query(PointsLedger).count() == 1
+
+
+def test_points_transaction_rejects_insufficient_balance(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": "user-1",
+            "entry_type": "debit",
+            "amount": 45,
+            "reference_id": "checkout-1",
+            "source_type": "checkout",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "insufficient balance"
+    assert session.query(PointsLedger).count() == 0
+
+
+def test_points_transaction_rejects_invalid_entry_type(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": "user-1",
+            "entry_type": "adjust",
+            "amount": 120,
+            "reference_id": "order-1",
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_points_ledger_requires_internal_secret(monkeypatch):
     session = build_session()
     client = build_client(session)
