@@ -121,3 +121,99 @@ def test_get_streamer_profile_returns_404(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "streamer profile not found"
+
+
+def test_create_and_get_streamer_product_assignment(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    streamer_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "Streamer One"},
+    )
+
+    assign_response = client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={
+            "saleor_product_id": " product-1 ",
+            "streamer_slug": " Streamer-One ",
+            "source": " saleor-metadata ",
+        },
+    )
+    get_response = client.get("/streamers/product-assignments/product-1", headers=headers)
+
+    assert streamer_response.status_code == 200
+    assert assign_response.status_code == 200
+    assert assign_response.json()["saleor_product_id"] == "product-1"
+    assert assign_response.json()["streamer_profile_id"] == streamer_response.json()["id"]
+    assert assign_response.json()["streamer_slug"] == "streamer-one"
+    assert assign_response.json()["source"] == "saleor-metadata"
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == assign_response.json()["id"]
+
+
+def test_streamer_product_assignment_updates_existing_product(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    second_streamer_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-two", "display_name": "Two"},
+    )
+    first_assignment_response = client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+
+    updated_assignment_response = client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={
+            "saleor_product_id": "product-1",
+            "streamer_slug": "streamer-two",
+            "source": "manual-correction",
+        },
+    )
+
+    assert first_assignment_response.status_code == 200
+    assert updated_assignment_response.status_code == 200
+    assert updated_assignment_response.json()["id"] == first_assignment_response.json()["id"]
+    assert updated_assignment_response.json()["streamer_profile_id"] == second_streamer_response.json()["id"]
+    assert updated_assignment_response.json()["streamer_slug"] == "streamer-two"
+    assert updated_assignment_response.json()["source"] == "manual-correction"
+
+
+def test_streamer_product_assignment_rejects_missing_streamer(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/streamers/product-assignments",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"saleor_product_id": "product-1", "streamer_slug": "missing-streamer"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "streamer profile not found"
+
+
+def test_get_streamer_product_assignment_returns_404(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers/product-assignments/missing-product",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "streamer product assignment not found"

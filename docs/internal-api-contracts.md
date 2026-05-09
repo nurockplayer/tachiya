@@ -234,6 +234,38 @@ Request：
 
 找不到時回傳 `404 streamer profile not found`。
 
+### `POST /streamers/product-assignments`
+
+用途：將 Saleor product id 指派給 streamer profile，作為前台歸屬與後續分潤計算的資料基礎。
+
+Request：
+
+```json
+{
+  "saleor_product_id": "product-1",
+  "streamer_slug": "streamer-one",
+  "source": "saleor-metadata"
+}
+```
+
+規則：
+
+- `saleor_product_id` 會 trim，且必須唯一。
+- `streamer_slug` 會 trim 並轉小寫，且必須對應已存在的 streamer profile。
+- `source` 會 trim，預設 `manual`。
+- 同一 product id 重送給同一 streamer/source 會回傳既有 assignment。
+- 同一 product id 改指到不同 streamer 或 source 時，會更新既有 assignment。
+
+錯誤：
+
+- streamer 不存在：`404 streamer profile not found`。
+
+### `GET /streamers/product-assignments/{saleor_product_id}`
+
+用途：依 Saleor product id 查詢目前 streamer assignment。
+
+找不到時回傳 `404 streamer product assignment not found`。
+
 ## Identity Mappings
 
 Identity mapping 將外部身份連到 Tachiya canonical user id，也就是 Saleor customer id。
