@@ -13,18 +13,21 @@ ADMIN_PASSWORD = os.getenv("SALEOR_ADMIN_PASSWORD", "admin")
 COUPON_CONFIG = {
     "tachiya-95": {
         "coupon_type": "PERCENT_5",
+        "tcg_cost": 18,
         "type": "ENTIRE_ORDER",
         "value_type": "PERCENTAGE",
         "value": 5,
     },
     "free-ship": {
         "coupon_type": "FREE_SHIPPING",
+        "tcg_cost": 30,
         "type": "SHIPPING",
         "value_type": "PERCENTAGE",
         "value": 100,
     },
     "bundle-120": {
         "coupon_type": "CREATOR_120",
+        "tcg_cost": 120,
         "type": "ENTIRE_ORDER",
         "value_type": "FIXED",
         "value": 120,

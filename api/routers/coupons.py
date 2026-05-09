@@ -58,6 +58,32 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
         )
         raise HTTPException(status_code=400, detail=f"unknown coupon_id: {req.coupon_id}")
 
+    expected_tcg_cost = COUPON_CONFIG[req.coupon_id]["tcg_cost"]
+    if req.tcg_cost <= 0:
+        _record_redemption_audit(
+            db,
+            coupon_id=req.coupon_id,
+            idempotency_key=req.idempotency_key,
+            redemption_token=None,
+            status="failed",
+            reason="tcg_cost must be positive",
+        )
+        raise HTTPException(status_code=400, detail="tcg_cost must be positive")
+
+    if req.tcg_cost != expected_tcg_cost:
+        _record_redemption_audit(
+            db,
+            coupon_id=req.coupon_id,
+            idempotency_key=req.idempotency_key,
+            redemption_token=None,
+            status="failed",
+            reason=f"tcg_cost mismatch: expected {expected_tcg_cost}, got {req.tcg_cost}",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"tcg_cost mismatch for coupon_id: {req.coupon_id}",
+        )
+
     if req.idempotency_key:
         existing = (
             db.query(UserCoupon)
@@ -101,7 +127,7 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
         idempotency_key=req.idempotency_key,
         redemption_token=redemption_token,
         coupon_type=coupon_type,
-        tcg_cost=req.tcg_cost,
+        tcg_cost=expected_tcg_cost,
     )
     db.add(record)
     db.add(
