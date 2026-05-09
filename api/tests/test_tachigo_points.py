@@ -5,12 +5,23 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from config import Settings
+from database import Base
 from routers import tachigo
-from services.tachigo import TachigoPoints, TachigoUpstreamError, get_user_points
+from services.identity_mapping_service import IdentityMappingService
+from services.tachigo import (
+    TachigoIdentityPoints,
+    TachigoPoints,
+    TachigoUpstreamError,
+    get_identity_points,
+    get_user_points,
+)
 
 
 @pytest.mark.anyio
@@ -44,6 +55,41 @@ async def test_get_user_points_calls_tachigo_internal_api(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_get_identity_points_calls_tachigo_identity_api(monkeypatch):
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "provider": "tachigo",
+                "external_subject": "tachigo-user-1",
+                "spendable_balance": 123,
+                "cumulative_total": 456,
+            },
+        )
+
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+
+    assert result == TachigoIdentityPoints(
+        provider="tachigo",
+        external_subject="tachigo-user-1",
+        spendable_balance=123,
+        cumulative_total=456,
+    )
+    assert (
+        str(requests[0].url)
+        == "http://tachigo.local/internal/identity/tachigo/tachigo-user-1/points"
+    )
+    assert requests[0].headers["X-Tachiya-Internal-Secret"] == "shared-secret"
+
+
+@pytest.mark.anyio
 async def test_get_user_points_raises_for_upstream_error(monkeypatch):
     settings = Settings(tachigo_api_url="http://tachigo.local")
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
@@ -55,9 +101,26 @@ async def test_get_user_points_raises_for_upstream_error(monkeypatch):
             await get_user_points("demo@tachigo.io", settings, client=client)
 
 
-def build_client() -> TestClient:
+def build_session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
+
+
+def build_client(session=None) -> TestClient:
     app = FastAPI()
     app.include_router(tachigo.router)
+    if session is not None:
+
+        def override_db():
+            yield session
+
+        app.dependency_overrides[tachigo.get_db] = override_db
     return TestClient(app)
 
 
@@ -109,6 +172,74 @@ def test_tachigo_points_endpoint_maps_upstream_error(monkeypatch):
         "/tachigo/users/points",
         headers={"X-Tachiya-Internal-Secret": "shared-secret"},
         params={"email": "demo@tachigo.io"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "tachigo upstream returned 502"
+
+
+def test_tachigo_identity_points_endpoint_returns_points(monkeypatch):
+    session = build_session()
+    IdentityMappingService(session).link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+        assert provider == "tachigo"
+        assert external_subject == "tachigo-user-1"
+        assert settings.tachigo_api_url
+        return TachigoIdentityPoints(
+            provider=provider,
+            external_subject=external_subject,
+            spendable_balance=123,
+            cumulative_total=456,
+        )
+
+    monkeypatch.setattr(tachigo, "get_identity_points", fake_get_identity_points)
+
+    response = client.get(
+        "/tachigo/identity/tachigo/tachigo-user-1/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "saleor_customer_id": "saleor-user-1",
+        "provider": "tachigo",
+        "external_subject": "tachigo-user-1",
+        "spendable_balance": 123,
+        "cumulative_total": 456,
+    }
+
+
+def test_tachigo_identity_points_endpoint_returns_404_for_missing_mapping(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/tachigo/identity/tachigo/unknown/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "identity mapping not found"
+
+
+def test_tachigo_identity_points_endpoint_maps_upstream_error(monkeypatch):
+    session = build_session()
+    IdentityMappingService(session).link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+        raise TachigoUpstreamError("tachigo upstream returned 502")
+
+    monkeypatch.setattr(tachigo, "get_identity_points", fake_get_identity_points)
+
+    response = client.get(
+        "/tachigo/identity/tachigo/tachigo-user-1/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
     )
 
     assert response.status_code == 502
