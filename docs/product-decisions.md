@@ -194,3 +194,51 @@ Tachigo 可以維持自己的 token / Web3 / Twitch 忠誠點數規則；一旦�
 - 若營運需要區分「消費回饋」、「分潤」、「Tachigo 兌換」等來源，新增 `PointsLedger.source_type`。
 - 若法務或活動規則需要點數到期，新增 `PointsLedger.expires_at` 與到期扣帳流程。
 - 若 Tachigo 仍需要可流通 token，維持在 Tachigo repo 內設計，不回填成 Tachiya 使用者可互轉點數。
+
+---
+
+## 身份映射：Tachiya 以 Saleor customer id 作為 canonical user id
+
+**決策：Tachiya domain 內的點數、推薦、折扣與分潤紀錄，長期以 Saleor customer id 作為 canonical `user_id`。**
+
+Email、Twitch user id、Tachigo member id、wallet address 都是可連結身份或查詢屬性，不應直接成為 Tachiya ledger 的長期主鍵。這讓使用者更換 email、解除 Twitch 連結或更換 wallet 時，不會讓既有訂單、點數與推薦紀錄失去歸屬。
+
+### 考慮過的選項
+
+| 方案 | 說明 | 放棄理由 |
+|------|------|----------|
+| Email 作為主鍵 | Storefront 與 Tachigo 都容易取得 | Email 會變更，也可能大小寫、別名或社群登入同步不一致 |
+| Twitch user id 作為主鍵 | 與 Tachigo extension 最接近 | 非所有商城使用者都有 Twitch；也會把 Tachigo 身份語意帶進 Tachiya |
+| Tachiya 自建 identity id | 最彈性，可管理多身份連結 | MVP 需要多一層 identity service，短期成本高 |
+| **Saleor customer id 作為 Tachiya canonical id** | 與訂單、結帳、帳戶頁一致 | **採用** |
+
+### 邊界規則
+
+- **Tachiya canonical `user_id`**：使用 Saleor customer id；`PointsLedger.user_id`、`ReferralRelationship.referrer_id`、`ReferralRelationship.referee_id` 以此為準。
+- **Email**：只作為登入聯絡資訊、搜尋 fallback 或 demo bridge，不作為永久歸屬鍵。
+- **Tachigo / Twitch identity**：透過受信任 server-to-server API 對應到 Saleor customer id；Tachigo 不直接寫入 Tachiya ledger。
+- **Wallet address**：視為可連結的 claim/login 屬性，不代表 Tachiya 點數可隨 wallet 轉移。
+- **帳號合併**：不得自動依 email 或 wallet 合併；需要人工審核或明確的 signed identity proof，並留下 audit trail。
+
+### Tachigo 串接過渡策略
+
+目前以 email 查詢 Tachigo points 的做法只適合 demo / local bridge。產品級串接應改為：
+
+1. Storefront 取得 Saleor customer id。
+2. Tachiya API 以 internal secret 或 webhook signature 接收 Tachigo 事件。
+3. Tachiya 驗證 Tachigo event id / timestamp / signature。
+4. Tachiya 透過 identity mapping 找到 Saleor customer id。
+5. Tachiya 用 `PointsService` 寫入 Soulbound ledger。
+
+### 更換與解除連結
+
+- 更換 email 不搬移 ledger；ledger 仍屬於同一 Saleor customer id。
+- 解除 Twitch 連結不刪除既有 Tachiya 點數或推薦紀錄，只停止新的 Tachigo 兌換。
+- 更換 wallet 需要重新驗證持有權；Tachiya 點數不因 wallet 轉移而轉移。
+- 若真的需要帳號合併，必須以後台操作或 migration 方式執行，並記錄來源帳號、目標帳號、操作者與原因。
+
+### 後續待補
+
+- 新增 Tachiya identity mapping 模型，保存 Saleor customer id 與 Tachigo/Twitch/wallet 外部身份的連結。
+- 將 `GET /tachigo/users/points?email=...` 逐步替換成 signed identity lookup。
+- 補帳號合併/解除連結的 audit log 與後台操作規格。
