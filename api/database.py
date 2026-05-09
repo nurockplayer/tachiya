@@ -25,7 +25,14 @@ def create_tables():
 
 
 def import_models():
-    from models import coupon, identity_mapping, points_ledger, referral, webhook_event  # noqa: F401
+    from models import (  # noqa: F401
+        coupon,
+        identity_audit_event,
+        identity_mapping,
+        points_ledger,
+        referral,
+        webhook_event,
+    )
 
 
 def ensure_coupon_extension_columns(bind=engine):

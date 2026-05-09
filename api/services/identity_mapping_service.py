@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from models.identity_audit_event import IdentityAuditEvent
 from models.identity_mapping import IdentityMapping
 
 
@@ -19,6 +20,9 @@ class IdentityMappingService:
         saleor_customer_id: str,
         provider: str,
         external_subject: str,
+        *,
+        actor: str = "system",
+        reason: str | None = None,
     ) -> IdentityMapping:
         normalized_saleor_customer_id = self._normalize_required(
             saleor_customer_id,
@@ -54,6 +58,13 @@ class IdentityMappingService:
             self.db.rollback()
             raise ValueError("identity mapping already exists") from exc
         self.db.refresh(mapping)
+        self._record_audit_event(
+            action="identity.linked",
+            actor=actor,
+            source=self._identity_source(normalized_provider, normalized_external_subject),
+            target=self._saleor_target(normalized_saleor_customer_id),
+            reason=reason,
+        )
         return mapping
 
     def resolve_customer_id(self, provider: str, external_subject: str) -> str | None:
@@ -69,16 +80,69 @@ class IdentityMappingService:
         )
         return mapping.saleor_customer_id if mapping is not None else None
 
-    def unlink_identity(self, mapping_id: str) -> IdentityMapping:
+    def unlink_identity(
+        self,
+        mapping_id: str,
+        *,
+        actor: str = "system",
+        reason: str | None = None,
+    ) -> IdentityMapping:
         mapping = self.db.get(IdentityMapping, mapping_id)
         if mapping is None:
             raise ValueError("identity mapping not found")
 
         if mapping.unlinked_at is None:
             mapping.unlinked_at = utcnow()
+            self._record_audit_event(
+                action="identity.unlinked",
+                actor=actor,
+                source=self._identity_source(mapping.provider, mapping.external_subject),
+                target=self._saleor_target(mapping.saleor_customer_id),
+                reason=reason,
+                commit=False,
+            )
             self.db.commit()
             self.db.refresh(mapping)
         return mapping
+
+    def list_audit_events(self, limit: int = 20) -> list[IdentityAuditEvent]:
+        return (
+            self.db.query(IdentityAuditEvent)
+            .order_by(IdentityAuditEvent.created_at.desc(), IdentityAuditEvent.id.desc())
+            .limit(limit)
+            .all()
+        )
+
+    def _record_audit_event(
+        self,
+        *,
+        action: str,
+        actor: str,
+        source: str,
+        target: str,
+        reason: str | None,
+        commit: bool = True,
+    ) -> IdentityAuditEvent:
+        event = IdentityAuditEvent(
+            action=action,
+            actor=self._normalize_required(actor, "actor is required"),
+            source=source,
+            target=target,
+            reason=reason.strip() if reason else None,
+        )
+        self.db.add(event)
+        if commit:
+            self.db.commit()
+            self.db.refresh(event)
+        return event
+
+    @staticmethod
+    def _identity_source(provider: str, external_subject: str) -> str:
+        return f"{provider}:{external_subject}"
+
+    @staticmethod
+    def _saleor_target(saleor_customer_id: str) -> str:
+        return f"saleor:{saleor_customer_id}"
 
     @staticmethod
     def _normalize_provider(provider: str) -> str:
