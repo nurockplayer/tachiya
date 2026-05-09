@@ -74,6 +74,23 @@ class RevenueSharePreviewResponse(BaseModel):
     unassigned_product_ids: list[str]
 
 
+class StreamerRevenueShareRecordResponse(BaseModel):
+    id: str
+    streamer_slug: str
+    streamer_profile_id: str
+    gross_amount: int
+    commission_bps: int
+    share_amount: int
+    status: str
+    created_at: datetime
+
+
+class RevenueShareRecordResponse(BaseModel):
+    order_id: str
+    records: list[StreamerRevenueShareRecordResponse]
+    unassigned_product_ids: list[str]
+
+
 @router.post(
     "",
     response_model=StreamerProfileResponse,
@@ -155,6 +172,48 @@ def preview_streamer_revenue_shares(
             for share in preview.shares
         ],
         unassigned_product_ids=preview.unassigned_product_ids,
+    )
+
+
+@router.post(
+    "/revenue-shares/record",
+    response_model=RevenueShareRecordResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def record_streamer_revenue_shares(
+    req: RevenueSharePreviewRequest,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = RevenueShareService(db).record_order_share(
+            order_id=req.order_id,
+            lines=[
+                RevenueShareLine(
+                    saleor_product_id=line.saleor_product_id,
+                    gross_amount=line.gross_amount,
+                )
+                for line in req.lines
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return RevenueShareRecordResponse(
+        order_id=result.order_id,
+        records=[
+            StreamerRevenueShareRecordResponse(
+                id=record.id,
+                streamer_slug=record.streamer_slug,
+                streamer_profile_id=record.streamer_profile_id,
+                gross_amount=record.gross_amount,
+                commission_bps=record.commission_bps,
+                share_amount=record.share_amount,
+                status=record.status,
+                created_at=record.created_at,
+            )
+            for record in result.records
+        ],
+        unassigned_product_ids=result.unassigned_product_ids,
     )
 
 

@@ -311,6 +311,40 @@ Response：
 }
 ```
 
+### `POST /streamers/revenue-shares/record`
+
+用途：使用與 preview 相同的計算規則，將每張訂單、每位 streamer 的分潤結果寫入 `tachiya_streamer_revenue_share_records`，作為後續 payout 與對帳依據。
+
+Request 與 `POST /streamers/revenue-shares/preview` 相同。
+
+規則：
+
+- 預設 record `status` 為 `pending`。
+- 同一 `order_id + streamer_slug` 重送且計算結果一致時，回傳既有 record。
+- 同一 `order_id + streamer_slug` 重送但 `gross_amount`、`commission_bps`、`share_amount`、`streamer_profile_id` 或 `status` 不一致時，回傳 `409 revenue share record conflict`。
+- 未歸屬或 inactive streamer 商品仍只出現在 `unassigned_product_ids`，不寫入 record。
+
+Response：
+
+```json
+{
+  "order_id": "saleor-order-1",
+  "records": [
+    {
+      "id": "uuid",
+      "streamer_slug": "streamer-one",
+      "streamer_profile_id": "uuid",
+      "gross_amount": 1200,
+      "commission_bps": 1000,
+      "share_amount": 120,
+      "status": "pending",
+      "created_at": "2026-05-09T23:40:00"
+    }
+  ],
+  "unassigned_product_ids": []
+}
+```
+
 ## Identity Mappings
 
 Identity mapping 將外部身份連到 Tachiya canonical user id，也就是 Saleor customer id。

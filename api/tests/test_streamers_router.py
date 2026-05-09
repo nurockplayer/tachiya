@@ -277,3 +277,80 @@ def test_preview_streamer_revenue_shares_rejects_invalid_payload(monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+def test_record_streamer_revenue_shares(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    streamer_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One", "commission_bps": 1250},
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+
+    response = client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "saleor-order-1",
+            "lines": [
+                {"saleor_product_id": "product-1", "gross_amount": 1200},
+                {"saleor_product_id": "missing-product", "gross_amount": 300},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["order_id"] == "saleor-order-1"
+    assert response.json()["unassigned_product_ids"] == ["missing-product"]
+    assert response.json()["records"][0]["streamer_profile_id"] == streamer_response.json()["id"]
+    assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
+    assert response.json()["records"][0]["gross_amount"] == 1200
+    assert response.json()["records"][0]["commission_bps"] == 1250
+    assert response.json()["records"][0]["share_amount"] == 150
+    assert response.json()["records"][0]["status"] == "pending"
+
+
+def test_record_streamer_revenue_shares_rejects_conflicting_replay(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One", "commission_bps": 1250},
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    first_response = client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "saleor-order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+    )
+
+    replay_response = client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "saleor-order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1300}],
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert replay_response.status_code == 409
+    assert replay_response.json()["detail"] == "revenue share record conflict"

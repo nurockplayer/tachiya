@@ -2,7 +2,11 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from models.streamer import StreamerProductAssignment, StreamerProfile
+from models.streamer import (
+    StreamerProductAssignment,
+    StreamerProfile,
+    StreamerRevenueShareRecord,
+)
 
 
 @dataclass(frozen=True)
@@ -23,6 +27,13 @@ class StreamerRevenueShare:
 class RevenueSharePreview:
     order_id: str
     shares: list[StreamerRevenueShare]
+    unassigned_product_ids: list[str]
+
+
+@dataclass(frozen=True)
+class RevenueShareRecordResult:
+    order_id: str
+    records: list[StreamerRevenueShareRecord]
     unassigned_product_ids: list[str]
 
 
@@ -82,12 +93,91 @@ class RevenueShareService:
             unassigned_product_ids=unassigned_product_ids,
         )
 
+    def record_order_share(
+        self,
+        *,
+        order_id: str,
+        lines: list[RevenueShareLine],
+    ) -> RevenueShareRecordResult:
+        preview = self.preview_order_share(order_id=order_id, lines=lines)
+        records: list[StreamerRevenueShareRecord] = []
+        for share in preview.shares:
+            streamer = self._get_streamer_by_slug(share.streamer_slug)
+            if streamer is None:
+                raise ValueError("streamer profile not found")
+
+            existing_record = self._get_record(
+                order_id=preview.order_id,
+                streamer_slug=share.streamer_slug,
+            )
+            if existing_record is not None:
+                records.append(self._ensure_record_matches(existing_record, streamer, share))
+                continue
+
+            record = StreamerRevenueShareRecord(
+                order_id=preview.order_id,
+                streamer_profile_id=streamer.id,
+                streamer_slug=share.streamer_slug,
+                gross_amount=share.gross_amount,
+                commission_bps=share.commission_bps,
+                share_amount=share.share_amount,
+                status="pending",
+            )
+            self.db.add(record)
+            self.db.commit()
+            self.db.refresh(record)
+            records.append(record)
+
+        return RevenueShareRecordResult(
+            order_id=preview.order_id,
+            records=records,
+            unassigned_product_ids=preview.unassigned_product_ids,
+        )
+
     def _get_assignment(self, saleor_product_id: str) -> StreamerProductAssignment | None:
         return (
             self.db.query(StreamerProductAssignment)
             .filter(StreamerProductAssignment.saleor_product_id == saleor_product_id)
             .one_or_none()
         )
+
+    def _get_streamer_by_slug(self, slug: str) -> StreamerProfile | None:
+        return (
+            self.db.query(StreamerProfile)
+            .filter(StreamerProfile.slug == slug)
+            .one_or_none()
+        )
+
+    def _get_record(
+        self,
+        *,
+        order_id: str,
+        streamer_slug: str,
+    ) -> StreamerRevenueShareRecord | None:
+        return (
+            self.db.query(StreamerRevenueShareRecord)
+            .filter(
+                StreamerRevenueShareRecord.order_id == order_id,
+                StreamerRevenueShareRecord.streamer_slug == streamer_slug,
+            )
+            .one_or_none()
+        )
+
+    @staticmethod
+    def _ensure_record_matches(
+        record: StreamerRevenueShareRecord,
+        streamer: StreamerProfile,
+        share: StreamerRevenueShare,
+    ) -> StreamerRevenueShareRecord:
+        if (
+            record.streamer_profile_id != streamer.id
+            or record.gross_amount != share.gross_amount
+            or record.commission_bps != share.commission_bps
+            or record.share_amount != share.share_amount
+            or record.status != "pending"
+        ):
+            raise ValueError("revenue share record conflict")
+        return record
 
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
