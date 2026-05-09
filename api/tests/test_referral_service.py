@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -116,6 +117,51 @@ def test_process_referral_reward_skips_after_referee_first_purchase():
     assert session.query(ReferralReward).count() == 1
     assert session.query(PointsLedger).count() == 1
     assert asyncio.run(PointsService(session).get_balance("referrer-1")) == 60
+
+
+def test_process_referral_reward_normalizes_identifiers():
+    session = build_session()
+    add_relationship(session)
+    service = ReferralService(session, reward_rate=0.05)
+
+    reward = asyncio.run(
+        service.process_referral_reward(
+            order_id=" order-1 ",
+            referee_id=" referee-1 ",
+            order_total_amount=1200,
+        ),
+    )
+
+    assert reward is not None
+    assert reward.order_id == "order-1"
+    assert reward.referee_id == "referee-1"
+    ledger_entry = session.get(PointsLedger, reward.ledger_entry_id)
+    assert ledger_entry.reference_id == "referral:order-1"
+
+
+@pytest.mark.parametrize(
+    ("order_id", "referee_id", "message"),
+    [
+        (" ", "referee-1", "order_id is required"),
+        ("order-1", " ", "referee_id is required"),
+    ],
+)
+def test_process_referral_reward_rejects_blank_identifiers(order_id, referee_id, message):
+    session = build_session()
+    add_relationship(session)
+    service = ReferralService(session, reward_rate=0.05)
+
+    with pytest.raises(ValueError, match=message):
+        asyncio.run(
+            service.process_referral_reward(
+                order_id=order_id,
+                referee_id=referee_id,
+                order_total_amount=1200,
+            ),
+        )
+
+    assert session.query(ReferralReward).count() == 0
+    assert session.query(PointsLedger).count() == 0
 
 
 def build_client(session) -> TestClient:
