@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,25 @@ def test_credit_writes_ledger_entry_and_updates_balance():
     assert asyncio.run(service.get_balance("user-1")) == 120
 
 
+def test_credit_writes_source_type_and_expiration_metadata():
+    session = build_session()
+    service = PointsService(session)
+    expires_at = datetime(2026, 12, 31, 23, 59, 59)
+
+    entry = asyncio.run(
+        service.credit(
+            user_id="user-1",
+            amount=120,
+            reference_id="tachigo:redemption-1",
+            source_type="tachigo",
+            expires_at=expires_at,
+        ),
+    )
+
+    assert entry.source_type == "tachigo"
+    assert entry.expires_at == expires_at
+
+
 def test_debit_writes_negative_ledger_entry_and_updates_balance():
     session = build_session()
     service = PointsService(session)
@@ -48,6 +68,8 @@ def test_debit_writes_negative_ledger_entry_and_updates_balance():
     assert entry.amount == -45
     assert entry.entry_type == "debit"
     assert entry.reference_id == "checkout-1"
+    assert entry.source_type == "manual"
+    assert entry.expires_at is None
     assert asyncio.run(service.get_balance("user-1")) == 75
 
 
@@ -82,3 +104,13 @@ def test_debit_rejects_insufficient_balance():
         asyncio.run(service.debit(user_id="user-1", amount=31, reference_id="checkout-1"))
 
     assert asyncio.run(service.get_balance("user-1")) == 30
+
+
+def test_credit_rejects_blank_source_type():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="source_type is required"):
+        asyncio.run(service.credit("user-1", 10, "order-1", source_type=" "))
+
+    assert session.query(PointsLedger).count() == 0

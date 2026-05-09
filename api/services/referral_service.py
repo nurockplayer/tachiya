@@ -51,6 +51,7 @@ class ReferralService:
             user_id=relationship.referrer_id,
             amount=reward_points,
             reference_id=f"referral:{order_id}",
+            source_type="referral",
         )
 
         reward = ReferralReward(
