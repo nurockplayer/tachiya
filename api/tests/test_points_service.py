@@ -55,6 +55,64 @@ def test_credit_writes_source_type_and_expiration_metadata():
     assert entry.expires_at == expires_at
 
 
+def test_credit_is_idempotent_for_same_user_entry_type_and_reference():
+    session = build_session()
+    service = PointsService(session)
+
+    first_entry = asyncio.run(
+        service.credit(
+            user_id="user-1",
+            amount=120,
+            reference_id="tachigo:redemption-1",
+            source_type="tachigo",
+        ),
+    )
+    second_entry = asyncio.run(
+        service.credit(
+            user_id="user-1",
+            amount=120,
+            reference_id="tachigo:redemption-1",
+            source_type="tachigo",
+        ),
+    )
+
+    assert second_entry.id == first_entry.id
+    assert session.query(PointsLedger).count() == 1
+    assert asyncio.run(service.get_balance("user-1")) == 120
+
+
+def test_credit_idempotency_allows_same_reference_for_different_users():
+    session = build_session()
+    service = PointsService(session)
+
+    first_entry = asyncio.run(service.credit("user-1", 120, "tachigo:redemption-1"))
+    second_entry = asyncio.run(service.credit("user-2", 120, "tachigo:redemption-1"))
+
+    assert second_entry.id != first_entry.id
+    assert session.query(PointsLedger).count() == 2
+    assert asyncio.run(service.get_balance("user-1")) == 120
+    assert asyncio.run(service.get_balance("user-2")) == 120
+
+
+def test_credit_rejects_idempotency_key_conflict():
+    session = build_session()
+    service = PointsService(session)
+    asyncio.run(service.credit("user-1", 120, "tachigo:redemption-1", source_type="tachigo"))
+
+    with pytest.raises(ValueError, match="idempotency key conflict"):
+        asyncio.run(
+            service.credit(
+                "user-1",
+                999,
+                "tachigo:redemption-1",
+                source_type="tachigo",
+            ),
+        )
+
+    assert session.query(PointsLedger).count() == 1
+    assert asyncio.run(service.get_balance("user-1")) == 120
+
+
 def test_debit_writes_negative_ledger_entry_and_updates_balance():
     session = build_session()
     service = PointsService(session)
@@ -71,6 +129,19 @@ def test_debit_writes_negative_ledger_entry_and_updates_balance():
     assert entry.source_type == "manual"
     assert entry.expires_at is None
     assert asyncio.run(service.get_balance("user-1")) == 75
+
+
+def test_debit_is_idempotent_before_balance_check():
+    session = build_session()
+    service = PointsService(session)
+    asyncio.run(service.credit(user_id="user-1", amount=120, reference_id="order-1"))
+
+    first_entry = asyncio.run(service.debit("user-1", 100, "checkout-1"))
+    second_entry = asyncio.run(service.debit("user-1", 100, "checkout-1"))
+
+    assert second_entry.id == first_entry.id
+    assert session.query(PointsLedger).count() == 2
+    assert asyncio.run(service.get_balance("user-1")) == 20
 
 
 def test_get_balance_only_sums_requested_user():
