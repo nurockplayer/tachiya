@@ -48,6 +48,7 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
     return RedeemResponse(voucher_code=result["code"])
 
 
+@router.get("")
 @router.get("/")
 def list_coupons(db: Session = Depends(get_db)):
     coupons = (
