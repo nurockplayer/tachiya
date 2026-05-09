@@ -157,3 +157,40 @@ Saleor Account 只管「能結帳的帳號」（購物車、訂單、地址）�
 - FastAPI 是保護層：沒有它，未來要自訂邏輯只能 fork Saleor
 - 三服務用 docker-compose 管理，部署成本低，FastAPI 輕量可與其他服務共機
 - 等未來 FastAPI 真的不再成長、只剩一兩支 API，再評估是否併入 Go
+
+---
+
+## Token 經濟：Tachiya 點數採 Soulbound 商店信用
+
+**決策：Tachiya MVP 的點數是綁定 Saleor/Tachiya 使用者帳號的商店信用，不提供使用者之間轉移。**
+
+Tachigo 可以維持自己的 token / Web3 / Twitch 忠誠點數規則；一旦透過 API 轉入 Tachiya，該價值在 Tachiya 內會被視為電商場景的折扣、點數或分潤信用，不再繼續承擔可自由轉移的 token 語意。
+
+### 考慮過的選項
+
+| 方案 | 說明 | 放棄理由 |
+|------|------|----------|
+| 使用者可自由轉移 Tachiya 點數 | 點數可像 token 一樣在使用者間流通 | 退款、洗點、盜帳與分潤追蹤成本過高；也會讓 Saleor 訂單信用與 Tachigo token 邊界混在一起 |
+| 特定關係內可轉移 | 例如家庭帳號、好友或公會內轉移 | MVP 需要額外關係模型、風控與爭議處理，會延後商城核心驗證 |
+| **帳號綁定商店信用** | 點數只能由受信任服務入帳/扣帳，使用者不能互轉 | **採用** |
+
+### 邊界規則
+
+- **Tachigo token**：屬於 Tachigo domain，可以依 Tachigo 的產品規則處理累積、驗證、鏈上或鏈下流通。
+- **Tachiya points**：屬於 Tachiya domain，是商城內的帳號信用，只能折抵、回饋或做分潤紀錄。
+- **轉換邊界**：Tachigo 透過內部 API 或兌換流程把 token 價值交給 Tachiya 後，Tachiya 只保存兌換結果與 ledger，不保存可轉移 token 狀態。
+- **使用者體驗**：Storefront 可以顯示餘額、折抵紀錄與兌換結果，但不提供轉移入口。
+
+### 實作原則
+
+- Soulbound 以後端與資料模型為準，不依賴前端隱藏按鈕作為唯一限制。
+- Tachiya API 不提供使用者對使用者的 transfer endpoint。
+- 點數異動必須經過受信任服務，例如 `PointsService.credit()`、`PointsService.debit()`、referral webhook、coupon redemption 或未來的 Tachigo 兌換 webhook。
+- `PointsLedger` 的 `entry_type` 保持為 `credit` / `debit`；業務來源暫時放在 `reference_id` namespace，例如 `referral:<order_id>`、`tachigo:<redemption_id>`、`coupon:<code>`。
+- 過期點數不放進 MVP；若未來需要點數到期，應新增 ledger 層級的 `expires_at` 或 policy 欄位，不用前端倒數或批次字串規則處理。
+
+### 後續待補
+
+- 若營運需要區分「消費回饋」、「分潤」、「Tachigo 兌換」等來源，新增 `PointsLedger.source_type`。
+- 若法務或活動規則需要點數到期，新增 `PointsLedger.expires_at` 與到期扣帳流程。
+- 若 Tachigo 仍需要可流通 token，維持在 Tachigo repo 內設計，不回填成 Tachiya 使用者可互轉點數。
