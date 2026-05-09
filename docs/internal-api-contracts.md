@@ -198,6 +198,42 @@ Request：
 - 若訂單沒有符合推薦關係，回傳 `{"rewarded": false}`。
 - 若有獎勵，回傳 `reward_points` 與 `ledger_entry_id`。
 
+## Streamers
+
+Streamer profile 是 Tachiya marketplace 的實況主主檔，用來連接 Saleor Collection、前台展示與後續分潤計算。
+
+### `POST /streamers`
+
+Request：
+
+```json
+{
+  "slug": "streamer-one",
+  "display_name": "Streamer One",
+  "saleor_collection_id": "collection-1",
+  "commission_bps": 1000,
+  "active": true
+}
+```
+
+規則：
+
+- `slug` 會 trim 並轉成小寫，且必須唯一。
+- `display_name` 會 trim，且不可為空。
+- `saleor_collection_id` 可選；空白視為未設定；有值時必須唯一。
+- `commission_bps` 是 basis points，範圍 `0..10000`，預設 `1000`。
+- `active` 預設 `true`。
+
+錯誤：
+
+- 重複 slug 或 Saleor collection：`409 streamer profile already exists`。
+
+### `GET /streamers/{slug}`
+
+用途：依 streamer slug 讀取 profile。`slug` 查詢時會 trim 並轉小寫。
+
+找不到時回傳 `404 streamer profile not found`。
+
 ## Identity Mappings
 
 Identity mapping 將外部身份連到 Tachiya canonical user id，也就是 Saleor customer id。

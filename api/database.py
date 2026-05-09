@@ -38,6 +38,7 @@ def import_models():
         identity_mapping,
         points_ledger,
         referral,
+        streamer,
         webhook_event,
     )
 
