@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
 from models.coupon import UserCoupon
+from models.coupon_redemption_audit import CouponRedemptionAuditEvent
 from routers import coupons
 
 
@@ -496,6 +497,115 @@ def test_list_redemption_audit_events_returns_recent_events(monkeypatch):
         "reason": None,
         "created_at": "2026-01-01T00:00:00",
     }
+
+
+def test_list_redemption_audit_events_filters_fields_and_created_range(monkeypatch):
+    session = build_real_session()
+    session.add_all(
+        [
+            CouponRedemptionAuditEvent(
+                id="before-range",
+                coupon_id="tachiya-95",
+                idempotency_key="redeem-before",
+                redemption_token="token-before",
+                status="failed",
+                reason="before",
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            CouponRedemptionAuditEvent(
+                id="matching-old",
+                coupon_id="tachiya-95",
+                idempotency_key="redeem-1",
+                redemption_token="token-1",
+                status="failed",
+                reason="older match",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            CouponRedemptionAuditEvent(
+                id="matching-new",
+                coupon_id="tachiya-95",
+                idempotency_key="redeem-1",
+                redemption_token="token-1",
+                status="failed",
+                reason="newer match",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            CouponRedemptionAuditEvent(
+                id="wrong-status",
+                coupon_id="tachiya-95",
+                idempotency_key="redeem-1",
+                redemption_token="token-1",
+                status="succeeded",
+                reason=None,
+                created_at=datetime(2026, 1, 2, 12, 0, 0),
+            ),
+            CouponRedemptionAuditEvent(
+                id="after-range",
+                coupon_id="tachiya-95",
+                idempotency_key="redeem-1",
+                redemption_token="token-1",
+                status="failed",
+                reason="after",
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/redemption-audit-events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "coupon_id": " tachiya-95 ",
+            "status": " failed ",
+            "idempotency_key": " redeem-1 ",
+            "redemption_token": " token-1 ",
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [event["reason"] for event in response.json()["events"]] == [
+        "newer match",
+        "older match",
+    ]
+
+
+def test_list_redemption_audit_events_rejects_invalid_created_range(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/redemption-audit-events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
+
+
+def test_list_redemption_audit_events_rejects_blank_filter(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/redemption-audit-events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"coupon_id": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "coupon_id is required"
 
 
 def test_list_admin_coupons_requires_internal_secret(monkeypatch):

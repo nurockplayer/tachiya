@@ -245,18 +245,56 @@ def list_admin_coupons(
     dependencies=[Depends(verify_internal_secret)],
 )
 def list_redemption_audit_events(
+    coupon_id: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    idempotency_key: str | None = Query(default=None),
+    redemption_token: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    events = (
-        db.query(CouponRedemptionAuditEvent)
-        .order_by(
-            CouponRedemptionAuditEvent.created_at.desc(),
-            CouponRedemptionAuditEvent.id.desc(),
-        )
-        .limit(limit)
-        .all()
+    normalized_coupon_id = _normalize_optional_filter(coupon_id, "coupon_id is required")
+    normalized_status = _normalize_optional_filter(status, "status is required")
+    normalized_idempotency_key = _normalize_optional_filter(
+        idempotency_key,
+        "idempotency_key is required",
     )
+    normalized_redemption_token = _normalize_optional_filter(
+        redemption_token,
+        "redemption_token is required",
+    )
+    normalized_created_from = _normalize_optional_datetime(created_from)
+    normalized_created_to = _normalize_optional_datetime(created_to)
+    if (
+        normalized_created_from is not None
+        and normalized_created_to is not None
+        and normalized_created_from > normalized_created_to
+    ):
+        raise HTTPException(status_code=422, detail="invalid created_at range")
+
+    query = db.query(CouponRedemptionAuditEvent)
+    if normalized_coupon_id is not None:
+        query = query.filter(CouponRedemptionAuditEvent.coupon_id == normalized_coupon_id)
+    if normalized_status is not None:
+        query = query.filter(CouponRedemptionAuditEvent.status == normalized_status)
+    if normalized_idempotency_key is not None:
+        query = query.filter(
+            CouponRedemptionAuditEvent.idempotency_key == normalized_idempotency_key,
+        )
+    if normalized_redemption_token is not None:
+        query = query.filter(
+            CouponRedemptionAuditEvent.redemption_token == normalized_redemption_token,
+        )
+    if normalized_created_from is not None:
+        query = query.filter(CouponRedemptionAuditEvent.created_at >= normalized_created_from)
+    if normalized_created_to is not None:
+        query = query.filter(CouponRedemptionAuditEvent.created_at <= normalized_created_to)
+
+    events = query.order_by(
+        CouponRedemptionAuditEvent.created_at.desc(),
+        CouponRedemptionAuditEvent.id.desc(),
+    ).limit(limit).all()
     return RedemptionAuditEventsResponse(
         events=[
             RedemptionAuditEventResponse(
