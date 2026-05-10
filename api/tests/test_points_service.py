@@ -155,6 +155,22 @@ def test_get_balance_only_sums_requested_user():
     assert asyncio.run(service.get_balance("user-2")) == 999
 
 
+def test_get_balance_normalizes_user_id():
+    session = build_session()
+    service = PointsService(session)
+    asyncio.run(service.credit(user_id="user-1", amount=120, reference_id="order-1"))
+
+    assert asyncio.run(service.get_balance(" user-1 ")) == 120
+
+
+def test_get_balance_rejects_blank_user_id():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="user_id is required"):
+        asyncio.run(service.get_balance("   "))
+
+
 def test_get_balance_excludes_expired_unspent_credits():
     session = build_session()
     service = PointsService(session)
@@ -337,6 +353,35 @@ def test_list_entries_returns_requested_user_newest_first():
     assert entries[0].source_type == "checkout"
     assert entries[0].reference_id == "checkout-1"
     assert entries[0].expires_at == datetime(2026, 12, 31, 23, 59, 59)
+
+
+def test_list_entries_normalizes_user_id():
+    session = build_session()
+    service = PointsService(session)
+    session.add(
+        PointsLedger(
+            id="entry-1",
+            user_id="user-1",
+            amount=120,
+            entry_type="credit",
+            source_type="tachigo",
+            reference_id="tachigo:redemption-1",
+            created_at=datetime(2026, 1, 1, 0, 0, 0),
+        ),
+    )
+    session.commit()
+
+    entries = asyncio.run(service.list_entries(" user-1 ", limit=10))
+
+    assert [entry.id for entry in entries] == ["entry-1"]
+
+
+def test_list_entries_rejects_blank_user_id():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="user_id is required"):
+        asyncio.run(service.list_entries("   "))
 
 
 def test_list_admin_entries_filters_and_returns_newest_first():
