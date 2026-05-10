@@ -66,23 +66,37 @@ def redeem_coupon(
     settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db),
 ):
-    if req.coupon_id not in VALID_COUPON_IDS:
+    coupon_id = req.coupon_id.strip()
+    idempotency_key = _normalize_optional_value(req.idempotency_key)
+
+    if not coupon_id:
         _record_redemption_audit(
             db,
             coupon_id=req.coupon_id,
-            idempotency_key=req.idempotency_key,
+            idempotency_key=idempotency_key,
             redemption_token=None,
             status="failed",
-            reason=f"unknown coupon_id: {req.coupon_id}",
+            reason="coupon_id is required",
         )
-        raise HTTPException(status_code=400, detail=f"unknown coupon_id: {req.coupon_id}")
+        raise HTTPException(status_code=400, detail="coupon_id is required")
 
-    expected_tcg_cost = COUPON_CONFIG[req.coupon_id]["tcg_cost"]
+    if coupon_id not in VALID_COUPON_IDS:
+        _record_redemption_audit(
+            db,
+            coupon_id=coupon_id,
+            idempotency_key=idempotency_key,
+            redemption_token=None,
+            status="failed",
+            reason=f"unknown coupon_id: {coupon_id}",
+        )
+        raise HTTPException(status_code=400, detail=f"unknown coupon_id: {coupon_id}")
+
+    expected_tcg_cost = COUPON_CONFIG[coupon_id]["tcg_cost"]
     if req.tcg_cost <= 0:
         _record_redemption_audit(
             db,
-            coupon_id=req.coupon_id,
-            idempotency_key=req.idempotency_key,
+            coupon_id=coupon_id,
+            idempotency_key=idempotency_key,
             redemption_token=None,
             status="failed",
             reason="tcg_cost must be positive",
@@ -92,29 +106,29 @@ def redeem_coupon(
     if req.tcg_cost != expected_tcg_cost:
         _record_redemption_audit(
             db,
-            coupon_id=req.coupon_id,
-            idempotency_key=req.idempotency_key,
+            coupon_id=coupon_id,
+            idempotency_key=idempotency_key,
             redemption_token=None,
             status="failed",
             reason=f"tcg_cost mismatch: expected {expected_tcg_cost}, got {req.tcg_cost}",
         )
         raise HTTPException(
             status_code=400,
-            detail=f"tcg_cost mismatch for coupon_id: {req.coupon_id}",
+            detail=f"tcg_cost mismatch for coupon_id: {coupon_id}",
         )
 
-    if req.idempotency_key:
+    if idempotency_key:
         existing = (
             db.query(UserCoupon)
-            .filter(UserCoupon.idempotency_key == req.idempotency_key)
+            .filter(UserCoupon.idempotency_key == idempotency_key)
             .first()
         )
         if existing:
-            if existing.coupon_id != req.coupon_id or existing.tcg_cost != req.tcg_cost:
+            if existing.coupon_id != coupon_id or existing.tcg_cost != req.tcg_cost:
                 _record_redemption_audit(
                     db,
-                    coupon_id=req.coupon_id,
-                    idempotency_key=req.idempotency_key,
+                    coupon_id=coupon_id,
+                    idempotency_key=idempotency_key,
                     redemption_token=None,
                     status="failed",
                     reason="idempotency key conflict",
@@ -124,7 +138,7 @@ def redeem_coupon(
             _record_redemption_audit(
                 db,
                 coupon_id=existing.coupon_id,
-                idempotency_key=req.idempotency_key,
+                idempotency_key=idempotency_key,
                 redemption_token=existing.redemption_token,
                 status="replayed",
                 reason="idempotency key replay",
@@ -137,24 +151,24 @@ def redeem_coupon(
     code = f"{settings.voucher_code_prefix}-{uuid.uuid4().hex[:6].upper()}"
     redemption_token = str(uuid.uuid4())
     try:
-        result = create_voucher(req.coupon_id, code)
+        result = create_voucher(coupon_id, code)
     except Exception as e:
         _record_redemption_audit(
             db,
-            coupon_id=req.coupon_id,
-            idempotency_key=req.idempotency_key,
+            coupon_id=coupon_id,
+            idempotency_key=idempotency_key,
             redemption_token=None,
             status="failed",
             reason=str(e),
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-    coupon_type = COUPON_CONFIG[req.coupon_id]["coupon_type"]
+    coupon_type = COUPON_CONFIG[coupon_id]["coupon_type"]
     record = UserCoupon(
-        coupon_id=req.coupon_id,
+        coupon_id=coupon_id,
         voucher_code=result["code"],
         saleor_voucher_id=result["voucher_id"],
-        idempotency_key=req.idempotency_key,
+        idempotency_key=idempotency_key,
         redemption_token=redemption_token,
         coupon_type=coupon_type,
         tcg_cost=expected_tcg_cost,
@@ -162,8 +176,8 @@ def redeem_coupon(
     db.add(record)
     db.add(
         CouponRedemptionAuditEvent(
-            coupon_id=req.coupon_id,
-            idempotency_key=req.idempotency_key,
+            coupon_id=coupon_id,
+            idempotency_key=idempotency_key,
             redemption_token=redemption_token,
             status="succeeded",
             reason=None,
@@ -300,3 +314,10 @@ def _normalize_optional_filter(value: str | None, message: str) -> str | None:
     if not normalized:
         raise HTTPException(status_code=422, detail=message)
     return normalized
+
+
+def _normalize_optional_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
