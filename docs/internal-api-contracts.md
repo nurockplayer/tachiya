@@ -685,7 +685,8 @@ Response：
       "commission_bps": 1000,
       "share_amount": 120,
       "status": "pending",
-      "created_at": "2026-05-09T23:40:00"
+      "created_at": "2026-05-09T23:40:00",
+      "updated_at": "2026-05-09T23:40:00"
     }
   ],
   "unassigned_product_ids": []
@@ -719,7 +720,8 @@ Response：
       "commission_bps": 1000,
       "share_amount": 120,
       "status": "pending",
-      "created_at": "2026-05-10T00:00:00"
+      "created_at": "2026-05-10T00:00:00",
+      "updated_at": "2026-05-10T00:00:00"
     }
   ]
 }
@@ -797,7 +799,8 @@ Response：
     "commission_bps": 1000,
     "share_amount": 120,
     "status": "paid",
-    "created_at": "2026-05-10T00:00:00"
+    "created_at": "2026-05-10T00:00:00",
+    "updated_at": "2026-05-10T00:05:00"
   }
 }
 ```
