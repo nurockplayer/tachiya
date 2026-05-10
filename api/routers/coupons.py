@@ -331,13 +331,14 @@ def list_coupons(
     redemption_token: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    if not redemption_token:
+    normalized_redemption_token = _normalize_optional_value(redemption_token)
+    if normalized_redemption_token is None:
         raise HTTPException(status_code=400, detail="redemption_token is required")
 
     coupon = (
         db.query(UserCoupon)
         .filter(
-            UserCoupon.redemption_token == redemption_token,
+            UserCoupon.redemption_token == normalized_redemption_token,
             UserCoupon.status == "active",
         )
         .first()
