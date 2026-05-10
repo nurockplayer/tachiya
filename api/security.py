@@ -69,7 +69,7 @@ async def verify_webhook_signature(
 
 def _get_required_internal_secret() -> str:
     secret = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
-    if not secret:
+    if not secret.strip():
         raise HTTPException(
             status_code=500,
             detail="internal shared secret is not configured",

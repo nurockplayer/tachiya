@@ -57,8 +57,28 @@ def test_internal_secret_fails_closed_when_not_configured(monkeypatch):
     assert response.json()["detail"] == "internal shared secret is not configured"
 
 
+def test_internal_secret_fails_closed_when_blank(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "   ")
+    client = build_client()
+
+    response = client.get("/internal", headers={"X-Tachiya-Internal-Secret": "   "})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "internal shared secret is not configured"
+
+
 def test_webhook_signature_fails_closed_when_secret_not_configured(monkeypatch):
     monkeypatch.delenv("TACHIYA_INTERNAL_SHARED_SECRET", raising=False)
+    client = build_client()
+
+    response = client.post("/webhook", json={"ok": True})
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "internal shared secret is not configured"
+
+
+def test_webhook_signature_fails_closed_when_secret_is_blank(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "   ")
     client = build_client()
 
     response = client.post("/webhook", json={"ok": True})
