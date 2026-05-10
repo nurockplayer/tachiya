@@ -118,7 +118,7 @@ async def get_identity_points(
 
 def _internal_headers() -> dict[str, str]:
     secret = os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "")
-    if not secret:
+    if not secret.strip():
         raise TachigoUpstreamError("tachigo internal secret is not configured")
     return {"X-Tachiya-Internal-Secret": secret}
 
