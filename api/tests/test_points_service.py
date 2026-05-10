@@ -201,6 +201,78 @@ def test_list_entries_returns_requested_user_newest_first():
     assert entries[0].expires_at == datetime(2026, 12, 31, 23, 59, 59)
 
 
+def test_list_admin_entries_filters_and_returns_newest_first():
+    session = build_session()
+    service = PointsService(session)
+    session.add_all(
+        [
+            PointsLedger(
+                id="older-tachigo-entry",
+                user_id="user-1",
+                amount=120,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:redemption-1",
+                created_at=datetime(2026, 1, 1, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="newer-tachigo-entry",
+                user_id="user-2",
+                amount=80,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:redemption-2",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="checkout-entry",
+                user_id="user-1",
+                amount=-20,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout-1",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+        ],
+    )
+    session.commit()
+
+    tachigo_credits = service.list_admin_entries(
+        entry_type=" credit ",
+        source_type=" Tachigo ",
+        limit=10,
+    )
+    user_entries = service.list_admin_entries(user_id=" user-1 ", limit=10)
+    reference_entries = service.list_admin_entries(reference_id=" checkout-1 ", limit=10)
+
+    assert [entry.id for entry in tachigo_credits] == [
+        "newer-tachigo-entry",
+        "older-tachigo-entry",
+    ]
+    assert [entry.id for entry in user_entries] == [
+        "checkout-entry",
+        "older-tachigo-entry",
+    ]
+    assert [entry.id for entry in reference_entries] == ["checkout-entry"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"user_id": " "}, "user_id is required"),
+        ({"entry_type": "adjust"}, "entry_type must be credit or debit"),
+        ({"source_type": " "}, "source_type is required"),
+        ({"reference_id": " "}, "reference_id is required"),
+    ],
+)
+def test_list_admin_entries_rejects_invalid_filters(kwargs, message):
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match=message):
+        service.list_admin_entries(**kwargs)
+
+
 @pytest.mark.parametrize("method", ["credit", "debit"])
 def test_credit_and_debit_reject_non_positive_amounts(method):
     session = build_session()

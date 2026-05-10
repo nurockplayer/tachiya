@@ -129,6 +129,44 @@ Response entry 欄位：
 - `expires_at`
 - `created_at`
 
+### `GET /points/ledger/entries`
+
+用途：受信任營運、客服或對帳工具查詢最近 points ledger entries，不限定單一使用者。
+
+Query：
+
+- `user_id`：可選，Saleor customer id。
+- `entry_type`：可選，只接受 `credit` / `debit`。
+- `source_type`：可選，例如 `manual`、`tachigo`、`order-reward`、`checkout`。
+- `reference_id`：可選，例如 `tachigo:redemption-1` 或 `checkout-1`。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "entries": [
+    {
+      "id": "uuid",
+      "user_id": "saleor-user-1",
+      "amount": 120,
+      "entry_type": "credit",
+      "source_type": "tachigo",
+      "reference_id": "tachigo:redemption-1",
+      "expires_at": null,
+      "created_at": "2026-05-10T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- 字串 filter 會 trim，空字串回 `422`。
+- `entry_type` 與 `source_type` filter 會轉小寫。
+- 結果依 `created_at desc`、`id desc` 穩定排序。
+- 此 endpoint 只查詢 ledger，不建立或修改點數。
+
 ### `POST /points/transactions`
 
 用途：受信任營運或系統服務建立 manual points credit/debit。
