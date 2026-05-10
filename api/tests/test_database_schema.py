@@ -60,6 +60,23 @@ def test_metadata_includes_coupon_admin_lookup_indexes():
     assert "ix_tachiya_demo_coupons_created_at" in indexes
 
 
+def test_metadata_includes_identity_mapping_lookup_indexes():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    indexes = {
+        index["name"]: index
+        for index in inspect(engine).get_indexes("tachiya_identity_mappings")
+    }
+
+    assert "ix_tachiya_identity_mappings_saleor_customer_id" in indexes
+    assert "ix_tachiya_identity_mappings_provider" in indexes
+    assert "ix_tachiya_identity_mappings_external_subject" in indexes
+    assert "ix_tachiya_identity_mappings_created_at" in indexes
+
+
 def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
     engine = create_engine("sqlite:///:memory:")
     with engine.begin() as conn:
