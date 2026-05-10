@@ -2,6 +2,27 @@
 
 本文記錄 Tachiya FastAPI 目前提供給 Storefront、Tachigo backend、營運腳本與受信任後台服務使用的內部 API 合約。產品決策背景見 [`docs/product-decisions.md`](product-decisions.md)。
 
+## 輸入型別基線
+
+自 2026-05-10 這一波 hardening 起，Tachiya 內部 API 對金額、點數與 basis points 類欄位採用明確的 schema-level strict integer 規則。
+
+- 這類欄位只接受 JSON number 整數值。
+- 不接受字串數字，例如 `"120"`。
+- 不接受布林值，例如 `true` / `false`。
+- 不接受浮點數，例如 `1200.5`。
+- request schema 先擋下非 strict integer payload，避免進到 service 後才發生隱性 coercion。
+
+目前已套用 strict integer 邊界的欄位：
+
+- `POST /coupons/redeem`：`tcg_cost`
+- `POST /points/transactions`：`amount`
+- `POST /points/webhooks/order-rewarded`：`reward_points`
+- `POST /referrals/webhooks/order-completed`：`order_total_amount`
+- `POST /streamers`：`commission_bps`
+- `PATCH /streamers/{slug}`：`commission_bps`
+- `POST /streamers/revenue-shares/preview`：`lines[].gross_amount`
+- `POST /streamers/revenue-shares/record`：`lines[].gross_amount`
+
 ## 共通認證
 
 所有內部 API endpoint 都必須帶：
@@ -112,6 +133,7 @@ Response：
 
 - `coupon_id` 與 `idempotency_key` 會 trim；`idempotency_key` trim 後為空時視為未提供。
 - `coupon_id` trim 後不可為空。
+- `tcg_cost` 必須是 strict integer；不得接受 `"18"`、`true` 或其他會被 Python / Pydantic 隱性轉型的 payload。
 - `coupon_id` 必須存在於 `api/services/saleor_voucher.py` 的 `COUPON_CONFIG`。
 - `tcg_cost` 必須大於 0，且必須等於 coupon 設定成本。
 - voucher code prefix 由 `TACHIYA_VOUCHER_CODE_PREFIX` 控制，預設 `TACHIYA`。
@@ -344,7 +366,7 @@ Request：
 規則：
 
 - `entry_type` 只接受 `credit` / `debit`。
-- `amount` 必須大於 0。
+- `amount` 必須是 strict integer，且必須大於 0。
 - `user_id`、`reference_id`、`source_type` 會 trim，trim 後不可為空字串。
 - 同一個使用者、同一個 `reference_id`、同一個 `entry_type` 重送時維持 idempotent。
 - debit 不可讓目前可用 balance 變成負數；已過期且尚未消耗的 credit 不可被 debit 花用。
@@ -368,7 +390,7 @@ Request：
 
 - 需要 webhook 簽章。
 - `order_id` 會 trim，trim 後為空回 `422 order_id is required`，且不建立 ledger 或 event。
-- `reward_points` 必須大於 0。
+- `reward_points` 必須是 strict integer，且必須大於 0。
 - ledger `reference_id` 使用 `order-reward:<trim 後 order_id>`。
 - ledger `source_type` 使用 `order-reward`。
 
@@ -392,6 +414,7 @@ Request：
 
 - 需要 webhook 簽章。
 - `order_id` 與 `referee_id` 會 trim，trim 後為空回 `422`。
+- `order_total_amount` 必須是 strict integer，且必須大於 0。
 - event id 重放回傳 `409 webhook event already processed`。
 - 若訂單沒有符合推薦關係，回傳 `{"rewarded": false}`。
 - 若有獎勵，回傳 `reward_points` 與 `ledger_entry_id`。
@@ -419,7 +442,7 @@ Request：
 - `slug` 會 trim 並轉成小寫，且必須唯一。
 - `display_name` 會 trim，且不可為空。
 - `saleor_collection_id` 可選；空白視為未設定；有值時必須唯一。
-- `commission_bps` 是 basis points，範圍 `0..10000`，預設 `1000`。
+- `commission_bps` 必須是 strict integer；範圍 `0..10000`，預設 `1000`。
 - `active` 預設 `true`。
 
 錯誤：
@@ -452,7 +475,7 @@ Request 欄位皆 optional，但至少需提供一個欄位：
 - path `slug` 會 trim 並轉小寫，trim 後為空回 `422 slug is required`。
 - `display_name` 若提供會 trim，且不可為空。
 - `saleor_collection_id` 若提供會 trim，空白或 `null` 視為清空。
-- `commission_bps` 若提供，範圍為 `0..10000`。
+- `commission_bps` 若提供，必須是 strict integer，且範圍為 `0..10000`。
 - profile 不存在回傳 `404 streamer profile not found`。
 - 重複 Saleor collection 回傳 `409 streamer profile already exists`。
 
@@ -653,7 +676,7 @@ Request：
 - `order_id` 會 trim，且不可為空。
 - `lines` 至少 1 筆。
 - `saleor_product_id` 會 trim，且不可為空。
-- `gross_amount` 必須大於 0，單位由 caller 保持一致，建議用最小貨幣單位。
+- `gross_amount` 必須是 strict integer，且必須大於 0，單位由 caller 保持一致，建議用最小貨幣單位。
 - 分潤金額使用 `floor(gross_amount * commission_bps / 10000)`。
 - 同 streamer 多行會彙總 `gross_amount` 與 `share_amount`。
 - 找不到 assignment 或 streamer inactive 時，商品 id 會進入 `unassigned_product_ids`。
