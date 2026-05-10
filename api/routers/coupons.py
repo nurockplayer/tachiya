@@ -194,12 +194,21 @@ def redeem_coupon(
     dependencies=[Depends(verify_internal_secret)],
 )
 def list_admin_coupons(
+    coupon_id: str | None = Query(default=None),
+    voucher_code: str | None = Query(default=None),
+    redemption_token: str | None = Query(default=None),
     status: str | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
+    normalized_coupon_id = _normalize_optional_filter(coupon_id, "coupon_id is required")
+    normalized_voucher_code = _normalize_optional_filter(voucher_code, "voucher_code is required")
+    normalized_redemption_token = _normalize_optional_filter(
+        redemption_token,
+        "redemption_token is required",
+    )
     normalized_status = _normalize_optional_filter(status, "status is required")
     normalized_created_from = _normalize_optional_datetime(created_from)
     normalized_created_to = _normalize_optional_datetime(created_to)
@@ -211,6 +220,12 @@ def list_admin_coupons(
         raise HTTPException(status_code=422, detail="invalid created_at range")
 
     query = db.query(UserCoupon)
+    if normalized_coupon_id is not None:
+        query = query.filter(UserCoupon.coupon_id == normalized_coupon_id)
+    if normalized_voucher_code is not None:
+        query = query.filter(UserCoupon.voucher_code == normalized_voucher_code)
+    if normalized_redemption_token is not None:
+        query = query.filter(UserCoupon.redemption_token == normalized_redemption_token)
     if normalized_status is not None:
         query = query.filter(UserCoupon.status == normalized_status)
     if normalized_created_from is not None:

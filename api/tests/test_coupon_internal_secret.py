@@ -724,6 +724,55 @@ def test_list_admin_coupons_filters_created_range(monkeypatch):
     ]
 
 
+def test_list_admin_coupons_filters_exact_lookup_fields(monkeypatch):
+    session = build_real_session()
+    session.add_all(
+        [
+            UserCoupon(
+                id="matching-coupon",
+                coupon_id="tachiya-95",
+                voucher_code="TACHIYA-MATCH",
+                saleor_voucher_id="saleor-match",
+                redemption_token="token-match",
+                coupon_type="PERCENT_5",
+                tcg_cost=18,
+                status="active",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            UserCoupon(
+                id="other-coupon",
+                coupon_id="tachiya-95",
+                voucher_code="TACHIYA-OTHER",
+                saleor_voucher_id="saleor-other",
+                redemption_token="token-other",
+                coupon_type="PERCENT_5",
+                tcg_cost=18,
+                status="active",
+                created_at=datetime(2026, 1, 2, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/admin",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "coupon_id": " tachiya-95 ",
+            "voucher_code": " TACHIYA-MATCH ",
+            "redemption_token": " token-match ",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [coupon["voucher_code"] for coupon in response.json()["coupons"]] == [
+        "TACHIYA-MATCH",
+    ]
+
+
 def test_list_admin_coupons_rejects_blank_status(monkeypatch):
     fake_db = FakeDB()
     client = build_client(fake_db)
@@ -737,6 +786,26 @@ def test_list_admin_coupons_rejects_blank_status(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "status is required"
+
+
+def test_list_admin_coupons_rejects_blank_exact_lookup_filter(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    for field, message in [
+        ("coupon_id", "coupon_id is required"),
+        ("voucher_code", "voucher_code is required"),
+        ("redemption_token", "redemption_token is required"),
+    ]:
+        response = client.get(
+            "/coupons/admin",
+            headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+            params={field: " "},
+        )
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == message
 
 
 def test_list_admin_coupons_rejects_invalid_created_range(monkeypatch):
