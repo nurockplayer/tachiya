@@ -27,12 +27,13 @@ X-Tachiya-Webhook-Signature: <hex-hmac-sha256>
 簽章 payload 為：
 
 ```text
-<timestamp>.<raw-request-body>
+<timestamp>.<event-id>.<raw-request-body>
 ```
 
 驗證規則：
 
 - HMAC secret：`TACHIYA_INTERNAL_SHARED_SECRET`。
+- `event-id` 必須與 `X-Tachiya-Webhook-Event-Id` header 完全一致；修改 event id 會讓簽章失效，避免改 id 重放同一 payload。
 - timestamp tolerance：`TACHIYA_WEBHOOK_TOLERANCE_SECONDS`，預設 `300` 秒。
 - tolerance 非整數、零或負數：回傳 `500 webhook tolerance is not configured correctly`。
 - timestamp 超出 tolerance：回傳 `401 stale webhook timestamp`。

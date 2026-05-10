@@ -30,17 +30,18 @@ def build_client() -> TestClient:
 def signed_webhook_headers(
     *,
     body: bytes,
+    event_id: str = "evt-test-1",
     secret: str = "shared-secret",
     timestamp: int = 1_700_000_000,
 ) -> dict[str, str]:
-    signed_payload = f"{timestamp}.".encode() + body
+    signed_payload = f"{timestamp}.{event_id}.".encode() + body
     signature = hmac.new(
         secret.encode(),
         signed_payload,
         hashlib.sha256,
     ).hexdigest()
     return {
-        "x-tachiya-webhook-event-id": "evt-test-1",
+        "x-tachiya-webhook-event-id": event_id,
         "x-tachiya-webhook-timestamp": str(timestamp),
         "x-tachiya-webhook-signature": signature,
     }
@@ -91,6 +92,20 @@ def test_webhook_signature_uses_default_tolerance_when_not_configured(monkeypatc
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
+
+
+def test_webhook_signature_rejects_tampered_event_id(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    monkeypatch.setattr(security.time, "time", lambda: 1_700_000_000)
+    client = build_client()
+    body = b'{"ok":true}'
+    headers = signed_webhook_headers(body=body, event_id="evt-original")
+    headers["x-tachiya-webhook-event-id"] = "evt-tampered"
+
+    response = client.post("/webhook", content=body, headers=headers)
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid webhook signature"
 
 
 def test_webhook_signature_uses_configured_tolerance(monkeypatch):
