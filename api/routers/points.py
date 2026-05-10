@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -11,6 +11,8 @@ from services.points_service import PointsService
 from services.webhook_event_service import WebhookEventReplayError, WebhookEventService
 
 router = APIRouter(prefix="/points", tags=["points"])
+
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
 
 class PointsBalanceResponse(BaseModel):
@@ -57,11 +59,11 @@ class PointsExpiredCreditsResponse(BaseModel):
 
 
 class PointsTransactionRequest(BaseModel):
-    user_id: str = Field(min_length=1)
+    user_id: NonBlankStr
     entry_type: Literal["credit", "debit"]
     amount: int = Field(gt=0)
-    reference_id: str = Field(min_length=1)
-    source_type: str = Field(default="manual", min_length=1)
+    reference_id: NonBlankStr
+    source_type: NonBlankStr = "manual"
     expires_at: datetime | None = None
 
 
@@ -71,8 +73,8 @@ class PointsTransactionResponse(BaseModel):
 
 
 class OrderRewardRequest(BaseModel):
-    order_id: str = Field(min_length=1)
-    user_id: str = Field(min_length=1)
+    order_id: NonBlankStr
+    user_id: NonBlankStr
     reward_points: int = Field(gt=0)
 
 
