@@ -1,4 +1,8 @@
+import hashlib
+import hmac
+import json
 import sys
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,6 +14,8 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
+from models.streamer import StreamerRevenueShareRecord
+from models.webhook_event import WebhookEvent
 from routers import streamers
 
 
@@ -472,3 +478,151 @@ def test_record_streamer_revenue_shares_rejects_conflicting_replay(monkeypatch):
     assert first_response.status_code == 200
     assert replay_response.status_code == 409
     assert replay_response.json()["detail"] == "revenue share record conflict"
+
+
+def signed_streamer_order_completed_request(
+    client: TestClient,
+    *,
+    payload: dict,
+    event_id: str = "evt-revenue-share-1",
+    timestamp: int | None = None,
+    secret: str = "shared-secret",
+):
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    timestamp = timestamp or int(time.time())
+    signed_payload = f"{timestamp}.".encode() + body
+    signature = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
+    return client.post(
+        "/streamers/webhooks/order-completed",
+        headers={
+            "Content-Type": "application/json",
+            "X-Tachiya-Internal-Secret": secret,
+            "X-Tachiya-Webhook-Event-Id": event_id,
+            "X-Tachiya-Webhook-Timestamp": str(timestamp),
+            "X-Tachiya-Webhook-Signature": signature,
+        },
+        content=body,
+    )
+
+
+def test_revenue_share_order_completed_webhook_records_shares(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    streamer_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One", "commission_bps": 1250},
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+
+    response = signed_streamer_order_completed_request(
+        client,
+        payload={
+            "order_id": "saleor-order-1",
+            "lines": [
+                {"saleor_product_id": "product-1", "gross_amount": 1200},
+                {"saleor_product_id": "missing-product", "gross_amount": 300},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["order_id"] == "saleor-order-1"
+    assert response.json()["unassigned_product_ids"] == ["missing-product"]
+    assert response.json()["records"][0]["streamer_profile_id"] == streamer_response.json()["id"]
+    assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
+    assert response.json()["records"][0]["share_amount"] == 150
+    event = session.query(WebhookEvent).one()
+    assert event.event_id == "evt-revenue-share-1"
+    assert event.event_type == "revenue_share.order_completed"
+    record = session.query(StreamerRevenueShareRecord).one()
+    assert record.order_id == "saleor-order-1"
+    assert record.share_amount == 150
+
+
+def test_revenue_share_order_completed_webhook_rejects_missing_signature(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/streamers/webhooks/order-completed",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "order_id": "saleor-order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid webhook signature"
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(StreamerRevenueShareRecord).count() == 0
+
+
+def test_revenue_share_order_completed_webhook_rejects_replayed_event(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    payload = {
+        "order_id": "saleor-order-1",
+        "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+    }
+
+    first_response = signed_streamer_order_completed_request(client, payload=payload)
+    second_response = signed_streamer_order_completed_request(client, payload=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert second_response.json()["detail"] == "webhook event already processed"
+    assert session.query(WebhookEvent).count() == 1
+    assert session.query(StreamerRevenueShareRecord).count() == 1
+
+
+def test_revenue_share_order_completed_webhook_rejects_record_conflict(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    first_response = signed_streamer_order_completed_request(
+        client,
+        payload={
+            "order_id": "saleor-order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+        event_id="evt-revenue-share-1",
+    )
+
+    conflict_response = signed_streamer_order_completed_request(
+        client,
+        payload={
+            "order_id": "saleor-order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1300}],
+        },
+        event_id="evt-revenue-share-2",
+    )
+
+    assert first_response.status_code == 200
+    assert conflict_response.status_code == 409
+    assert conflict_response.json()["detail"] == "revenue share record conflict"
+    assert session.query(WebhookEvent).count() == 1
+    assert session.query(StreamerRevenueShareRecord).count() == 1
