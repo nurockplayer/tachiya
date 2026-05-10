@@ -126,7 +126,7 @@ async def create_points_transaction(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    balance = await service.get_balance(req.user_id)
+    balance = await service.get_balance(entry.user_id)
     return PointsTransactionResponse(
         entry=_ledger_entry_response(entry),
         balance=balance,
