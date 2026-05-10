@@ -987,6 +987,7 @@ Query：
 - `provider` 或 `external_subject` trim 後為空時回傳 `422`。
 - Tachiya 找不到 mapping 時回傳 `404 identity mapping not found`，不呼叫 Tachigo upstream。
 - Tachigo upstream 非 200、連線失敗、payload 不合法或 outbound secret 缺失時，router 回傳 `502`。
+- 若 Tachigo upstream 回傳的 `provider` / `external_subject` 與請求不一致，回傳 `502 tachigo upstream identity mismatch`。
 
 ### `GET /tachigo/identity/{provider}/{external_subject}/points`
 

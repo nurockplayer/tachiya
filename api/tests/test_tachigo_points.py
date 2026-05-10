@@ -118,6 +118,35 @@ async def test_get_identity_points_calls_tachigo_identity_api(monkeypatch):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "provider": "wallet",
+            "external_subject": "tachigo-user-1",
+            "spendable_balance": 123,
+            "cumulative_total": 456,
+        },
+        {
+            "provider": "tachigo",
+            "external_subject": "other-user",
+            "spendable_balance": 123,
+            "cumulative_total": 456,
+        },
+    ],
+)
+async def test_get_identity_points_rejects_upstream_identity_mismatch(monkeypatch, payload):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=payload)),
+    ) as client:
+        with pytest.raises(TachigoUpstreamError, match="tachigo upstream identity mismatch"):
+            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+
+
+@pytest.mark.anyio
 async def test_get_identity_points_fails_closed_without_internal_secret(monkeypatch):
     requests: list[httpx.Request] = []
 
@@ -301,6 +330,32 @@ def test_tachigo_identity_points_query_endpoint_returns_points_for_special_subje
         "spendable_balance": 123,
         "cumulative_total": 456,
     }
+
+
+def test_tachigo_identity_points_endpoint_rejects_upstream_identity_mismatch(monkeypatch):
+    session = build_session()
+    IdentityMappingService(session).link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+        return TachigoIdentityPoints(
+            provider="wallet",
+            external_subject=external_subject,
+            spendable_balance=123,
+            cumulative_total=456,
+        )
+
+    monkeypatch.setattr(tachigo, "get_identity_points", fake_get_identity_points)
+
+    response = client.get(
+        "/tachigo/identity/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"provider": "tachigo", "external_subject": "tachigo-user-1"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "tachigo upstream identity mismatch"
 
 
 def test_tachigo_identity_points_query_endpoint_rejects_blank_filters(monkeypatch):

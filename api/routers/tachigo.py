@@ -109,6 +109,11 @@ async def _tachigo_identity_points_response(
         points = await get_identity_points(normalized_provider, normalized_external_subject, settings)
     except TachigoUpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if (
+        points.provider.strip().lower() != normalized_provider
+        or points.external_subject.strip() != normalized_external_subject
+    ):
+        raise HTTPException(status_code=502, detail="tachigo upstream identity mismatch")
 
     return TachigoIdentityPointsResponse(
         saleor_customer_id=saleor_customer_id,
