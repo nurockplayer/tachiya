@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -203,6 +204,51 @@ def test_list_records_filters_and_sorts_payout_queue():
     assert [record.id for record in order_records] == [pending_result.records[0].id]
 
 
+def test_list_records_filters_created_range_inclusively():
+    session = build_session()
+    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
+    service = RevenueShareService(session)
+    before = service.record_order_share(
+        order_id="order-before",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=100)],
+    )
+    range_start = service.record_order_share(
+        order_id="order-start",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=200)],
+    )
+    range_end = service.record_order_share(
+        order_id="order-end",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=300)],
+    )
+    after = service.record_order_share(
+        order_id="order-after",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=400)],
+    )
+    before.records[0].created_at = datetime(2026, 1, 1, 23, 59, 59)
+    range_start.records[0].created_at = datetime(2026, 1, 2, 0, 0, 0)
+    range_end.records[0].created_at = datetime(2026, 1, 3, 0, 0, 0)
+    after.records[0].created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    records = service.list_records(
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+        limit=10,
+    )
+
+    assert [record.order_id for record in records] == ["order-end", "order-start"]
+
+
+def test_list_records_rejects_invalid_created_range():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        RevenueShareService(session).list_records(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
+
+
 def test_list_records_applies_limit():
     session = build_session()
     create_streamer_with_assignment(session)
@@ -289,6 +335,48 @@ def test_summarize_records_groups_totals_by_status_and_filters():
         (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
         for summary in order_summaries
     ] == [("pending", 1, 2400, 240)]
+
+
+def test_summarize_records_filters_created_range():
+    session = build_session()
+    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
+    service = RevenueShareService(session)
+    before = service.record_order_share(
+        order_id="order-before",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=100)],
+    )
+    range_record = service.record_order_share(
+        order_id="order-in-range",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=200)],
+    )
+    after = service.record_order_share(
+        order_id="order-after",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=300)],
+    )
+    before.records[0].created_at = datetime(2026, 1, 1, 23, 59, 59)
+    range_record.records[0].created_at = datetime(2026, 1, 2, 0, 0, 0)
+    after.records[0].created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    summaries = service.summarize_records(
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+    )
+
+    assert [
+        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        for summary in summaries
+    ] == [("pending", 1, 200, 20)]
+
+
+def test_summarize_records_rejects_invalid_created_range():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        RevenueShareService(session).summarize_records(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
 
 
 def test_summarize_records_rejects_invalid_status_filter():

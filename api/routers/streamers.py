@@ -274,6 +274,8 @@ def list_streamer_revenue_share_records(
     status: str | None = Query(default=None),
     streamer_slug: str | None = Query(default=None),
     order_id: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
@@ -282,6 +284,8 @@ def list_streamer_revenue_share_records(
             status=status,
             streamer_slug=streamer_slug,
             order_id=order_id,
+            created_from=created_from,
+            created_to=created_to,
             limit=limit,
         )
     except ValueError as exc:
@@ -301,6 +305,8 @@ def summarize_streamer_revenue_share_records(
     status: str | None = Query(default=None),
     streamer_slug: str | None = Query(default=None),
     order_id: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     try:
@@ -308,6 +314,8 @@ def summarize_streamer_revenue_share_records(
             status=status,
             streamer_slug=streamer_slug,
             order_id=order_id,
+            created_from=created_from,
+            created_to=created_to,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

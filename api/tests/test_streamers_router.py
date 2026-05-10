@@ -953,6 +953,53 @@ def test_list_revenue_share_records(monkeypatch):
     assert response.json()["records"][0]["status"] == "pending"
 
 
+def test_list_revenue_share_records_filters_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    for order_id in ["order-before", "order-start", "order-end", "order-after"]:
+        client.post(
+            "/streamers/revenue-shares/record",
+            headers=headers,
+            json={
+                "order_id": order_id,
+                "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+            },
+        )
+    records = {
+        record.order_id: record
+        for record in session.query(StreamerRevenueShareRecord).all()
+    }
+    records["order-before"].created_at = datetime(2026, 1, 1, 23, 59, 59)
+    records["order-start"].created_at = datetime(2026, 1, 2, 0, 0, 0)
+    records["order-end"].created_at = datetime(2026, 1, 3, 0, 0, 0)
+    records["order-after"].created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    response = client.get(
+        "/streamers/revenue-shares/records",
+        headers=headers,
+        params={
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [record["order_id"] for record in response.json()["records"]] == [
+        "order-end",
+        "order-start",
+    ]
+
+
 def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -971,6 +1018,24 @@ def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
     assert invalid_limit_response.status_code == 422
     assert invalid_status_response.status_code == 422
     assert invalid_status_response.json()["detail"] == "status must be pending, paid, or void"
+
+
+def test_list_revenue_share_records_rejects_invalid_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers/revenue-shares/records",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
 
 
 def test_summarize_revenue_share_records(monkeypatch):
@@ -1033,6 +1098,52 @@ def test_summarize_revenue_share_records(monkeypatch):
     }
 
 
+def test_summarize_revenue_share_records_filters_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    for order_id in ["order-before", "order-in-range", "order-after"]:
+        client.post(
+            "/streamers/revenue-shares/record",
+            headers=headers,
+            json={
+                "order_id": order_id,
+                "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+            },
+        )
+    records = {
+        record.order_id: record
+        for record in session.query(StreamerRevenueShareRecord).all()
+    }
+    records["order-before"].created_at = datetime(2026, 1, 1, 23, 59, 59)
+    records["order-in-range"].created_at = datetime(2026, 1, 2, 0, 0, 0)
+    records["order-after"].created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    response = client.get(
+        "/streamers/revenue-shares/summary",
+        headers=headers,
+        params={
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "summaries": [
+            {"status": "pending", "record_count": 1, "gross_amount": 1200, "share_amount": 120},
+        ],
+    }
+
+
 def test_summarize_revenue_share_records_rejects_invalid_query(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -1045,6 +1156,24 @@ def test_summarize_revenue_share_records_rejects_invalid_query(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "status is required"
+
+
+def test_summarize_revenue_share_records_rejects_invalid_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers/revenue-shares/summary",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
 
 
 def test_update_revenue_share_record_status(monkeypatch):

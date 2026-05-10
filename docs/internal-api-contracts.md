@@ -701,6 +701,8 @@ Query：
 - `status`：可選，例如 `pending`、`paid` 或 `void`。
 - `streamer_slug`：可選，查詢單一 streamer 的分潤紀錄。
 - `order_id`：可選，查詢單一 Saleor order 的分潤紀錄。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response：
@@ -728,6 +730,8 @@ Response：
 - `status`、`streamer_slug`、`order_id` 有提供時會 trim，空字串回 `422`。
 - `status` 會轉小寫，且只接受 `pending` / `paid` / `void`；其他值回 `422 status must be pending, paid, or void`。
 - `streamer_slug` 查詢會轉小寫。
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
 - 依 `created_at desc`、`id asc` 穩定排序。
 - 本 endpoint 只查詢 records，不更新 payout 狀態。
 
@@ -740,6 +744,8 @@ Query：
 - `status`：可選，例如 `pending`、`paid` 或 `void`。
 - `streamer_slug`：可選，查詢單一 streamer 的分潤彙總。
 - `order_id`：可選，查詢單一 Saleor order 的分潤彙總。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 
 Response：
 
@@ -761,6 +767,8 @@ Response：
 - `status`、`streamer_slug`、`order_id` 有提供時會 trim，空字串回 `422`。
 - `status` 會轉小寫，且只接受 `pending` / `paid` / `void`；其他值回 `422 status must be pending, paid, or void`。
 - `streamer_slug` 查詢會轉小寫。
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
 - 依 `status asc` 穩定排序。
 - 無符合資料時回傳空陣列。
 
