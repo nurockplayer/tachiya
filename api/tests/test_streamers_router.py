@@ -31,7 +31,7 @@ def build_session():
     return SessionLocal()
 
 
-def build_client(session) -> TestClient:
+def build_client(session, *, raise_server_exceptions: bool = True) -> TestClient:
     app = FastAPI()
     app.include_router(streamers.router)
 
@@ -39,7 +39,7 @@ def build_client(session) -> TestClient:
         yield session
 
     app.dependency_overrides[streamers.get_db] = override_db
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
 def test_create_and_get_streamer_profile(monkeypatch):
@@ -128,6 +128,28 @@ def test_get_streamer_profile_returns_404(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "streamer profile not found"
+
+
+def test_streamer_profile_path_endpoints_reject_blank_slug(monkeypatch):
+    session = build_session()
+    client = build_client(session, raise_server_exceptions=False)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+
+    get_response = client.get("/streamers/%20", headers=headers)
+    patch_response = client.patch(
+        "/streamers/%20",
+        headers=headers,
+        json={"display_name": "Renamed"},
+    )
+    catalog_response = client.get("/streamers/%20/catalog", headers=headers)
+
+    assert get_response.status_code == 422
+    assert get_response.json()["detail"] == "slug is required"
+    assert patch_response.status_code == 422
+    assert patch_response.json()["detail"] == "slug is required"
+    assert catalog_response.status_code == 422
+    assert catalog_response.json()["detail"] == "slug is required"
 
 
 def test_update_streamer_profile(monkeypatch):
@@ -617,6 +639,28 @@ def test_delete_streamer_product_assignment_returns_404(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "streamer product assignment not found"
+
+
+def test_streamer_product_assignment_path_endpoints_reject_blank_product_id(monkeypatch):
+    session = build_session()
+    client = build_client(session, raise_server_exceptions=False)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+
+    get_response = client.get("/streamers/product-assignments/%20", headers=headers)
+    delete_response = client.delete("/streamers/product-assignments/%20", headers=headers)
+
+    assert get_response.status_code == 422
+    assert get_response.json()["detail"] == "saleor_product_id is required"
+    assert delete_response.status_code == 422
+    assert delete_response.json()["detail"] == "saleor_product_id is required"
+    assert session.query(StreamerProductAssignment).count() == 1
 
 
 def test_get_streamer_catalog(monkeypatch):
