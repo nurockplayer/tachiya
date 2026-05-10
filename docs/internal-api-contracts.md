@@ -398,6 +398,21 @@ Response：
 }
 ```
 
+### `POST /streamers/webhooks/order-completed`
+
+用途：Saleor 訂單完成 webhook 入口，使用與 record endpoint 相同的分潤計算規則，自動寫入每張訂單、每位 streamer 的分潤紀錄。
+
+Request 與 `POST /streamers/revenue-shares/record` 相同。
+
+規則：
+
+- 需要 internal secret 與 webhook 簽章。
+- 成功後記錄 webhook event type：`revenue_share.order_completed`。
+- 重放 event id 回傳 `409 webhook event already processed`。
+- 同一訂單分潤結果衝突時回傳 `409 revenue share record conflict`，且不記錄新的 webhook event。
+
+Response 與 `POST /streamers/revenue-shares/record` 相同。
+
 ## Identity Mappings
 
 Identity mapping 將外部身份連到 Tachiya canonical user id，也就是 Saleor customer id。

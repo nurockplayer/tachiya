@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
-from security import verify_internal_secret
+from security import VerifiedWebhookRequest, verify_internal_secret, verify_webhook_signature
 from services.revenue_share_service import RevenueShareLine, RevenueShareService
 from services.streamer_product_assignment_service import StreamerProductAssignmentService
 from services.streamer_service import StreamerService
+from services.webhook_event_service import WebhookEventReplayError, WebhookEventService
 
 router = APIRouter(prefix="/streamers", tags=["streamers"])
 
@@ -254,6 +255,35 @@ def record_streamer_revenue_shares(
     )
 
 
+@router.post(
+    "/webhooks/order-completed",
+    response_model=RevenueShareRecordResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def record_streamer_revenue_shares_from_order_webhook(
+    req: RevenueSharePreviewRequest,
+    webhook: VerifiedWebhookRequest | None = Depends(verify_webhook_signature),
+    db: Session = Depends(get_db),
+):
+    _reject_replayed_webhook_event(db, webhook)
+    try:
+        result = RevenueShareService(db).record_order_share(
+            order_id=req.order_id,
+            lines=[
+                RevenueShareLine(
+                    saleor_product_id=line.saleor_product_id,
+                    gross_amount=line.gross_amount,
+                )
+                for line in req.lines
+            ],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    _record_webhook_event(db, webhook, event_type="revenue_share.order_completed")
+    return _revenue_share_record_response(result)
+
+
 @router.get(
     "/product-assignments/{saleor_product_id}",
     response_model=StreamerProductAssignmentResponse,
@@ -335,3 +365,48 @@ def _streamer_product_assignment_response(assignment) -> StreamerProductAssignme
         created_at=assignment.created_at,
         updated_at=assignment.updated_at,
     )
+
+
+def _revenue_share_record_response(result) -> RevenueShareRecordResponse:
+    return RevenueShareRecordResponse(
+        order_id=result.order_id,
+        records=[
+            StreamerRevenueShareRecordResponse(
+                id=record.id,
+                streamer_slug=record.streamer_slug,
+                streamer_profile_id=record.streamer_profile_id,
+                gross_amount=record.gross_amount,
+                commission_bps=record.commission_bps,
+                share_amount=record.share_amount,
+                status=record.status,
+                created_at=record.created_at,
+            )
+            for record in result.records
+        ],
+        unassigned_product_ids=result.unassigned_product_ids,
+    )
+
+
+def _reject_replayed_webhook_event(
+    db: Session,
+    webhook: VerifiedWebhookRequest | None,
+) -> None:
+    try:
+        WebhookEventService(db).reject_replayed_event(webhook)
+    except WebhookEventReplayError as exc:
+        raise HTTPException(status_code=409, detail="webhook event already processed") from exc
+
+
+def _record_webhook_event(
+    db: Session,
+    webhook: VerifiedWebhookRequest | None,
+    *,
+    event_type: str,
+) -> None:
+    try:
+        WebhookEventService(db).record_event(webhook, event_type=event_type)
+    except WebhookEventReplayError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="webhook event already processed",
+        ) from exc
