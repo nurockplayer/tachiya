@@ -25,5 +25,5 @@ class IdentityMapping(Base):
     provider = Column(String, nullable=False, index=True)
     external_subject = Column(String, nullable=False, index=True)
     verified_at = Column(DateTime, default=utcnow, nullable=False)
-    created_at = Column(DateTime, default=utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     unlinked_at = Column(DateTime, nullable=True)
