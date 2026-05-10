@@ -123,6 +123,7 @@ class RevenueShareService:
     ) -> RevenueShareRecordResult:
         preview = self.preview_order_share(order_id=order_id, lines=lines)
         records: list[StreamerRevenueShareRecord] = []
+        records_to_create: list[StreamerRevenueShareRecord] = []
         for share in preview.shares:
             streamer = self._get_streamer_by_slug(share.streamer_slug)
             if streamer is None:
@@ -145,10 +146,14 @@ class RevenueShareService:
                 share_amount=share.share_amount,
                 status="pending",
             )
-            self.db.add(record)
-            self.db.commit()
-            self.db.refresh(record)
+            records_to_create.append(record)
             records.append(record)
+
+        if records_to_create:
+            self.db.add_all(records_to_create)
+            self.db.commit()
+            for record in records_to_create:
+                self.db.refresh(record)
 
         return RevenueShareRecordResult(
             order_id=preview.order_id,
