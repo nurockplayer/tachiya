@@ -110,6 +110,17 @@ def redeem_coupon(
             .first()
         )
         if existing:
+            if existing.coupon_id != req.coupon_id or existing.tcg_cost != req.tcg_cost:
+                _record_redemption_audit(
+                    db,
+                    coupon_id=req.coupon_id,
+                    idempotency_key=req.idempotency_key,
+                    redemption_token=None,
+                    status="failed",
+                    reason="idempotency key conflict",
+                )
+                raise HTTPException(status_code=409, detail="idempotency key conflict")
+
             _record_redemption_audit(
                 db,
                 coupon_id=existing.coupon_id,
