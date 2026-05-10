@@ -169,10 +169,46 @@ class IdentityMappingService:
             .all()
         )
 
-    def list_audit_events(self, limit: int = 20) -> list[IdentityAuditEvent]:
+    def list_audit_events(
+        self,
+        *,
+        action: str | None = None,
+        actor: str | None = None,
+        source: str | None = None,
+        target: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+        limit: int = 20,
+    ) -> list[IdentityAuditEvent]:
+        normalized_action = self._normalize_optional_filter(action, "action is required")
+        normalized_actor = self._normalize_optional_filter(actor, "actor is required")
+        normalized_source = self._normalize_optional_filter(source, "source is required")
+        normalized_target = self._normalize_optional_filter(target, "target is required")
+        normalized_created_from = self._normalize_optional_datetime(created_from)
+        normalized_created_to = self._normalize_optional_datetime(created_to)
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("invalid created_at range")
+
+        query = self.db.query(IdentityAuditEvent)
+        if normalized_action is not None:
+            query = query.filter(IdentityAuditEvent.action == normalized_action)
+        if normalized_actor is not None:
+            query = query.filter(IdentityAuditEvent.actor == normalized_actor)
+        if normalized_source is not None:
+            query = query.filter(IdentityAuditEvent.source == normalized_source)
+        if normalized_target is not None:
+            query = query.filter(IdentityAuditEvent.target == normalized_target)
+        if normalized_created_from is not None:
+            query = query.filter(IdentityAuditEvent.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(IdentityAuditEvent.created_at <= normalized_created_to)
+
         return (
-            self.db.query(IdentityAuditEvent)
-            .order_by(IdentityAuditEvent.created_at.desc(), IdentityAuditEvent.id.desc())
+            query.order_by(IdentityAuditEvent.created_at.desc(), IdentityAuditEvent.id.desc())
             .limit(limit)
             .all()
         )
@@ -227,3 +263,11 @@ class IdentityMappingService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)

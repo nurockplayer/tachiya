@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -133,6 +134,107 @@ def test_list_identity_audit_events(monkeypatch):
         "reason": "initial link",
         "created_at": event["created_at"],
     }
+
+
+def test_list_identity_audit_events_filters_fields_and_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    session.add_all(
+        [
+            IdentityAuditEvent(
+                id="before-range",
+                action="identity.linked",
+                actor="ops-user-1",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-1",
+                reason="before",
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            IdentityAuditEvent(
+                id="matching-old",
+                action="identity.relinked",
+                actor="ops-user-2",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-2",
+                reason="older match",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            IdentityAuditEvent(
+                id="matching-new",
+                action="identity.relinked",
+                actor="ops-user-2",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-2",
+                reason="newer match",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            IdentityAuditEvent(
+                id="after-range",
+                action="identity.relinked",
+                actor="ops-user-2",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-2",
+                reason="after",
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    response = client.get(
+        "/identity-mappings/audit-events",
+        headers=headers,
+        params={
+            "action": " identity.relinked ",
+            "actor": " ops-user-2 ",
+            "source": " tachigo:tachigo-user-1 ",
+            "target": " saleor:saleor-user-2 ",
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [event["reason"] for event in response.json()["events"]] == [
+        "newer match",
+        "older match",
+    ]
+
+
+def test_list_identity_audit_events_rejects_invalid_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings/audit-events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
+
+
+def test_list_identity_audit_events_rejects_blank_filter(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings/audit-events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"source": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "source is required"
 
 
 def test_list_identity_mappings(monkeypatch):

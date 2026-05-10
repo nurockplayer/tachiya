@@ -899,9 +899,21 @@ Query：
 
 Query：
 
+- `action`：可選，例如 `identity.linked`、`identity.unlinked`、`identity.relinked`；提供時會 trim，空字串回 `422 action is required`。
+- `actor`：可選；提供時會 trim，空字串回 `422 actor is required`。
+- `source`：可選，例如 `tachigo:tachigo-user-1`；提供時會 trim，空字串回 `422 source is required`。
+- `target`：可選，例如 `saleor:saleor-user-1`；提供時會 trim，空字串回 `422 target is required`。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 用途：檢視最近身份連結 audit events。
+
+規則：
+
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
+- 結果依 `created_at desc`、`id desc` 穩定排序。
 
 Response：
 
