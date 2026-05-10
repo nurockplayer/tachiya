@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -161,6 +162,8 @@ class RevenueShareService:
         status: str | None = None,
         streamer_slug: str | None = None,
         order_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[StreamerRevenueShareRecord]:
         normalized_status = (
@@ -173,6 +176,10 @@ class RevenueShareService:
             "streamer_slug is required",
         )
         normalized_order_id = self._normalize_optional_filter(order_id, "order_id is required")
+        normalized_created_from, normalized_created_to = self._normalize_created_range(
+            created_from,
+            created_to,
+        )
 
         query = self.db.query(StreamerRevenueShareRecord)
         if normalized_status is not None:
@@ -181,6 +188,10 @@ class RevenueShareService:
             query = query.filter(StreamerRevenueShareRecord.streamer_slug == normalized_streamer_slug.lower())
         if normalized_order_id is not None:
             query = query.filter(StreamerRevenueShareRecord.order_id == normalized_order_id)
+        if normalized_created_from is not None:
+            query = query.filter(StreamerRevenueShareRecord.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(StreamerRevenueShareRecord.created_at <= normalized_created_to)
 
         return (
             query.order_by(
@@ -197,6 +208,8 @@ class RevenueShareService:
         status: str | None = None,
         streamer_slug: str | None = None,
         order_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
     ) -> list[RevenueShareRecordSummary]:
         normalized_status = (
             self._validate_record_status_filter(status)
@@ -208,6 +221,10 @@ class RevenueShareService:
             "streamer_slug is required",
         )
         normalized_order_id = self._normalize_optional_filter(order_id, "order_id is required")
+        normalized_created_from, normalized_created_to = self._normalize_created_range(
+            created_from,
+            created_to,
+        )
 
         query = self.db.query(
             StreamerRevenueShareRecord.status,
@@ -223,6 +240,10 @@ class RevenueShareService:
             )
         if normalized_order_id is not None:
             query = query.filter(StreamerRevenueShareRecord.order_id == normalized_order_id)
+        if normalized_created_from is not None:
+            query = query.filter(StreamerRevenueShareRecord.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(StreamerRevenueShareRecord.created_at <= normalized_created_to)
 
         rows = (
             query.group_by(StreamerRevenueShareRecord.status)
@@ -336,6 +357,30 @@ class RevenueShareService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @classmethod
+    def _normalize_created_range(
+        cls,
+        created_from: datetime | None,
+        created_to: datetime | None,
+    ) -> tuple[datetime | None, datetime | None]:
+        normalized_created_from = cls._normalize_optional_datetime(created_from)
+        normalized_created_to = cls._normalize_optional_datetime(created_to)
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("invalid created_at range")
+        return normalized_created_from, normalized_created_to
+
+    @staticmethod
+    def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
 
     @staticmethod
     def _append_unique_product_id(
