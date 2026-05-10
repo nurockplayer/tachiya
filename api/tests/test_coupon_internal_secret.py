@@ -493,6 +493,26 @@ def test_list_coupons_rejects_blank_redemption_token():
     assert response.json()["detail"] == "redemption_token is required"
 
 
+def test_coupon_created_at_default_uses_naive_utc():
+    session = build_real_session()
+    coupon = UserCoupon(
+        id="default-created-at",
+        coupon_id="tachiya-95",
+        voucher_code="TACHIYA-DEFAULT",
+        saleor_voucher_id="saleor-default",
+        redemption_token="token-default",
+        coupon_type="PERCENT_5",
+        tcg_cost=18,
+        status="active",
+    )
+    session.add(coupon)
+    session.commit()
+    session.refresh(coupon)
+
+    assert coupon.created_at is not None
+    assert coupon.created_at.tzinfo is None
+
+
 def test_list_redemption_audit_events_requires_internal_secret(monkeypatch):
     fake_db = FakeDB()
     client = build_client(fake_db)
