@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -390,6 +391,30 @@ def test_points_transaction_rejects_blank_user_id(monkeypatch):
     assert session.query(PointsLedger).count() == 0
 
 
+@pytest.mark.parametrize("field", ["user_id", "reference_id", "source_type"])
+def test_points_transaction_rejects_whitespace_strings_at_schema(monkeypatch, field):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    payload = {
+        "user_id": "user-1",
+        "entry_type": "credit",
+        "amount": 120,
+        "reference_id": "order-1",
+        "source_type": "order-reward",
+    }
+    payload[field] = "   "
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert session.query(PointsLedger).count() == 0
+
+
 def test_points_transaction_rejects_non_positive_amount_at_schema(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -581,6 +606,25 @@ def test_order_reward_webhook_rejects_blank_order_id(monkeypatch):
     assert session.query(PointsLedger).count() == 0
 
 
+def test_order_reward_webhook_rejects_whitespace_user_id_at_schema(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_reward_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "user_id": "   ",
+            "reward_points": 120,
+        },
+    )
+
+    assert response.status_code == 422
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
 def test_order_reward_webhook_rejects_whitespace_order_id(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -596,7 +640,6 @@ def test_order_reward_webhook_rejects_whitespace_order_id(monkeypatch):
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "order_id is required"
     assert session.query(WebhookEvent).count() == 0
     assert session.query(PointsLedger).count() == 0
 
