@@ -62,6 +62,7 @@ class RevenueShareService:
         normalized_order_id = self._validate_required(order_id, "order_id is required")
         shares_by_streamer: dict[str, StreamerRevenueShare] = {}
         unassigned_product_ids: list[str] = []
+        unassigned_product_id_set: set[str] = set()
 
         for line in lines:
             product_id = self._validate_required(
@@ -73,12 +74,20 @@ class RevenueShareService:
 
             assignment = self._get_assignment(product_id)
             if assignment is None:
-                unassigned_product_ids.append(product_id)
+                self._append_unique_product_id(
+                    unassigned_product_ids,
+                    unassigned_product_id_set,
+                    product_id,
+                )
                 continue
 
             streamer = self.db.get(StreamerProfile, assignment.streamer_profile_id)
             if streamer is None or not streamer.active:
-                unassigned_product_ids.append(product_id)
+                self._append_unique_product_id(
+                    unassigned_product_ids,
+                    unassigned_product_id_set,
+                    product_id,
+                )
                 continue
 
             share_amount = line.gross_amount * streamer.commission_bps // 10000
@@ -327,3 +336,14 @@ class RevenueShareService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _append_unique_product_id(
+        product_ids: list[str],
+        seen_product_ids: set[str],
+        product_id: str,
+    ) -> None:
+        if product_id in seen_product_ids:
+            return
+        product_ids.append(product_id)
+        seen_product_ids.add(product_id)

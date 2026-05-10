@@ -92,6 +92,7 @@ def test_preview_order_share_tracks_unassigned_and_inactive_products():
         order_id="order-1",
         lines=[
             RevenueShareLine(saleor_product_id="missing-product", gross_amount=1200),
+            RevenueShareLine(saleor_product_id="missing-product", gross_amount=400),
             RevenueShareLine(saleor_product_id="inactive-product", gross_amount=300),
         ],
     )

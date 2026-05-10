@@ -591,6 +591,7 @@ def test_preview_streamer_revenue_shares(monkeypatch):
             "lines": [
                 {"saleor_product_id": " product-1 ", "gross_amount": 1200},
                 {"saleor_product_id": "missing-product", "gross_amount": 300},
+                {"saleor_product_id": "missing-product", "gross_amount": 100},
             ],
         },
     )
