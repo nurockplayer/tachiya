@@ -16,4 +16,18 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=config",
+    "--cov=database",
+    "--cov=main",
+    "--cov=models",
+    "--cov=routers",
+    "--cov=security",
+    "--cov=services",
+    "--cov-report=term-missing",
+    "--cov-fail-under=90",
 ]

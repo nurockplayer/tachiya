@@ -9,6 +9,7 @@ on:
       - ".github/workflows/api-ci.yml"
       - ".github/workflows/dependabot-automerge.yml"
       - ".github/workflows/weekly-release-pr.yml"
+      - ".github/workflow-tests/**"
       - "api/**"
       - "docs/internal-api-contracts.md"
       - "docs/testing-and-ci-gates.md"
@@ -22,6 +23,7 @@ on:
       - ".github/workflows/api-ci.yml"
       - ".github/workflows/dependabot-automerge.yml"
       - ".github/workflows/weekly-release-pr.yml"
+      - ".github/workflow-tests/**"
       - "api/**"
       - "docs/internal-api-contracts.md"
       - "docs/testing-and-ci-gates.md"
@@ -84,6 +86,22 @@ jobs:
 
       - name: Run API tests
         run: uv run --group dev pytest
+
+  workflow-regression:
+    name: Workflow regression tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tachiya
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run workflow policy tests
+        run: node --test .github/workflow-tests/*.test.mjs
 
   api-compile:
     name: API compile check
