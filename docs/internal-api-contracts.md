@@ -771,7 +771,7 @@ Query：
 Tachiya 會呼叫：
 
 ```http
-GET <TACHIGO_API_URL>/internal/users/points?email=<email>
+GET <TACHIGO_API_URL>/api/v1/internal/tachiya/users/points/balance?email=<email>
 X-Tachiya-Internal-Secret: <TACHIYA_INTERNAL_SHARED_SECRET>
 ```
 

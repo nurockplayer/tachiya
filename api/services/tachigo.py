@@ -39,7 +39,7 @@ async def get_user_points(
 
     try:
         response = await client.get(
-            f"{settings.tachigo_api_url.rstrip('/')}/internal/users/points",
+            f"{settings.tachigo_api_url.rstrip('/')}/api/v1/internal/tachiya/users/points/balance",
             params={"email": email},
             headers=internal_headers,
         )
