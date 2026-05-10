@@ -19,7 +19,7 @@ class StreamerProfile(Base):
     saleor_collection_id = Column(String, nullable=True, unique=True, index=True)
     commission_bps = Column(Integer, nullable=False, default=1000)
     active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, default=utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
@@ -36,7 +36,7 @@ class StreamerProductAssignment(Base):
     )
     streamer_slug = Column(String, nullable=False, index=True)
     source = Column(String, nullable=False, default="manual")
-    created_at = Column(DateTime, default=utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
 
 
@@ -63,5 +63,5 @@ class StreamerRevenueShareRecord(Base):
     commission_bps = Column(Integer, nullable=False)
     share_amount = Column(Integer, nullable=False)
     status = Column(String, nullable=False, default="pending", index=True)
-    created_at = Column(DateTime, default=utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
