@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -138,6 +139,54 @@ def test_list_assignments_filters_for_operational_audit():
     assert assignments[0].saleor_product_id == "product-1"
     assert assignments[0].streamer_slug == "streamer-one"
     assert assignments[0].source == "saleor-metadata"
+
+
+def test_list_assignments_filters_created_range_inclusively():
+    session = build_session()
+    create_streamer(session)
+    service = StreamerProductAssignmentService(session)
+    before = service.assign_product(
+        saleor_product_id="product-before",
+        streamer_slug="streamer-one",
+    )
+    range_start = service.assign_product(
+        saleor_product_id="product-start",
+        streamer_slug="streamer-one",
+    )
+    range_end = service.assign_product(
+        saleor_product_id="product-end",
+        streamer_slug="streamer-one",
+    )
+    after = service.assign_product(
+        saleor_product_id="product-after",
+        streamer_slug="streamer-one",
+    )
+    before.created_at = datetime(2026, 1, 1, 23, 59, 59)
+    range_start.created_at = datetime(2026, 1, 2, 0, 0, 0)
+    range_end.created_at = datetime(2026, 1, 3, 0, 0, 0)
+    after.created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    assignments = service.list_assignments(
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+        limit=10,
+    )
+
+    assert [assignment.saleor_product_id for assignment in assignments] == [
+        "product-end",
+        "product-start",
+    ]
+
+
+def test_list_assignments_rejects_invalid_created_range():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        StreamerProductAssignmentService(session).list_assignments(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
 
 
 @pytest.mark.parametrize(

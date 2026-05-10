@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -79,6 +81,8 @@ class StreamerProductAssignmentService:
         *,
         streamer_slug: str | None = None,
         source: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[StreamerProductAssignment]:
         normalized_streamer_slug = self._normalize_optional_filter(
@@ -86,6 +90,14 @@ class StreamerProductAssignmentService:
             "streamer_slug is required",
         )
         normalized_source = self._normalize_optional_filter(source, "source is required")
+        normalized_created_from = self._normalize_optional_datetime(created_from)
+        normalized_created_to = self._normalize_optional_datetime(created_to)
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("invalid created_at range")
 
         query = self.db.query(StreamerProductAssignment)
         if normalized_streamer_slug is not None:
@@ -94,6 +106,10 @@ class StreamerProductAssignmentService:
             )
         if normalized_source is not None:
             query = query.filter(StreamerProductAssignment.source == normalized_source)
+        if normalized_created_from is not None:
+            query = query.filter(StreamerProductAssignment.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(StreamerProductAssignment.created_at <= normalized_created_to)
 
         return (
             query.order_by(
@@ -128,3 +144,11 @@ class StreamerProductAssignmentService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)

@@ -541,6 +541,8 @@ Query：
 
 - `streamer_slug`：可選，查詢單一 streamer 的 assignment。
 - `source`：可選，例如 `manual`、`saleor-metadata`。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response：
@@ -565,6 +567,8 @@ Response：
 
 - `streamer_slug`、`source` 有提供時會 trim，空字串回 `422`。
 - `streamer_slug` 查詢會轉小寫。
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
 - 依 `created_at desc`、`id asc` 穩定排序。
 
 ### `GET /streamers/product-assignments/{saleor_product_id}`
