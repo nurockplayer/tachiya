@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictInt
 from sqlalchemy.orm import Session
 
 from config import Settings, get_settings
@@ -19,7 +19,7 @@ VALID_COUPON_IDS = list(COUPON_CONFIG.keys())
 
 class RedeemRequest(BaseModel):
     coupon_id: str
-    tcg_cost: int
+    tcg_cost: StrictInt
     idempotency_key: str | None = None
 
 

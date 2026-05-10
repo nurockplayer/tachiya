@@ -290,6 +290,28 @@ def test_redeem_rejects_non_positive_tcg_cost_before_saleor(monkeypatch):
     assert fake_db.commits == 1
 
 
+def test_redeem_rejects_non_strict_tcg_cost(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fail_create_voucher(coupon_id: str, code: str):
+        raise AssertionError("create_voucher should not be called")
+
+    monkeypatch.setattr(coupons, "create_voucher", fail_create_voucher)
+
+    for tcg_cost in [True, "18"]:
+        response = client.post(
+            "/coupons/redeem",
+            headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+            json={"coupon_id": "tachiya-95", "tcg_cost": tcg_cost},
+        )
+
+        assert response.status_code == 422
+    assert fake_db.records == []
+    assert fake_db.commits == 0
+
+
 def test_redeem_reuses_existing_coupon_for_same_idempotency_key(monkeypatch):
     existing_coupon = SimpleNamespace(
         coupon_id="tachiya-95",
