@@ -63,6 +63,7 @@ class WebhookEventService:
         received_to: datetime | None = None,
         limit: int = 20,
     ) -> list[WebhookEvent]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_event_id = (
             self._validate_required(event_id, "event_id is required")
             if event_id is not None
@@ -94,7 +95,7 @@ class WebhookEventService:
 
         return (
             query.order_by(WebhookEvent.received_at.desc(), WebhookEvent.id.desc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -112,3 +113,9 @@ class WebhookEventService:
         if value.tzinfo is None:
             return value
         return value.astimezone(UTC).replace(tzinfo=None)
+
+    @staticmethod
+    def _validate_read_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return limit

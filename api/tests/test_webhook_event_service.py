@@ -228,3 +228,11 @@ def test_list_events_rejects_invalid_received_range():
             received_from=datetime(2026, 1, 3, 0, 0, 0),
             received_to=datetime(2026, 1, 2, 0, 0, 0),
         )
+
+
+@pytest.mark.parametrize("limit", [0, 101, True])
+def test_list_events_rejects_invalid_limit(limit):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        WebhookEventService(session).list_events(limit=limit)
