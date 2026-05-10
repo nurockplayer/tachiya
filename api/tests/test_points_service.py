@@ -4,21 +4,16 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from database import Base
+from conftest import build_sqlite_session
 from models.points_ledger import PointsLedger
 from services.points_service import PointsService
 
 
 def build_session():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine)
-    return SessionLocal()
+    return build_sqlite_session()
 
 
 def test_credit_writes_ledger_entry_and_updates_balance():

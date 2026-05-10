@@ -8,16 +8,12 @@ import time
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from database import Base
+from conftest import build_router_client, build_sqlite_session
 from models.points_ledger import PointsLedger
 from models.referral import ReferralRelationship, ReferralReward
 from models.webhook_event import WebhookEvent
@@ -27,14 +23,7 @@ from services.referral_service import ReferralService
 
 
 def build_session():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(bind=engine)
-    return SessionLocal()
+    return build_sqlite_session(static_pool=True)
 
 
 def add_relationship(session, *, referrer_id="referrer-1", referee_id="referee-1"):
@@ -242,14 +231,7 @@ def test_referral_service_rejects_invalid_reward_rate(reward_rate):
 
 
 def build_client(session) -> TestClient:
-    app = FastAPI()
-    app.include_router(referrals.router)
-
-    def override_db():
-        yield session
-
-    app.dependency_overrides[referrals.get_db] = override_db
-    return TestClient(app)
+    return build_router_client(referrals.router, referrals.get_db, session)
 
 
 def signed_order_completed_request(
