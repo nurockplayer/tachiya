@@ -49,6 +49,15 @@ class StreamerService:
             .one_or_none()
         )
 
+    def list_active_profiles(self, *, limit: int = 20) -> list[StreamerProfile]:
+        return (
+            self.db.query(StreamerProfile)
+            .filter(StreamerProfile.active.is_(True))
+            .order_by(StreamerProfile.display_name.asc(), StreamerProfile.slug.asc())
+            .limit(limit)
+            .all()
+        )
+
     @staticmethod
     def _normalize_slug(slug: str) -> str:
         return StreamerService._validate_required(slug, "slug is required").lower()

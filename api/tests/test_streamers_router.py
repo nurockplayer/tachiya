@@ -123,6 +123,59 @@ def test_get_streamer_profile_returns_404(monkeypatch):
     assert response.json()["detail"] == "streamer profile not found"
 
 
+def test_list_streamer_profiles(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "zeta", "display_name": "Zeta", "saleor_collection_id": "collection-z"},
+    )
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "alpha", "display_name": "Alpha", "saleor_collection_id": "collection-a"},
+    )
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "inactive", "display_name": "Inactive", "active": False},
+    )
+
+    response = client.get("/streamers?limit=10", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "streamers": [
+            {
+                "slug": "alpha",
+                "display_name": "Alpha",
+                "saleor_collection_id": "collection-a",
+            },
+            {
+                "slug": "zeta",
+                "display_name": "Zeta",
+                "saleor_collection_id": "collection-z",
+            },
+        ],
+    }
+
+
+def test_list_streamer_profiles_rejects_invalid_limit(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers?limit=101",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_create_and_get_streamer_product_assignment(monkeypatch):
     session = build_session()
     client = build_client(session)

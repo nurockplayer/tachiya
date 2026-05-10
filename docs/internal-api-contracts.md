@@ -234,6 +234,34 @@ Request：
 
 找不到時回傳 `404 streamer profile not found`。
 
+### `GET /streamers`
+
+用途：Storefront 實況主探索入口使用，列出可展示的 active streamer profiles。
+
+Query：
+
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "streamers": [
+    {
+      "slug": "streamer-one",
+      "display_name": "Streamer One",
+      "saleor_collection_id": "collection-1"
+    }
+  ]
+}
+```
+
+規則：
+
+- 只回傳 active streamer。
+- 依 `display_name`、`slug` 穩定排序。
+- 不回傳 commission 或 revenue share 欄位。
+
 ### `POST /streamers/product-assignments`
 
 用途：將 Saleor product id 指派給 streamer profile，作為前台歸屬與後續分潤計算的資料基礎。
