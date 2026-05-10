@@ -213,6 +213,25 @@ def test_process_referral_reward_rejects_blank_identifiers(order_id, referee_id,
     assert session.query(PointsLedger).count() == 0
 
 
+@pytest.mark.parametrize("order_total_amount", [0, -1, True, 1200.5, "1200"])
+def test_process_referral_reward_rejects_non_positive_integer_amount(order_total_amount):
+    session = build_session()
+    add_relationship(session)
+    service = ReferralService(session, reward_rate=0.05)
+
+    with pytest.raises(ValueError, match="order_total_amount must be a positive integer"):
+        asyncio.run(
+            service.process_referral_reward(
+                order_id="order-1",
+                referee_id="referee-1",
+                order_total_amount=order_total_amount,
+            ),
+        )
+
+    assert session.query(ReferralReward).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
 def build_client(session) -> TestClient:
     app = FastAPI()
     app.include_router(referrals.router)

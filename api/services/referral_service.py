@@ -20,8 +20,10 @@ class ReferralService:
     ) -> ReferralReward | None:
         normalized_order_id = self._validate_required(order_id, "order_id is required")
         normalized_referee_id = self._validate_required(referee_id, "referee_id is required")
-        if order_total_amount <= 0:
-            raise ValueError("order_total_amount must be positive")
+        normalized_order_total_amount = self._validate_positive_integer(
+            order_total_amount,
+            "order_total_amount must be a positive integer",
+        )
 
         existing_order_reward = (
             self.db.query(ReferralReward)
@@ -47,7 +49,7 @@ class ReferralService:
         if existing_referee_reward:
             return None
 
-        reward_points = int(order_total_amount * self.reward_rate)
+        reward_points = int(normalized_order_total_amount * self.reward_rate)
         if reward_points <= 0:
             return None
 
@@ -64,7 +66,7 @@ class ReferralService:
             order_id=normalized_order_id,
             referrer_id=relationship.referrer_id,
             referee_id=normalized_referee_id,
-            order_total_amount=order_total_amount,
+            order_total_amount=normalized_order_total_amount,
             reward_points=reward_points,
             ledger_entry_id=ledger_entry.id,
         )
@@ -98,3 +100,9 @@ class ReferralService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _validate_positive_integer(value: int, message: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(message)
+        return value
