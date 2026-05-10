@@ -629,6 +629,7 @@ Response：
 規則：
 
 - `status`、`streamer_slug`、`order_id` 有提供時會 trim，空字串回 `422`。
+- `status` 會轉小寫，且只接受 `pending` / `paid` / `void`；其他值回 `422 status must be pending, paid, or void`。
 - `streamer_slug` 查詢會轉小寫。
 - 依 `created_at desc`、`id asc` 穩定排序。
 - 本 endpoint 只查詢 records，不更新 payout 狀態。
@@ -661,6 +662,7 @@ Response：
 規則：
 
 - `status`、`streamer_slug`、`order_id` 有提供時會 trim，空字串回 `422`。
+- `status` 會轉小寫，且只接受 `pending` / `paid` / `void`；其他值回 `422 status must be pending, paid, or void`。
 - `streamer_slug` 查詢會轉小寫。
 - 依 `status asc` 穩定排序。
 - 無符合資料時回傳空陣列。
@@ -697,7 +699,7 @@ Response：
 
 規則：
 
-- 目標 `status` 只接受 `paid` 或 `void`。
+- 目標 `status` 會 trim 並轉小寫，只接受 `paid` 或 `void`。
 - record 不存在回傳 `404 revenue share record not found`。
 - 已是相同 terminal status 時保持 idempotent。
 - 已是 `paid` / `void` 但目標狀態不同時回傳 `409 revenue share status conflict`。
