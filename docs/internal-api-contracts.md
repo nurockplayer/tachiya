@@ -850,8 +850,8 @@ Query：
 | 變數 | 用途 | 預設 |
 | --- | --- | --- |
 | `DATABASE_URL` | Tachiya API database | `postgresql://saleor:saleor@localhost:5432/saleor` |
-| `TACHIYA_INTERNAL_SHARED_SECRET` | internal API 與 webhook HMAC secret | 無，缺失時 fail closed |
-| `TACHIYA_WEBHOOK_TOLERANCE_SECONDS` | webhook timestamp 容忍秒數 | `300` |
+| `TACHIYA_INTERNAL_SHARED_SECRET` | internal API 與 webhook HMAC secret；production 必須使用高熵隨機值，並與 Tachigo `TACHIYA_INTERNAL_SHARED_SECRET` 同步 | 無，缺失時 fail closed |
+| `TACHIYA_WEBHOOK_TOLERANCE_SECONDS` | webhook timestamp 容忍秒數；`.env.example` 明列 `300` 作為預設建議值 | `300` |
 | `TACHIYA_CORS_ALLOWED_ORIGINS` | 逗號分隔的 API CORS origins | `http://localhost:3000,http://localhost:3001` |
 | `TACHIYA_VOUCHER_CODE_PREFIX` | Tachiya coupon redemption 產生 Saleor voucher code 的 prefix | `TACHIYA` |
 | `TACHIGO_API_URL` | Tachigo backend base URL | `http://localhost:8080` |
