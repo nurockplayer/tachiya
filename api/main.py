@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import get_settings
+from config import get_settings, is_internal_shared_secret_configured
 from database import check_database_ready, create_tables
 from routers import coupons, identity_mappings, points, referrals, streamers, tachigo
 
@@ -41,12 +41,22 @@ def health():
 
 @app.get("/ready")
 def ready():
+    checks = {}
     try:
         check_database_ready()
     except SQLAlchemyError:
+        checks["database"] = "error"
+    else:
+        checks["database"] = "ok"
+
+    checks["internal_secret"] = (
+        "ok" if is_internal_shared_secret_configured() else "error"
+    )
+
+    if "error" in checks.values():
         return JSONResponse(
             status_code=503,
-            content={"status": "unavailable", "checks": {"database": "error"}},
+            content={"status": "unavailable", "checks": checks},
         )
 
-    return {"status": "ok", "checks": {"database": "ok"}}
+    return {"status": "ok", "checks": checks}

@@ -28,3 +28,7 @@ def parse_cors_allowed_origins(raw_value: str | None) -> tuple[str, ...]:
 
     origins = tuple(origin.strip() for origin in raw_value.split(",") if origin.strip())
     return origins or DEFAULT_CORS_ALLOWED_ORIGINS
+
+
+def is_internal_shared_secret_configured() -> bool:
+    return bool(os.getenv("TACHIYA_INTERNAL_SHARED_SECRET", "").strip())
