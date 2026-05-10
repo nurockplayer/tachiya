@@ -10,6 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -117,6 +118,54 @@ def test_process_referral_reward_skips_after_referee_first_purchase():
     assert session.query(ReferralReward).count() == 1
     assert session.query(PointsLedger).count() == 1
     assert asyncio.run(PointsService(session).get_balance("referrer-1")) == 60
+
+
+def test_referral_reward_referee_id_is_unique():
+    session = build_session()
+    session.add_all(
+        [
+            ReferralReward(
+                order_id="order-1",
+                referrer_id="referrer-1",
+                referee_id="referee-1",
+                order_total_amount=1200,
+                reward_points=60,
+                ledger_entry_id="ledger-1",
+            ),
+            ReferralReward(
+                order_id="order-2",
+                referrer_id="referrer-1",
+                referee_id="referee-1",
+                order_total_amount=9999,
+                reward_points=499,
+                ledger_entry_id="ledger-2",
+            ),
+        ],
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+
+
+def test_process_referral_reward_rolls_back_ledger_when_reward_commit_fails(monkeypatch):
+    session = build_session()
+    add_relationship(session)
+    service = ReferralService(session, reward_rate=0.05)
+    original_commit = session.commit
+
+    def fail_reward_commit():
+        if any(isinstance(item, ReferralReward) for item in session.new):
+            raise IntegrityError("reward commit failed", {}, RuntimeError("conflict"))
+        original_commit()
+
+    monkeypatch.setattr(session, "commit", fail_reward_commit)
+
+    with pytest.raises(IntegrityError):
+        asyncio.run(service.process_referral_reward("order-1", "referee-1", 1200))
+
+    session.rollback()
+    assert session.query(ReferralReward).count() == 0
+    assert session.query(PointsLedger).count() == 0
 
 
 def test_process_referral_reward_normalizes_identifiers():

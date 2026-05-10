@@ -25,7 +25,7 @@ class ReferralReward(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     order_id = Column(String, nullable=False, unique=True, index=True)
     referrer_id = Column(String, nullable=False, index=True)
-    referee_id = Column(String, nullable=False, index=True)
+    referee_id = Column(String, nullable=False, unique=True, index=True)
     order_total_amount = Column(Integer, nullable=False)
     reward_points = Column(Integer, nullable=False)
     ledger_entry_id = Column(String, nullable=False)
