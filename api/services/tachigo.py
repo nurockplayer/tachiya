@@ -94,9 +94,21 @@ async def get_identity_points(
 
     payload = response.json()
     try:
+        requested_provider = provider.strip().lower()
+        requested_external_subject = external_subject.strip()
+        response_provider = str(payload.get("provider", requested_provider)).strip().lower()
+        response_external_subject = str(
+            payload.get("external_subject", requested_external_subject),
+        ).strip()
+        if (
+            response_provider != requested_provider
+            or response_external_subject != requested_external_subject
+        ):
+            raise TachigoUpstreamError("tachigo upstream identity mismatch")
+
         return TachigoIdentityPoints(
-            provider=str(payload.get("provider", provider.strip().lower())),
-            external_subject=str(payload.get("external_subject", external_subject.strip())),
+            provider=response_provider,
+            external_subject=response_external_subject,
             spendable_balance=int(payload["spendable_balance"]),
             cumulative_total=int(payload["cumulative_total"]),
         )
