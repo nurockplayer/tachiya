@@ -481,6 +481,9 @@ Response：
 Query：
 
 - `active`：可選；未提供時列出全部 profile。
+- `slug`：可選，查詢單一 streamer profile。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response：
@@ -504,6 +507,9 @@ Response：
 
 規則：
 
+- `slug` 有提供時會 trim，空字串回 `422 slug is required`，查詢會轉小寫。
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
 - 依 `display_name asc`、`slug asc` 穩定排序。
 - 本 endpoint 保留營運欄位；前台 discovery 仍使用 `GET /streamers`。
 
