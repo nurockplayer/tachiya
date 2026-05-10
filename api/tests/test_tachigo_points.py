@@ -263,6 +263,63 @@ def test_tachigo_identity_points_endpoint_returns_points(monkeypatch):
     }
 
 
+def test_tachigo_identity_points_query_endpoint_returns_points_for_special_subject(
+    monkeypatch,
+):
+    session = build_session()
+    IdentityMappingService(session).link_identity("saleor-user-1", "wallet", "eip155:1/0xabc")
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+        assert provider == "wallet"
+        assert external_subject == "eip155:1/0xabc"
+        assert settings.tachigo_api_url
+        return TachigoIdentityPoints(
+            provider=provider,
+            external_subject=external_subject,
+            spendable_balance=123,
+            cumulative_total=456,
+        )
+
+    monkeypatch.setattr(tachigo, "get_identity_points", fake_get_identity_points)
+
+    response = client.get(
+        "/tachigo/identity/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"provider": " Wallet ", "external_subject": " eip155:1/0xabc "},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "saleor_customer_id": "saleor-user-1",
+        "provider": "wallet",
+        "external_subject": "eip155:1/0xabc",
+        "spendable_balance": 123,
+        "cumulative_total": 456,
+    }
+
+
+def test_tachigo_identity_points_query_endpoint_rejects_blank_filters(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async def fail_get_identity_points(provider: str, external_subject: str, settings: Settings):
+        raise AssertionError("upstream should not be called")
+
+    monkeypatch.setattr(tachigo, "get_identity_points", fail_get_identity_points)
+
+    response = client.get(
+        "/tachigo/identity/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"provider": " ", "external_subject": "tachigo-user-1"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "provider is required"
+
+
 def test_tachigo_identity_points_endpoint_returns_404_for_missing_mapping(monkeypatch):
     session = build_session()
     client = build_client(session)

@@ -47,6 +47,25 @@ async def tachigo_user_points(
 
 
 @router.get(
+    "/identity/points",
+    response_model=TachigoIdentityPointsResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+async def tachigo_identity_points_by_query(
+    provider: str = Query(..., min_length=1),
+    external_subject: str = Query(..., min_length=1),
+    settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
+):
+    return await _tachigo_identity_points_response(
+        provider=provider,
+        external_subject=external_subject,
+        settings=settings,
+        db=db,
+    )
+
+
+@router.get(
     "/identity/{provider}/{external_subject}/points",
     response_model=TachigoIdentityPointsResponse,
     dependencies=[Depends(verify_internal_secret)],
@@ -57,8 +76,28 @@ async def tachigo_identity_points(
     settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db),
 ):
+    return await _tachigo_identity_points_response(
+        provider=provider,
+        external_subject=external_subject,
+        settings=settings,
+        db=db,
+    )
+
+
+async def _tachigo_identity_points_response(
+    *,
+    provider: str,
+    external_subject: str,
+    settings: Settings,
+    db: Session,
+) -> TachigoIdentityPointsResponse:
     normalized_provider = provider.strip().lower()
+    if not normalized_provider:
+        raise HTTPException(status_code=422, detail="provider is required")
     normalized_external_subject = external_subject.strip()
+    if not normalized_external_subject:
+        raise HTTPException(status_code=422, detail="external_subject is required")
+
     saleor_customer_id = IdentityMappingService(db).resolve_customer_id(
         normalized_provider,
         normalized_external_subject,
