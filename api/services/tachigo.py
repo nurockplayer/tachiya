@@ -32,6 +32,10 @@ async def get_user_points(
     *,
     client: httpx.AsyncClient | None = None,
 ) -> TachigoPoints:
+    normalized_email = email.strip()
+    if not normalized_email:
+        raise TachigoUpstreamError("email is required")
+
     internal_headers = _internal_headers()
     close_client = client is None
     if client is None:
@@ -40,7 +44,7 @@ async def get_user_points(
     try:
         response = await client.get(
             f"{settings.tachigo_api_url.rstrip('/')}/api/v1/internal/tachiya/users/points/balance",
-            params={"email": email},
+            params={"email": normalized_email},
             headers=internal_headers,
         )
     except httpx.HTTPError as exc:

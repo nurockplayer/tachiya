@@ -82,6 +82,51 @@ async def test_get_user_points_trims_configured_internal_secret(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_get_user_points_trims_email_before_upstream_request(monkeypatch):
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "email": "demo@tachigo.io",
+                "spendable_balance": 123,
+                "cumulative_total": 456,
+            },
+        )
+
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await get_user_points(" demo@tachigo.io ", settings, client=client)
+
+    assert (
+        str(requests[0].url)
+        == "http://tachigo.local/api/v1/internal/tachiya/users/points/balance?email=demo%40tachigo.io"
+    )
+
+
+@pytest.mark.anyio
+async def test_get_user_points_rejects_blank_email_before_upstream_request(monkeypatch):
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={})
+
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(TachigoUpstreamError, match="email is required"):
+            await get_user_points("   ", settings, client=client)
+
+    assert requests == []
+
+
+@pytest.mark.anyio
 async def test_get_user_points_fails_closed_without_internal_secret(monkeypatch):
     requests: list[httpx.Request] = []
 
@@ -313,6 +358,25 @@ def test_tachigo_points_endpoint_returns_points(monkeypatch):
         "spendable_balance": 123,
         "cumulative_total": 456,
     }
+
+
+def test_tachigo_points_endpoint_rejects_blank_email(monkeypatch):
+    client = build_client()
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async def fake_get_user_points(email: str, settings: Settings):
+        return TachigoPoints(email=email, spendable_balance=123, cumulative_total=456)
+
+    monkeypatch.setattr(tachigo, "get_user_points", fake_get_user_points)
+
+    response = client.get(
+        "/tachigo/users/points",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"email": "   "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "email is required"
 
 
 def test_tachigo_points_endpoint_rejects_missing_secret(monkeypatch):

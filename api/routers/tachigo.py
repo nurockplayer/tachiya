@@ -34,8 +34,12 @@ async def tachigo_user_points(
     email: str = Query(..., min_length=3),
     settings: Settings = Depends(get_settings),
 ):
+    normalized_email = email.strip()
+    if not normalized_email:
+        raise HTTPException(status_code=422, detail="email is required")
+
     try:
-        points = await get_user_points(email, settings)
+        points = await get_user_points(normalized_email, settings)
     except TachigoUpstreamError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
