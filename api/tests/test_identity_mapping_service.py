@@ -243,6 +243,14 @@ def test_list_mappings_rejects_invalid_created_range():
         )
 
 
+@pytest.mark.parametrize("limit", [0, 101, True])
+def test_list_mappings_rejects_invalid_limit(limit):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        IdentityMappingService(session).list_mappings(limit=limit)
+
+
 def test_list_audit_events_filters_fields_and_created_range():
     session = build_session()
     service = IdentityMappingService(session)
@@ -310,6 +318,14 @@ def test_list_audit_events_rejects_invalid_created_range():
             created_from=datetime(2026, 1, 3, 0, 0, 0),
             created_to=datetime(2026, 1, 2, 0, 0, 0),
         )
+
+
+@pytest.mark.parametrize("limit", [0, 101, True])
+def test_list_audit_events_rejects_invalid_limit(limit):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        IdentityMappingService(session).list_audit_events(limit=limit)
 
 
 @pytest.mark.parametrize(
