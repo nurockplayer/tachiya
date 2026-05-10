@@ -3,7 +3,7 @@ name: PR Scope Police
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, labeled, unlabeled]
-    branches: [develop]
+    branches: [develop, master]
 
 permissions:
   contents: read
