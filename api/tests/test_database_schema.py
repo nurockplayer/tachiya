@@ -151,6 +151,7 @@ def test_metadata_includes_streamer_profiles_table():
     }.issubset(columns)
     assert "ix_tachiya_streamer_profiles_slug" in indexes
     assert "ix_tachiya_streamer_profiles_saleor_collection_id" in indexes
+    assert "ix_tachiya_streamer_profiles_created_at" in indexes
     assert indexes["ix_tachiya_streamer_profiles_slug"]["unique"] == 1
     assert indexes["ix_tachiya_streamer_profiles_saleor_collection_id"]["unique"] == 1
 
@@ -184,6 +185,7 @@ def test_metadata_includes_streamer_product_assignments_table():
     assert "ix_tachiya_streamer_product_assignments_saleor_product_id" in indexes
     assert "ix_tachiya_streamer_product_assignments_streamer_profile_id" in indexes
     assert "ix_tachiya_streamer_product_assignments_streamer_slug" in indexes
+    assert "ix_tachiya_streamer_product_assignments_created_at" in indexes
     assert indexes["ix_tachiya_streamer_product_assignments_saleor_product_id"]["unique"] == 1
     assert foreign_keys[0]["referred_table"] == "tachiya_streamer_profiles"
 
@@ -227,6 +229,7 @@ def test_metadata_includes_streamer_revenue_share_records_table():
     assert "ix_tachiya_streamer_revenue_share_records_status" in indexes
     assert "ix_tachiya_streamer_revenue_share_records_streamer_profile_id" in indexes
     assert "ix_tachiya_streamer_revenue_share_records_streamer_slug" in indexes
+    assert "ix_tachiya_streamer_revenue_share_records_created_at" in indexes
     assert (
         unique_constraints["uq_tachiya_streamer_revenue_share_order_streamer"]["column_names"]
         == ["order_id", "streamer_slug"]
