@@ -114,6 +114,7 @@ class StreamerRevenueShareRecordResponse(BaseModel):
     share_amount: int
     status: str
     created_at: datetime
+    updated_at: datetime
 
 
 class StreamerRevenueShareRecordListItemResponse(StreamerRevenueShareRecordResponse):
@@ -434,6 +435,7 @@ def record_streamer_revenue_shares(
                 share_amount=record.share_amount,
                 status=record.status,
                 created_at=record.created_at,
+                updated_at=record.updated_at,
             )
             for record in result.records
         ],
@@ -610,6 +612,7 @@ def _revenue_share_record_response(result) -> RevenueShareRecordResponse:
                 share_amount=record.share_amount,
                 status=record.status,
                 created_at=record.created_at,
+                updated_at=record.updated_at,
             )
             for record in result.records
         ],
@@ -628,6 +631,7 @@ def _revenue_share_record_list_item_response(record) -> StreamerRevenueShareReco
         share_amount=record.share_amount,
         status=record.status,
         created_at=record.created_at,
+        updated_at=record.updated_at,
     )
 
 

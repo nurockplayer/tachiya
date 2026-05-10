@@ -728,6 +728,8 @@ def test_record_streamer_revenue_shares(monkeypatch):
     assert response.json()["records"][0]["commission_bps"] == 1250
     assert response.json()["records"][0]["share_amount"] == 150
     assert response.json()["records"][0]["status"] == "pending"
+    assert response.json()["records"][0]["created_at"]
+    assert response.json()["records"][0]["updated_at"]
 
 
 def test_record_streamer_revenue_shares_rejects_conflicting_replay(monkeypatch):
@@ -951,6 +953,8 @@ def test_list_revenue_share_records(monkeypatch):
     assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
     assert response.json()["records"][0]["share_amount"] == 150
     assert response.json()["records"][0]["status"] == "pending"
+    assert response.json()["records"][0]["created_at"]
+    assert response.json()["records"][0]["updated_at"]
 
 
 def test_list_revenue_share_records_filters_created_range(monkeypatch):
@@ -1207,6 +1211,8 @@ def test_update_revenue_share_record_status(monkeypatch):
     assert response.json()["record"]["id"] == record_id
     assert response.json()["record"]["order_id"] == "order-1"
     assert response.json()["record"]["status"] == "paid"
+    assert response.json()["record"]["created_at"]
+    assert response.json()["record"]["updated_at"]
 
 
 def test_update_revenue_share_record_status_rejects_missing_record(monkeypatch):
