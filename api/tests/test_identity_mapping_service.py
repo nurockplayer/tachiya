@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
 from models.identity_audit_event import IdentityAuditEvent
+from models.identity_mapping import IdentityMapping
 from services.identity_mapping_service import IdentityMappingService
 
 
@@ -150,6 +151,70 @@ def test_list_mappings_filters_active_and_unlinked_mappings():
     assert [mapping.id for mapping in customer_mappings] == [twitch_mapping.id]
 
 
+def test_list_mappings_filters_external_subject_and_created_range():
+    session = build_session()
+    service = IdentityMappingService(session)
+    session.add_all(
+        [
+            IdentityMapping(
+                id="before-range",
+                saleor_customer_id="saleor-user-1",
+                provider="youtube",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 1, 0, 0, 0),
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            IdentityMapping(
+                id="matching-old",
+                saleor_customer_id="saleor-user-2",
+                provider="tachigo",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 2, 0, 0, 0),
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            IdentityMapping(
+                id="matching-new",
+                saleor_customer_id="saleor-user-3",
+                provider="twitch",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 3, 0, 0, 0),
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+                unlinked_at=datetime(2026, 1, 4, 0, 0, 0),
+            ),
+            IdentityMapping(
+                id="after-range",
+                saleor_customer_id="saleor-user-4",
+                provider="discord",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 3, 0, 0, 1),
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    mappings = service.list_mappings(
+        external_subject=" shared-user ",
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+        include_unlinked=True,
+        limit=10,
+    )
+
+    assert [mapping.id for mapping in mappings] == ["matching-new", "matching-old"]
+
+
+def test_list_mappings_rejects_invalid_created_range():
+    session = build_session()
+    service = IdentityMappingService(session)
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        service.list_mappings(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
+
+
 def test_list_audit_events_filters_fields_and_created_range():
     session = build_session()
     service = IdentityMappingService(session)
@@ -224,6 +289,7 @@ def test_list_audit_events_rejects_invalid_created_range():
     [
         ("provider", {"provider": " "}),
         ("saleor_customer_id", {"saleor_customer_id": " "}),
+        ("external_subject", {"external_subject": " "}),
     ],
 )
 def test_list_mappings_rejects_blank_filters(field, kwargs):
