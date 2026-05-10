@@ -863,6 +863,7 @@ Request：
 規則：
 
 - `provider` 會正規化成小寫。
+- `reason` 可選；有提供時會 trim，trim 後為空會以 `null` 記錄。
 - 同一外部身份只能有一個 active mapping。
 - 同一 Saleor customer id 同 provider 只能有一個 active mapping。
 - link / unlink / relink 都會寫入 identity audit event。
@@ -926,7 +927,7 @@ Query：
 Query：
 
 - `actor`：預設 `system`；會 trim，trim 後為空回 `422 actor is required`。
-- `reason`：可選。
+- `reason`：可選；有提供時會 trim，trim 後為空會以 `null` 記錄。
 
 用途：解除外部身份連結並留下 audit trail。
 
