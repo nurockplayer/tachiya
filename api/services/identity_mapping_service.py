@@ -105,6 +105,40 @@ class IdentityMappingService:
             self.db.refresh(mapping)
         return mapping
 
+    def list_mappings(
+        self,
+        *,
+        provider: str | None = None,
+        saleor_customer_id: str | None = None,
+        include_unlinked: bool = False,
+        limit: int = 20,
+    ) -> list[IdentityMapping]:
+        normalized_provider = (
+            self._normalize_provider(provider)
+            if provider is not None
+            else None
+        )
+        normalized_saleor_customer_id = self._normalize_optional_filter(
+            saleor_customer_id,
+            "saleor_customer_id is required",
+        )
+
+        query = self.db.query(IdentityMapping)
+        if normalized_provider is not None:
+            query = query.filter(IdentityMapping.provider == normalized_provider)
+        if normalized_saleor_customer_id is not None:
+            query = query.filter(
+                IdentityMapping.saleor_customer_id == normalized_saleor_customer_id,
+            )
+        if not include_unlinked:
+            query = query.filter(IdentityMapping.unlinked_at.is_(None))
+
+        return (
+            query.order_by(IdentityMapping.created_at.desc(), IdentityMapping.id.asc())
+            .limit(limit)
+            .all()
+        )
+
     def list_audit_events(self, limit: int = 20) -> list[IdentityAuditEvent]:
         return (
             self.db.query(IdentityAuditEvent)
@@ -150,6 +184,15 @@ class IdentityMappingService:
 
     @staticmethod
     def _normalize_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
+
+    @staticmethod
+    def _normalize_optional_filter(value: str | None, message: str) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
             raise ValueError(message)

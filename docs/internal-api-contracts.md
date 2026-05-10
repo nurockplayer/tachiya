@@ -650,6 +650,41 @@ Request：
 
 - 衝突：`409 identity mapping already exists` 或 `409 saleor customer already has active provider mapping`。
 
+### `GET /identity-mappings`
+
+用途：受信任後台稽核外部身份與 Saleor customer id 的 mapping 狀態。
+
+Query：
+
+- `provider`：可選，例如 `tachigo` 或 `twitch`。
+- `saleor_customer_id`：可選。
+- `include_unlinked`：預設 `false`；`true` 時包含已解除連結的歷史 mapping。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "mappings": [
+    {
+      "id": "uuid",
+      "saleor_customer_id": "saleor-user-1",
+      "provider": "tachigo",
+      "external_subject": "tachigo-user-1",
+      "verified_at": "2026-05-10T00:00:00",
+      "unlinked_at": null
+    }
+  ]
+}
+```
+
+規則：
+
+- 預設只回 active mapping，也就是 `unlinked_at is null`。
+- `provider`、`saleor_customer_id` 有提供時會 trim，空字串回 `422`。
+- `provider` 查詢會轉小寫。
+- 依 `created_at desc`、`id asc` 穩定排序。
+
 ### `GET /identity-mappings/resolve`
 
 Query：

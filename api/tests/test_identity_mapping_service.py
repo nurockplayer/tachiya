@@ -101,3 +101,33 @@ def test_unlink_identity_records_audit_event():
     assert events[-1].source == "tachigo:tachigo-user-1"
     assert events[-1].target == "saleor:saleor-user-1"
     assert events[-1].reason == "user requested unlink"
+
+
+def test_list_mappings_filters_active_and_unlinked_mappings():
+    session = build_session()
+    service = IdentityMappingService(session)
+    tachigo_mapping = service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    twitch_mapping = service.link_identity("saleor-user-2", "twitch", "twitch-user-1")
+    service.unlink_identity(tachigo_mapping.id)
+
+    active_mappings = service.list_mappings()
+    tachigo_history = service.list_mappings(provider=" Tachigo ", include_unlinked=True)
+    customer_mappings = service.list_mappings(saleor_customer_id=" saleor-user-2 ")
+
+    assert [mapping.id for mapping in active_mappings] == [twitch_mapping.id]
+    assert [mapping.id for mapping in tachigo_history] == [tachigo_mapping.id]
+    assert [mapping.id for mapping in customer_mappings] == [twitch_mapping.id]
+
+
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        ("provider", {"provider": " "}),
+        ("saleor_customer_id", {"saleor_customer_id": " "}),
+    ],
+)
+def test_list_mappings_rejects_blank_filters(field, kwargs):
+    session = build_session()
+
+    with pytest.raises(ValueError, match=f"{field} is required"):
+        IdentityMappingService(session).list_mappings(**kwargs)
