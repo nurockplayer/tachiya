@@ -69,8 +69,8 @@ async def get_user_points(
 
         return TachigoPoints(
             email=normalized_response_email,
-            spendable_balance=int(payload["spendable_balance"]),
-            cumulative_total=int(payload["cumulative_total"]),
+            spendable_balance=_required_int(payload["spendable_balance"]),
+            cumulative_total=_required_int(payload["cumulative_total"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise TachigoUpstreamError("tachigo upstream returned invalid points payload") from exc
@@ -127,8 +127,8 @@ async def get_identity_points(
         return TachigoIdentityPoints(
             provider=response_provider,
             external_subject=response_external_subject,
-            spendable_balance=int(payload["spendable_balance"]),
-            cumulative_total=int(payload["cumulative_total"]),
+            spendable_balance=_required_int(payload["spendable_balance"]),
+            cumulative_total=_required_int(payload["cumulative_total"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise TachigoUpstreamError("tachigo upstream returned invalid points payload") from exc
@@ -148,3 +148,9 @@ def _json_payload(response: httpx.Response):
         raise TachigoUpstreamError(
             "tachigo upstream returned invalid points payload",
         ) from exc
+
+
+def _required_int(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError("value must be an integer")
+    return value
