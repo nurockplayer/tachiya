@@ -53,6 +53,7 @@ class IdentityAuditEventResponse(BaseModel):
     source: str
     target: str
     reason: str | None = None
+    created_at: datetime
 
 
 class IdentityAuditEventsResponse(BaseModel):
@@ -166,6 +167,7 @@ def list_identity_audit_events(
                 source=event.source,
                 target=event.target,
                 reason=event.reason,
+                created_at=event.created_at,
             )
             for event in events
         ],

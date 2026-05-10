@@ -811,6 +811,28 @@ Query：
 
 用途：檢視最近身份連結 audit events。
 
+Response：
+
+```json
+{
+  "events": [
+    {
+      "action": "identity.relinked",
+      "actor": "ops-user-1",
+      "source": "tachigo:tachigo-user-1",
+      "target": "saleor:saleor-user-1",
+      "reason": "verified new owner",
+      "created_at": "2026-05-10T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- 依 `created_at desc`、`id desc` 回傳最近事件。
+- `created_at` 代表 audit event 寫入時間，供後台與客服稽核 link / unlink / relink 時序。
+
 ## Tachigo Bridge
 
 ### `GET /tachigo/users/points`

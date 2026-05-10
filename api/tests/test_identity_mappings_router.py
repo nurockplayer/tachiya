@@ -123,12 +123,15 @@ def test_list_identity_audit_events(monkeypatch):
     response = client.get("/identity-mappings/audit-events", headers=headers)
 
     assert response.status_code == 200
-    assert response.json()["events"][0] == {
+    event = response.json()["events"][0]
+    assert event["created_at"] is not None
+    assert event == {
         "action": "identity.linked",
         "actor": "ops-user-1",
         "source": "tachigo:tachigo-user-1",
         "target": "saleor:saleor-user-1",
         "reason": "initial link",
+        "created_at": event["created_at"],
     }
 
 
@@ -277,12 +280,15 @@ def test_create_identity_mapping_relinks_unlinked_mapping(monkeypatch):
     assert relink_response.json()["saleor_customer_id"] == "saleor-user-2"
     assert relink_response.json()["provider"] == "tachigo"
     assert relink_response.json()["unlinked_at"] is None
-    assert events_response.json()["events"][0] == {
+    event = events_response.json()["events"][0]
+    assert event["created_at"] is not None
+    assert event == {
         "action": "identity.relinked",
         "actor": "ops-user-2",
         "source": "tachigo:tachigo-user-1",
         "target": "saleor:saleor-user-2",
         "reason": "verified new owner",
+        "created_at": event["created_at"],
     }
 
 
