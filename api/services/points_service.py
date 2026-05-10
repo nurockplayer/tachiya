@@ -99,8 +99,9 @@ class PointsService:
         )
 
     async def get_balance(self, user_id: str, *, at: datetime | None = None) -> int:
+        normalized_user_id = self._validate_required(user_id, "user_id is required")
         effective_at = self._normalize_datetime(at or datetime.now(UTC))
-        buckets, debit_deficit = self._build_credit_buckets(user_id, at=effective_at)
+        buckets, debit_deficit = self._build_credit_buckets(normalized_user_id, at=effective_at)
 
         active_balance = sum(
             bucket.amount
@@ -140,9 +141,10 @@ class PointsService:
         return exposures[:limit]
 
     async def list_entries(self, user_id: str, limit: int = 20) -> list[PointsLedger]:
+        normalized_user_id = self._validate_required(user_id, "user_id is required")
         return (
             self.db.query(PointsLedger)
-            .filter(PointsLedger.user_id == user_id)
+            .filter(PointsLedger.user_id == normalized_user_id)
             .order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
             .limit(limit)
             .all()
