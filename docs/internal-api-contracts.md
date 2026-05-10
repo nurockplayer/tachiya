@@ -470,6 +470,38 @@ Response：
 - 依 `created_at desc`、`id asc` 穩定排序。
 - 本 endpoint 只查詢 records，不更新 payout 狀態。
 
+### `GET /streamers/revenue-shares/summary`
+
+用途：營運與 payout dashboard 查詢分潤紀錄彙總，避免前端拉完整 queue 後自行加總。
+
+Query：
+
+- `status`：可選，例如 `pending`、`paid` 或 `void`。
+- `streamer_slug`：可選，查詢單一 streamer 的分潤彙總。
+- `order_id`：可選，查詢單一 Saleor order 的分潤彙總。
+
+Response：
+
+```json
+{
+  "summaries": [
+    {
+      "status": "pending",
+      "record_count": 2,
+      "gross_amount": 2400,
+      "share_amount": 240
+    }
+  ]
+}
+```
+
+規則：
+
+- `status`、`streamer_slug`、`order_id` 有提供時會 trim，空字串回 `422`。
+- `streamer_slug` 查詢會轉小寫。
+- 依 `status asc` 穩定排序。
+- 無符合資料時回傳空陣列。
+
 ### `POST /streamers/revenue-shares/records/{record_id}/status`
 
 用途：受信任後台或 payout 流程將 pending 分潤紀錄標記為 `paid` 或 `void`。

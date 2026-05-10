@@ -233,6 +233,49 @@ def test_list_records_rejects_blank_filters(field, kwargs):
         RevenueShareService(session).list_records(**kwargs)
 
 
+def test_summarize_records_groups_totals_by_status_and_filters():
+    session = build_session()
+    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
+    create_streamer_with_assignment(session, slug="streamer-two", saleor_product_id="product-2")
+    service = RevenueShareService(session)
+    paid_result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+    service.update_record_status(record_id=paid_result.records[0].id, status="paid")
+    service.record_order_share(
+        order_id="order-2",
+        lines=[RevenueShareLine(saleor_product_id="product-2", gross_amount=2400)],
+    )
+    service.record_order_share(
+        order_id="order-3",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=300)],
+    )
+
+    summaries = service.summarize_records()
+    streamer_summaries = service.summarize_records(streamer_slug=" Streamer-One ")
+    order_summaries = service.summarize_records(order_id=" order-2 ")
+
+    assert [
+        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        for summary in summaries
+    ] == [
+        ("paid", 1, 1200, 120),
+        ("pending", 2, 2700, 270),
+    ]
+    assert [
+        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        for summary in streamer_summaries
+    ] == [
+        ("paid", 1, 1200, 120),
+        ("pending", 1, 300, 30),
+    ]
+    assert [
+        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        for summary in order_summaries
+    ] == [("pending", 1, 2400, 240)]
+
+
 def test_update_record_status_marks_pending_record_paid():
     session = build_session()
     create_streamer_with_assignment(session)
