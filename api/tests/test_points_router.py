@@ -76,6 +76,37 @@ def test_points_balance_returns_zero_without_ledger_entries(monkeypatch):
     assert response.json() == {"user_id": "new-user", "balance": 0}
 
 
+def test_points_balance_trims_user_id(monkeypatch):
+    session = build_session()
+    asyncio.run(PointsService(session).credit("user-1", 120, "order-1"))
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/balance",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"user_id": " user-1 "},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "user-1", "balance": 120}
+
+
+def test_points_balance_rejects_blank_user_id(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/balance",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"user_id": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "user_id is required"
+
+
 def test_points_balance_excludes_expired_credit(monkeypatch):
     session = build_session()
     session.add_all(
@@ -547,6 +578,49 @@ def test_points_ledger_returns_recent_entries(monkeypatch):
             },
         ],
     }
+
+
+def test_points_ledger_trims_user_id(monkeypatch):
+    session = build_session()
+    session.add(
+        PointsLedger(
+            id="entry-1",
+            user_id="user-1",
+            amount=120,
+            entry_type="credit",
+            source_type="tachigo",
+            reference_id="tachigo:redemption-1",
+            created_at=datetime(2026, 1, 1, 0, 0, 0),
+        ),
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"user_id": " user-1 "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "user-1"
+    assert [entry["id"] for entry in response.json()["entries"]] == ["entry-1"]
+
+
+def test_points_ledger_rejects_blank_user_id(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"user_id": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "user_id is required"
 
 
 def test_points_ledger_admin_entries_filter_across_users(monkeypatch):
