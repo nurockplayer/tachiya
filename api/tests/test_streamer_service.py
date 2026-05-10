@@ -136,6 +136,13 @@ def test_list_active_profiles_applies_limit():
     assert [profile.slug for profile in profiles] == ["alpha"]
 
 
+def test_list_active_profiles_rejects_invalid_limit():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        StreamerService(session).list_active_profiles(limit=0)
+
+
 def test_list_profiles_supports_admin_active_filter():
     session = build_session()
     service = StreamerService(session)
@@ -189,6 +196,14 @@ def test_list_profiles_rejects_invalid_filters():
             created_from=datetime(2026, 1, 3, 0, 0, 0),
             created_to=datetime(2026, 1, 2, 0, 0, 0),
         )
+
+
+@pytest.mark.parametrize("limit", [101, True])
+def test_list_profiles_rejects_invalid_limit(limit):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        StreamerService(session).list_profiles(limit=limit)
 
 
 @pytest.mark.parametrize(
