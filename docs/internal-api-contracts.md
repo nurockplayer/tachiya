@@ -11,8 +11,9 @@ X-Tachiya-Internal-Secret: <TACHIYA_INTERNAL_SHARED_SECRET>
 ```
 
 - 未設定 `TACHIYA_INTERNAL_SHARED_SECRET`：API fail closed，回傳 `500 internal shared secret is not configured`。
+- 已設定的 `TACHIYA_INTERNAL_SHARED_SECRET` 會先 trim；trim 後為空視為未設定並 fail closed。
 - header 缺失或不相符：回傳 `401 invalid internal secret`。
-- 這個 secret 同時用於 Tachiya 呼叫 Tachigo internal API 時的 outbound header。
+- 這個 secret 同時用於 webhook HMAC 與 Tachiya 呼叫 Tachigo internal API 時的 outbound header，兩者皆使用 trim 後的 configured value。
 
 ## Webhook 簽章
 
@@ -209,7 +210,7 @@ Query：
 
 Query：
 
-- `user_id`：Saleor customer id，必填。
+- `user_id`：Saleor customer id，必填；會 trim，trim 後為空回 `422 user_id is required`。
 
 到期政策：
 
@@ -232,7 +233,7 @@ Response：
 
 Query：
 
-- `user_id`：Saleor customer id，必填。
+- `user_id`：Saleor customer id，必填；會 trim，trim 後為空回 `422 user_id is required`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response entry 欄位：
@@ -344,9 +345,10 @@ Request：
 
 - `entry_type` 只接受 `credit` / `debit`。
 - `amount` 必須大於 0。
-- `user_id`、`reference_id`、`source_type` 不可為空字串。
+- `user_id`、`reference_id`、`source_type` 會 trim，trim 後不可為空字串。
 - 同一個使用者、同一個 `reference_id`、同一個 `entry_type` 重送時維持 idempotent。
 - debit 不可讓目前可用 balance 變成負數；已過期且尚未消耗的 credit 不可被 debit 花用。
+- Response 的 `balance` 依 persisted normalized `user_id` 計算，不使用 request 原始空白版本。
 
 ### `POST /points/webhooks/order-rewarded`
 
@@ -365,8 +367,9 @@ Request：
 規則：
 
 - 需要 webhook 簽章。
+- `order_id` 會 trim，trim 後為空回 `422 order_id is required`，且不建立 ledger 或 event。
 - `reward_points` 必須大於 0。
-- ledger `reference_id` 使用 `order-reward:<order_id>`。
+- ledger `reference_id` 使用 `order-reward:<trim 後 order_id>`。
 - ledger `source_type` 使用 `order-reward`。
 
 ## Referrals
@@ -977,12 +980,12 @@ Response：
 
 Query：
 
-- `email`：必填，最短 3 字元。
+- `email`：必填，會 trim；trim 後為空回 `422 email is required`，trim 後最短 3 字元。
 
 Tachiya 會呼叫：
 
 ```http
-GET <TACHIGO_API_URL>/api/v1/internal/tachiya/users/points/balance?email=<email>
+GET <TACHIGO_API_URL>/api/v1/internal/tachiya/users/points/balance?email=<trim 後 email>
 X-Tachiya-Internal-Secret: <TACHIYA_INTERNAL_SHARED_SECRET>
 ```
 
@@ -1013,7 +1016,7 @@ Query：
 | 變數 | 用途 | 預設 |
 | --- | --- | --- |
 | `DATABASE_URL` | Tachiya API database | `postgresql://saleor:saleor@localhost:5432/saleor` |
-| `TACHIYA_INTERNAL_SHARED_SECRET` | internal API 與 webhook HMAC secret；production 必須使用高熵隨機值，並與 Tachigo `TACHIYA_INTERNAL_SHARED_SECRET` 同步 | 無，缺失時 fail closed |
+| `TACHIYA_INTERNAL_SHARED_SECRET` | internal API 與 webhook HMAC secret；production 必須使用高熵隨機值，並與 Tachigo `TACHIYA_INTERNAL_SHARED_SECRET` 同步；configured value 會 trim，trim 後為空視為缺失 | 無，缺失時 fail closed |
 | `TACHIYA_WEBHOOK_TOLERANCE_SECONDS` | webhook timestamp 容忍秒數；`.env.example` 明列 `300` 作為預設建議值 | `300` |
 | `TACHIYA_CORS_ALLOWED_ORIGINS` | 逗號分隔的 API CORS origins | `http://localhost:3000,http://localhost:3001` |
 | `TACHIYA_VOUCHER_CODE_PREFIX` | Tachiya coupon redemption 產生 Saleor voucher code 的 prefix | `TACHIYA` |
