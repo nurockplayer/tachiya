@@ -61,6 +61,22 @@ def test_link_identity_records_audit_event():
     assert event.reason == "initial link"
 
 
+def test_link_identity_stores_blank_audit_reason_as_none():
+    session = build_session()
+    service = IdentityMappingService(session)
+
+    service.link_identity(
+        "saleor-user-1",
+        "tachigo",
+        "tachigo-user-1",
+        actor="ops-user-1",
+        reason="   ",
+    )
+
+    event = session.query(IdentityAuditEvent).one()
+    assert event.reason is None
+
+
 def test_link_identity_rejects_duplicate_external_subject():
     session = build_session()
     service = IdentityMappingService(session)
@@ -103,6 +119,18 @@ def test_unlink_identity_records_audit_event():
     assert events[-1].source == "tachigo:tachigo-user-1"
     assert events[-1].target == "saleor:saleor-user-1"
     assert events[-1].reason == "user requested unlink"
+
+
+def test_unlink_identity_stores_blank_audit_reason_as_none():
+    session = build_session()
+    service = IdentityMappingService(session)
+    mapping = service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+
+    service.unlink_identity(mapping.id, actor="ops-user-1", reason="   ")
+
+    events = session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    assert events[-1].action == "identity.unlinked"
+    assert events[-1].reason is None
 
 
 def test_link_identity_relinks_unlinked_external_subject_with_audit_event():

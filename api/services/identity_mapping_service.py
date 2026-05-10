@@ -249,7 +249,7 @@ class IdentityMappingService:
             actor=self._normalize_required(actor, "actor is required"),
             source=source,
             target=target,
-            reason=reason.strip() if reason else None,
+            reason=self._normalize_optional_text(reason),
         )
         self.db.add(event)
         if commit:
@@ -284,6 +284,13 @@ class IdentityMappingService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _normalize_optional_text(value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
     @staticmethod
     def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
