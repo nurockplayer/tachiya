@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StrictInt, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -17,7 +17,7 @@ NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length
 class OrderCompletedRequest(BaseModel):
     order_id: NonBlankStr
     referee_id: NonBlankStr
-    order_total_amount: int = Field(gt=0)
+    order_total_amount: StrictInt = Field(gt=0)
 
 
 class ReferralRewardResponse(BaseModel):

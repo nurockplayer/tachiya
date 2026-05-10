@@ -350,6 +350,31 @@ def test_order_completed_webhook_rejects_invalid_payload_before_processing(monke
     assert session.query(PointsLedger).count() == 0
 
 
+@pytest.mark.parametrize("order_total_amount", [True, "1200"])
+def test_order_completed_webhook_rejects_non_strict_order_total_amount(
+    monkeypatch,
+    order_total_amount,
+):
+    session = build_session()
+    add_relationship(session)
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_completed_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "referee_id": "referee-1",
+            "order_total_amount": order_total_amount,
+        },
+    )
+
+    assert response.status_code == 422
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(ReferralReward).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
 def test_order_completed_webhook_rejects_missing_signature_headers(monkeypatch):
     session = build_session()
     add_relationship(session)
