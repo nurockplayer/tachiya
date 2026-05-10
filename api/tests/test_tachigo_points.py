@@ -50,7 +50,10 @@ async def test_get_user_points_calls_tachigo_internal_api(monkeypatch):
         spendable_balance=123,
         cumulative_total=456,
     )
-    assert str(requests[0].url) == "http://tachigo.local/internal/users/points?email=demo%40tachigo.io"
+    assert (
+        str(requests[0].url)
+        == "http://tachigo.local/api/v1/internal/tachiya/users/points/balance?email=demo%40tachigo.io"
+    )
     assert requests[0].headers["X-Tachiya-Internal-Secret"] == "shared-secret"
 
 
