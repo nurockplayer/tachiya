@@ -171,6 +171,7 @@ class RevenueShareService:
         created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[StreamerRevenueShareRecord]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_status = (
             self._validate_record_status_filter(status)
             if status is not None
@@ -203,7 +204,7 @@ class RevenueShareService:
                 StreamerRevenueShareRecord.created_at.desc(),
                 StreamerRevenueShareRecord.id.asc(),
             )
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -353,6 +354,12 @@ class RevenueShareService:
         if normalized_status not in REVENUE_SHARE_RECORD_STATUSES:
             raise ValueError("status must be pending, paid, or void")
         return normalized_status
+
+    @staticmethod
+    def _validate_read_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return limit
 
     @staticmethod
     def _normalize_optional_filter(value: str | None, message: str) -> str | None:

@@ -313,6 +313,14 @@ def test_list_records_applies_limit():
     assert len(records) == 1
 
 
+@pytest.mark.parametrize("limit", [0, 101, True])
+def test_list_records_rejects_invalid_limit(limit):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        RevenueShareService(session).list_records(limit=limit)
+
+
 @pytest.mark.parametrize(
     ("field", "kwargs"),
     [
