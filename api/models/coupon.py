@@ -1,9 +1,13 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, Integer, String
 
 from database import Base
+
+
+def utcnow():
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class UserCoupon(Base):
@@ -18,4 +22,4 @@ class UserCoupon(Base):
     coupon_type = Column(String, nullable=False)
     tcg_cost = Column(Integer, nullable=False)
     status = Column(String, default="active")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
