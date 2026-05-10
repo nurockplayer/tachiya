@@ -140,6 +140,9 @@ class IdentityMappingService:
         *,
         provider: str | None = None,
         saleor_customer_id: str | None = None,
+        external_subject: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
         include_unlinked: bool = False,
         limit: int = 20,
     ) -> list[IdentityMapping]:
@@ -152,6 +155,18 @@ class IdentityMappingService:
             saleor_customer_id,
             "saleor_customer_id is required",
         )
+        normalized_external_subject = self._normalize_optional_filter(
+            external_subject,
+            "external_subject is required",
+        )
+        normalized_created_from = self._normalize_optional_datetime(created_from)
+        normalized_created_to = self._normalize_optional_datetime(created_to)
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("invalid created_at range")
 
         query = self.db.query(IdentityMapping)
         if normalized_provider is not None:
@@ -160,6 +175,12 @@ class IdentityMappingService:
             query = query.filter(
                 IdentityMapping.saleor_customer_id == normalized_saleor_customer_id,
             )
+        if normalized_external_subject is not None:
+            query = query.filter(IdentityMapping.external_subject == normalized_external_subject)
+        if normalized_created_from is not None:
+            query = query.filter(IdentityMapping.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(IdentityMapping.created_at <= normalized_created_to)
         if not include_unlinked:
             query = query.filter(IdentityMapping.unlinked_at.is_(None))
 

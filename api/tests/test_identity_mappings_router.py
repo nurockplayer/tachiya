@@ -290,6 +290,69 @@ def test_list_identity_mappings(monkeypatch):
     assert tachigo_history_response.json()["mappings"][0]["unlinked_at"] is not None
 
 
+def test_list_identity_mappings_filters_external_subject_and_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    session.add_all(
+        [
+            IdentityMapping(
+                id="before-range",
+                saleor_customer_id="saleor-user-1",
+                provider="youtube",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 1, 0, 0, 0),
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            IdentityMapping(
+                id="matching-old",
+                saleor_customer_id="saleor-user-2",
+                provider="tachigo",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 2, 0, 0, 0),
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            IdentityMapping(
+                id="matching-new",
+                saleor_customer_id="saleor-user-3",
+                provider="twitch",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 3, 0, 0, 0),
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+                unlinked_at=datetime(2026, 1, 4, 0, 0, 0),
+            ),
+            IdentityMapping(
+                id="after-range",
+                saleor_customer_id="saleor-user-4",
+                provider="discord",
+                external_subject="shared-user",
+                verified_at=datetime(2026, 1, 3, 0, 0, 1),
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    response = client.get(
+        "/identity-mappings",
+        headers=headers,
+        params={
+            "external_subject": " shared-user ",
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "include_unlinked": "true",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [mapping["id"] for mapping in response.json()["mappings"]] == [
+        "matching-new",
+        "matching-old",
+    ]
+
+
 def test_list_identity_mappings_rejects_invalid_query(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -302,6 +365,39 @@ def test_list_identity_mappings_rejects_invalid_query(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "provider is required"
+
+
+def test_list_identity_mappings_rejects_blank_external_subject(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"external_subject": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "external_subject is required"
+
+
+def test_list_identity_mappings_rejects_invalid_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
 
 
 def test_resolve_identity_mapping_returns_404_for_missing_mapping(monkeypatch):

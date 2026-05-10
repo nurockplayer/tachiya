@@ -98,6 +98,9 @@ def create_identity_mapping(
 def list_identity_mappings(
     provider: str | None = Query(default=None),
     saleor_customer_id: str | None = Query(default=None),
+    external_subject: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     include_unlinked: bool = Query(default=False),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -106,6 +109,9 @@ def list_identity_mappings(
         mappings = IdentityMappingService(db).list_mappings(
             provider=provider,
             saleor_customer_id=saleor_customer_id,
+            external_subject=external_subject,
+            created_from=created_from,
+            created_to=created_to,
             include_unlinked=include_unlinked,
             limit=limit,
         )
