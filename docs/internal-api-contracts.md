@@ -543,6 +543,7 @@ Request：
 - 分潤金額使用 `floor(gross_amount * commission_bps / 10000)`。
 - 同 streamer 多行會彙總 `gross_amount` 與 `share_amount`。
 - 找不到 assignment 或 streamer inactive 時，商品 id 會進入 `unassigned_product_ids`。
+- `unassigned_product_ids` 會保留首次出現順序並去重，避免同一 product id 在同一張訂單內重複列出。
 
 Response：
 
