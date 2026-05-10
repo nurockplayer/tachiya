@@ -185,14 +185,14 @@ Tachigo 可以維持自己的 token / Web3 / Twitch 忠誠點數規則；一旦�
 
 - Soulbound 以後端與資料模型為準，不依賴前端隱藏按鈕作為唯一限制。
 - Tachiya API 不提供使用者對使用者的 transfer endpoint。
-- 點數異動必須經過受信任服務，例如 `PointsService.credit()`、`PointsService.debit()`、referral webhook、coupon redemption 或未來的 Tachigo 兌換 webhook。
-- `PointsLedger` 的 `entry_type` 保持為 `credit` / `debit`；業務來源暫時放在 `reference_id` namespace，例如 `referral:<order_id>`、`tachigo:<redemption_id>`、`coupon:<code>`。
-- 過期點數不放進 MVP；若未來需要點數到期，應新增 ledger 層級的 `expires_at` 或 policy 欄位，不用前端倒數或批次字串規則處理。
+- 點數異動必須經過受信任服務，例如 `PointsService.credit()`、`PointsService.debit()`、referral webhook、coupon redemption 或 Tachigo 兌換 webhook。
+- `PointsLedger` 的 `entry_type` 保持為 `credit` / `debit`；業務來源使用 `source_type`，具體事件仍放在 `reference_id` namespace，例如 `referral:<order_id>`、`tachigo:<redemption_id>`、`coupon:<code>`。
+- ledger 已可保存 `expires_at`；到期是否生效必須由後端政策與扣帳流程處理，不用前端倒數或批次字串規則處理。
 
 ### 後續待補
 
-- 若營運需要區分「消費回饋」、「分潤」、「Tachigo 兌換」等來源，新增 `PointsLedger.source_type`。
-- 若法務或活動規則需要點數到期，新增 `PointsLedger.expires_at` 與到期扣帳流程。
+- 補點數到期政策與扣帳流程；`PointsLedger.expires_at` 已可保存到期時間，但尚未有自動到期處理。
+- 補營運層級的點數來源分類規則；`PointsLedger.source_type` 已落地，但各活動來源仍需明確命名慣例。
 - 若 Tachigo 仍需要可流通 token，維持在 Tachigo repo 內設計，不回填成 Tachiya 使用者可互轉點數。
 
 ---
@@ -239,6 +239,6 @@ Email、Twitch user id、Tachigo member id、wallet address 都是可連結身�
 
 ### 後續待補
 
-- 新增 Tachiya identity mapping 模型，保存 Saleor customer id 與 Tachigo/Twitch/wallet 外部身份的連結。
-- 將 `GET /tachigo/users/points?email=...` 逐步替換成 signed identity lookup。
-- 補帳號合併/解除連結的 audit log 與後台操作規格。
+- 將 identity mapping 串進 Tachigo/Twitch/wallet 的 signed identity lookup，不再依 demo email bridge 做產品級查詢。
+- 規劃並淘汰 `GET /tachigo/users/points?email=...` 的前台依賴。
+- 補帳號合併、identity proof、解除連結後台操作規格；目前 link / unlink 已有基本 audit trail。
