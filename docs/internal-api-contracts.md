@@ -44,6 +44,36 @@ X-Tachiya-Webhook-Signature: <hex-hmac-sha256>
 - `api/services/webhook_event_service.py`
 - `api/models/webhook_event.py`
 
+### `GET /webhooks/events`
+
+用途：受信任後台、營運腳本或客服工具查詢最近已處理 webhook event，用來確認 replay guard、事件到達時間與來源 event id。
+
+Query：
+
+- `event_type`：可選，例如 `points.order_rewarded` 或 `revenue_share.order_completed`；提供時會 trim，空字串回 `422 event_type is required`。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "events": [
+    {
+      "id": "uuid",
+      "event_id": "evt-1",
+      "event_type": "points.order_rewarded",
+      "occurred_at": "2026-05-10T00:00:00",
+      "received_at": "2026-05-10T00:00:01"
+    }
+  ]
+}
+```
+
+規則：
+
+- 需要 internal secret，不需要 webhook 簽章。
+- 依 `received_at desc`、`id desc` 回傳最近事件。
+
 ## Coupons
 
 ### `POST /coupons/redeem`

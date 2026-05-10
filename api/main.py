@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from config import get_settings, is_internal_shared_secret_configured
 from database import check_database_ready, create_tables
-from routers import coupons, identity_mappings, points, referrals, streamers, tachigo
+from routers import coupons, identity_mappings, points, referrals, streamers, tachigo, webhooks
 
 
 @asynccontextmanager
@@ -32,6 +32,7 @@ app.include_router(points.router)
 app.include_router(referrals.router)
 app.include_router(streamers.router)
 app.include_router(tachigo.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/health")
