@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -230,6 +231,14 @@ def test_process_referral_reward_rejects_non_positive_integer_amount(order_total
 
     assert session.query(ReferralReward).count() == 0
     assert session.query(PointsLedger).count() == 0
+
+
+@pytest.mark.parametrize("reward_rate", [0, -0.01, 1.01, True, "0.05", math.nan, math.inf])
+def test_referral_service_rejects_invalid_reward_rate(reward_rate):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="reward_rate must be between 0 and 1"):
+        ReferralService(session, reward_rate=reward_rate)
 
 
 def build_client(session) -> TestClient:
