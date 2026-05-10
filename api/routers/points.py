@@ -41,6 +41,21 @@ class PointsLedgerAdminEntriesResponse(BaseModel):
     entries: list[PointsLedgerAdminEntryResponse]
 
 
+class PointsExpiredCreditEntryResponse(BaseModel):
+    id: str
+    user_id: str
+    amount: int
+    remaining_amount: int
+    source_type: str
+    reference_id: str
+    expires_at: datetime
+    created_at: datetime
+
+
+class PointsExpiredCreditsResponse(BaseModel):
+    entries: list[PointsExpiredCreditEntryResponse]
+
+
 class PointsTransactionRequest(BaseModel):
     user_id: str = Field(min_length=1)
     entry_type: Literal["credit", "debit"]
@@ -173,6 +188,41 @@ def list_points_ledger_entries_for_admin(
 
     return PointsLedgerAdminEntriesResponse(
         entries=[_ledger_admin_entry_response(entry) for entry in entries],
+    )
+
+
+@router.get(
+    "/ledger/expired-credits",
+    response_model=PointsExpiredCreditsResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_points_expired_credit_exposures_for_admin(
+    user_id: str = Query(..., min_length=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    try:
+        exposures = PointsService(db).list_expired_credit_exposures(
+            user_id=user_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return PointsExpiredCreditsResponse(
+        entries=[
+            PointsExpiredCreditEntryResponse(
+                id=exposure.entry.id,
+                user_id=exposure.entry.user_id,
+                amount=exposure.entry.amount,
+                remaining_amount=exposure.remaining_amount,
+                source_type=exposure.entry.source_type,
+                reference_id=exposure.entry.reference_id,
+                expires_at=exposure.entry.expires_at,
+                created_at=exposure.entry.created_at,
+            )
+            for exposure in exposures
+        ],
     )
 
 

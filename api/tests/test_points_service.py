@@ -246,6 +246,53 @@ def test_debit_rejects_expired_credit_balance():
     assert session.query(PointsLedger).count() == 1
 
 
+def test_list_expired_credit_exposures_returns_unspent_expired_credit_amounts():
+    session = build_session()
+    service = PointsService(session)
+    session.add_all(
+        [
+            PointsLedger(
+                id="expired-credit",
+                user_id="user-1",
+                amount=100,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:redemption-1",
+                expires_at=datetime(2026, 1, 10, 0, 0, 0),
+                created_at=datetime(2026, 1, 1, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="active-credit",
+                user_id="user-1",
+                amount=50,
+                entry_type="credit",
+                source_type="manual",
+                reference_id="manual:adjustment-1",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="checkout-debit",
+                user_id="user-1",
+                amount=-30,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout-1",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+        ],
+    )
+    session.commit()
+
+    exposures = service.list_expired_credit_exposures(
+        "user-1",
+        at=datetime(2026, 1, 11, 0, 0, 0),
+    )
+
+    assert len(exposures) == 1
+    assert exposures[0].entry.id == "expired-credit"
+    assert exposures[0].remaining_amount == 70
+
+
 def test_list_entries_returns_requested_user_newest_first():
     session = build_session()
     service = PointsService(session)
