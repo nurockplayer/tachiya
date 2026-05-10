@@ -267,6 +267,36 @@ async def test_get_identity_points_fails_closed_without_internal_secret(monkeypa
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("provider", "external_subject", "message"),
+    [
+        ("   ", "tachigo-user-1", "provider is required"),
+        ("tachigo", "   ", "external_subject is required"),
+    ],
+)
+async def test_get_identity_points_rejects_blank_inputs_before_upstream(
+    monkeypatch,
+    provider,
+    external_subject,
+    message,
+):
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={})
+
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(TachigoUpstreamError, match=message):
+            await get_identity_points(provider, external_subject, settings, client=client)
+
+    assert requests == []
+
+
+@pytest.mark.anyio
 async def test_get_user_points_raises_for_upstream_error(monkeypatch):
     settings = Settings(tachigo_api_url="http://tachigo.local")
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
