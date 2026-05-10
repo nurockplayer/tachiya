@@ -76,6 +76,46 @@ def test_points_balance_returns_zero_without_ledger_entries(monkeypatch):
     assert response.json() == {"user_id": "new-user", "balance": 0}
 
 
+def test_points_balance_excludes_expired_credit(monkeypatch):
+    session = build_session()
+    session.add_all(
+        [
+            PointsLedger(
+                id="expired-credit",
+                user_id="user-1",
+                amount=120,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:expired",
+                expires_at=datetime(2000, 1, 1, 0, 0, 0),
+                created_at=datetime(1999, 12, 1, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="active-credit",
+                user_id="user-1",
+                amount=40,
+                entry_type="credit",
+                source_type="manual",
+                reference_id="manual:active",
+                expires_at=datetime(2999, 12, 31, 23, 59, 59),
+                created_at=datetime(2026, 1, 1, 0, 0, 0),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/balance",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"user_id": "user-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"user_id": "user-1", "balance": 40}
+
+
 def test_points_balance_rejects_missing_internal_secret(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -216,6 +256,41 @@ def test_points_transaction_rejects_insufficient_balance(monkeypatch):
     assert response.status_code == 400
     assert response.json()["detail"] == "insufficient balance"
     assert session.query(PointsLedger).count() == 0
+
+
+def test_points_transaction_rejects_expired_credit_balance(monkeypatch):
+    session = build_session()
+    session.add(
+        PointsLedger(
+            id="expired-credit",
+            user_id="user-1",
+            amount=45,
+            entry_type="credit",
+            source_type="tachigo",
+            reference_id="tachigo:expired",
+            expires_at=datetime(2000, 1, 1, 0, 0, 0),
+            created_at=datetime(1999, 12, 1, 0, 0, 0),
+        ),
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": "user-1",
+            "entry_type": "debit",
+            "amount": 1,
+            "reference_id": "checkout-1",
+            "source_type": "checkout",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "insufficient balance"
+    assert session.query(PointsLedger).count() == 1
 
 
 def test_points_transaction_rejects_blank_user_id(monkeypatch):

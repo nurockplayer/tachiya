@@ -187,11 +187,13 @@ Tachigo 可以維持自己的 token / Web3 / Twitch 忠誠點數規則；一旦�
 - Tachiya API 不提供使用者對使用者的 transfer endpoint。
 - 點數異動必須經過受信任服務，例如 `PointsService.credit()`、`PointsService.debit()`、referral webhook、coupon redemption 或 Tachigo 兌換 webhook。
 - `PointsLedger` 的 `entry_type` 保持為 `credit` / `debit`；業務來源使用 `source_type`，具體事件仍放在 `reference_id` namespace，例如 `referral:<order_id>`、`tachigo:<redemption_id>`、`coupon:<code>`。
-- ledger 已可保存 `expires_at`；到期是否生效必須由後端政策與扣帳流程處理，不用前端倒數或批次字串規則處理。
+- `PointsLedger.expires_at` 由後端餘額與扣帳流程生效；目前可用餘額排除已過期且未消耗的 credit。
+- 扣帳以 ledger 時序計算，並以 FIFO 優先消耗較早到期的 credit；已在到期前花掉的 credit 不會在到期後被重複扣回。
+- 前端可以顯示 `expires_at` 作為資訊，但不得自行用倒數、字串規則或 client-side 過濾取代後端餘額。
 
 ### 後續待補
 
-- 補點數到期政策與扣帳流程；`PointsLedger.expires_at` 已可保存到期時間，但尚未有自動到期處理。
+- 補到期點數的營運報表與批次對帳；MVP 已能在可用餘額與扣帳流程排除過期 credit，但尚未產生獨立 expiration adjustment ledger。
 - 補營運層級的點數來源分類規則；`PointsLedger.source_type` 已落地，但各活動來源仍需明確命名慣例。
 - 若 Tachigo 仍需要可流通 token，維持在 Tachigo repo 內設計，不回填成 Tachiya 使用者可互轉點數。
 
