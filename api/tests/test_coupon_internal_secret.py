@@ -410,6 +410,45 @@ def test_redeem_records_failed_audit_when_saleor_voucher_fails(monkeypatch):
     assert fake_db.commits == 1
 
 
+def test_redeem_records_failed_audit_when_coupon_persistence_fails(monkeypatch):
+    session = build_real_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fake_create_voucher(coupon_id: str, code: str):
+        return {"code": code, "voucher_id": "saleor-voucher-1"}
+
+    original_commit = session.commit
+    commit_attempts = 0
+
+    def fail_coupon_commit_once():
+        nonlocal commit_attempts
+        commit_attempts += 1
+        if commit_attempts == 1:
+            raise RuntimeError("db unavailable")
+        original_commit()
+
+    monkeypatch.setattr(coupons, "create_voucher", fake_create_voucher)
+    monkeypatch.setattr(session, "commit", fail_coupon_commit_once)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "coupon_id": "tachiya-95",
+            "tcg_cost": 18,
+            "idempotency_key": "redeem-1",
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "coupon persistence failed"
+    assert session.query(UserCoupon).count() == 0
+    audit_event = session.query(CouponRedemptionAuditEvent).one()
+    assert audit_event.status == "failed"
+    assert audit_event.reason == "coupon persistence failed: db unavailable"
+
+
 def test_list_coupons_filters_by_redemption_token():
     matching_coupon = SimpleNamespace(
         voucher_code="DEMO-MATCH",
