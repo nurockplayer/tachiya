@@ -58,8 +58,17 @@ async def get_user_points(
 
     payload = _json_payload(response)
     try:
+        response_email = payload["email"]
+        if not isinstance(response_email, str):
+            raise TypeError("email must be a string")
+        normalized_response_email = response_email.strip()
+        if not normalized_response_email:
+            raise ValueError("email is required")
+        if normalized_response_email.lower() != normalized_email.lower():
+            raise TachigoUpstreamError("tachigo upstream email mismatch")
+
         return TachigoPoints(
-            email=str(payload["email"]),
+            email=normalized_response_email,
             spendable_balance=int(payload["spendable_balance"]),
             cumulative_total=int(payload["cumulative_total"]),
         )
