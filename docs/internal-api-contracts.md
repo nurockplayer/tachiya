@@ -436,6 +436,43 @@ Response：
 - 依 `created_at desc`、`id asc` 穩定排序。
 - 本 endpoint 只查詢 records，不更新 payout 狀態。
 
+### `POST /streamers/revenue-shares/records/{record_id}/status`
+
+用途：受信任後台或 payout 流程將 pending 分潤紀錄標記為 `paid` 或 `void`。
+
+Request：
+
+```json
+{
+  "status": "paid"
+}
+```
+
+Response：
+
+```json
+{
+  "record": {
+    "id": "uuid",
+    "order_id": "saleor-order-1",
+    "streamer_slug": "streamer-one",
+    "streamer_profile_id": "uuid",
+    "gross_amount": 1200,
+    "commission_bps": 1000,
+    "share_amount": 120,
+    "status": "paid",
+    "created_at": "2026-05-10T00:00:00"
+  }
+}
+```
+
+規則：
+
+- 目標 `status` 只接受 `paid` 或 `void`。
+- record 不存在回傳 `404 revenue share record not found`。
+- 已是相同 terminal status 時保持 idempotent。
+- 已是 `paid` / `void` 但目標狀態不同時回傳 `409 revenue share status conflict`。
+
 ### `POST /streamers/webhooks/order-completed`
 
 用途：Saleor 訂單完成 webhook 入口，使用與 record endpoint 相同的分潤計算規則，自動寫入每張訂單、每位 streamer 的分潤紀錄。

@@ -682,3 +682,66 @@ def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
 
     assert invalid_limit_response.status_code == 422
     assert blank_status_response.status_code == 422
+
+
+def test_update_revenue_share_record_status(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    record_response = client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+    )
+    record_id = record_response.json()["records"][0]["id"]
+
+    response = client.post(
+        f"/streamers/revenue-shares/records/{record_id}/status",
+        headers=headers,
+        json={"status": "paid"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["record"]["id"] == record_id
+    assert response.json()["record"]["order_id"] == "order-1"
+    assert response.json()["record"]["status"] == "paid"
+
+
+def test_update_revenue_share_record_status_rejects_missing_record(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/streamers/revenue-shares/records/missing-record/status",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"status": "paid"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "revenue share record not found"
+
+
+def test_update_revenue_share_record_status_rejects_invalid_status(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/streamers/revenue-shares/records/record-1/status",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"status": "pending"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "status must be paid or void"

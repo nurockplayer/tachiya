@@ -115,6 +115,14 @@ class RevenueShareRecordListResponse(BaseModel):
     records: list[StreamerRevenueShareRecordListItemResponse]
 
 
+class RevenueShareRecordStatusRequest(BaseModel):
+    status: NonBlankStr
+
+
+class RevenueShareRecordStatusResponse(BaseModel):
+    record: StreamerRevenueShareRecordListItemResponse
+
+
 @router.post(
     "",
     response_model=StreamerProfileResponse,
@@ -206,20 +214,35 @@ def list_streamer_revenue_share_records(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return RevenueShareRecordListResponse(
-        records=[
-            StreamerRevenueShareRecordListItemResponse(
-                id=record.id,
-                order_id=record.order_id,
-                streamer_slug=record.streamer_slug,
-                streamer_profile_id=record.streamer_profile_id,
-                gross_amount=record.gross_amount,
-                commission_bps=record.commission_bps,
-                share_amount=record.share_amount,
-                status=record.status,
-                created_at=record.created_at,
-            )
-            for record in records
-        ],
+        records=[_revenue_share_record_list_item_response(record) for record in records],
+    )
+
+
+@router.post(
+    "/revenue-shares/records/{record_id}/status",
+    response_model=RevenueShareRecordStatusResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def update_streamer_revenue_share_record_status(
+    req: RevenueShareRecordStatusRequest,
+    record_id: str = Path(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    try:
+        record = RevenueShareService(db).update_record_status(
+            record_id=record_id,
+            status=req.status,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "revenue share record not found":
+            raise HTTPException(status_code=404, detail=detail) from exc
+        if detail == "revenue share status conflict":
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=422, detail=detail) from exc
+
+    return RevenueShareRecordStatusResponse(
+        record=_revenue_share_record_list_item_response(record),
     )
 
 
@@ -432,6 +455,20 @@ def _revenue_share_record_response(result) -> RevenueShareRecordResponse:
             for record in result.records
         ],
         unassigned_product_ids=result.unassigned_product_ids,
+    )
+
+
+def _revenue_share_record_list_item_response(record) -> StreamerRevenueShareRecordListItemResponse:
+    return StreamerRevenueShareRecordListItemResponse(
+        id=record.id,
+        order_id=record.order_id,
+        streamer_slug=record.streamer_slug,
+        streamer_profile_id=record.streamer_profile_id,
+        gross_amount=record.gross_amount,
+        commission_bps=record.commission_bps,
+        share_amount=record.share_amount,
+        status=record.status,
+        created_at=record.created_at,
     )
 
 

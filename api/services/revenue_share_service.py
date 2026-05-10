@@ -166,6 +166,27 @@ class RevenueShareService:
             .all()
         )
 
+    def update_record_status(
+        self,
+        *,
+        record_id: str,
+        status: str,
+    ) -> StreamerRevenueShareRecord:
+        normalized_record_id = self._validate_required(record_id, "record_id is required")
+        normalized_status = self._validate_record_status(status)
+        record = self.db.get(StreamerRevenueShareRecord, normalized_record_id)
+        if record is None:
+            raise ValueError("revenue share record not found")
+        if record.status == normalized_status:
+            return record
+        if record.status != "pending":
+            raise ValueError("revenue share status conflict")
+
+        record.status = normalized_status
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
     def _get_assignment(self, saleor_product_id: str) -> StreamerProductAssignment | None:
         return (
             self.db.query(StreamerProductAssignment)
@@ -217,6 +238,13 @@ class RevenueShareService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _validate_record_status(status: str) -> str:
+        normalized_status = status.strip()
+        if normalized_status not in {"paid", "void"}:
+            raise ValueError("status must be paid or void")
+        return normalized_status
 
     @staticmethod
     def _normalize_optional_filter(value: str | None, message: str) -> str | None:
