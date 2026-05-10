@@ -122,7 +122,9 @@ def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
     assert "source_type" in columns
     assert "expires_at" in columns
     indexes = {index["name"] for index in inspect(engine).get_indexes("tachiya_points_ledger")}
+    assert "ix_tachiya_points_ledger_entry_type" in indexes
     assert "ix_tachiya_points_ledger_source_type" in indexes
+    assert "ix_tachiya_points_ledger_created_at" in indexes
     assert "uq_tachiya_points_ledger_idempotency" in indexes
 
     with engine.connect() as conn:
@@ -138,6 +140,24 @@ def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
 
     assert row.source_type == "manual"
     assert row.expires_at is None
+
+
+def test_metadata_includes_points_ledger_admin_lookup_indexes():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    indexes = {
+        index["name"]: index
+        for index in inspect(engine).get_indexes("tachiya_points_ledger")
+    }
+
+    assert "ix_tachiya_points_ledger_user_id" in indexes
+    assert "ix_tachiya_points_ledger_entry_type" in indexes
+    assert "ix_tachiya_points_ledger_source_type" in indexes
+    assert "ix_tachiya_points_ledger_reference_id" in indexes
+    assert "ix_tachiya_points_ledger_created_at" in indexes
 
 
 def test_metadata_includes_streamer_profiles_table():

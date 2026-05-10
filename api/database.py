@@ -108,6 +108,14 @@ def ensure_points_ledger_extension_columns(bind=engine):
         columns=["user_id", "entry_type", "reference_id"],
         unique=True,
     )
+    for column_name in ["entry_type", "created_at"]:
+        _ensure_index(
+            bind,
+            inspector,
+            table_name="tachiya_points_ledger",
+            index_name=f"ix_tachiya_points_ledger_{column_name}",
+            columns=[column_name],
+        )
 
 
 def _ensure_column(
