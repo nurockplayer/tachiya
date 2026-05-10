@@ -74,13 +74,20 @@ async def get_identity_points(
     *,
     client: httpx.AsyncClient | None = None,
 ) -> TachigoIdentityPoints:
+    requested_provider = provider.strip().lower()
+    if not requested_provider:
+        raise TachigoUpstreamError("provider is required")
+    requested_external_subject = external_subject.strip()
+    if not requested_external_subject:
+        raise TachigoUpstreamError("external_subject is required")
+
     internal_headers = _internal_headers()
     close_client = client is None
     if client is None:
         client = httpx.AsyncClient(timeout=5)
 
-    provider_path = quote(provider.strip().lower(), safe="")
-    subject_path = quote(external_subject.strip(), safe="")
+    provider_path = quote(requested_provider, safe="")
+    subject_path = quote(requested_external_subject, safe="")
     try:
         response = await client.get(
             f"{settings.tachigo_api_url.rstrip('/')}/internal/identity/"
@@ -98,8 +105,6 @@ async def get_identity_points(
 
     payload = _json_payload(response)
     try:
-        requested_provider = provider.strip().lower()
-        requested_external_subject = external_subject.strip()
         response_provider = str(payload.get("provider", requested_provider)).strip().lower()
         response_external_subject = str(
             payload.get("external_subject", requested_external_subject),
