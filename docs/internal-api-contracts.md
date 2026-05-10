@@ -84,6 +84,21 @@ Response：
 - 成本小於等於 0：`400 tcg_cost must be positive`。
 - 成本不符：`400 tcg_cost mismatch for coupon_id: <id>`。
 
+### `GET /coupons`
+
+用途：Storefront 使用 redemption token 查詢單一可套用 coupon。公開查詢不得列出所有 active coupon。
+
+Query：
+
+- `redemption_token`：必填，由 `POST /coupons/redeem` 回傳。
+
+規則：
+
+- 符合 token 且 `status = active` 時回傳單筆 coupon array。
+- 找不到或 coupon 非 active 時回傳空 array。
+- 未提供 `redemption_token` 時回傳 `400 redemption_token is required`。
+- 若未來需要營運列表，必須另建受 internal secret 保護的 admin endpoint。
+
 ### `GET /coupons/redemption-audit-events`
 
 用途：查詢最近 coupon redemption audit events。
