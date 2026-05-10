@@ -132,6 +132,73 @@ def test_list_identity_audit_events(monkeypatch):
     }
 
 
+def test_list_identity_mappings(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    tachigo_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+        },
+    )
+    twitch_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-2",
+            "provider": "twitch",
+            "external_subject": "twitch-user-1",
+        },
+    )
+    client.delete(
+        f"/identity-mappings/{tachigo_response.json()['id']}",
+        headers=headers,
+        params={"actor": "ops-user-1", "reason": "user requested unlink"},
+    )
+
+    active_response = client.get("/identity-mappings", headers=headers)
+    tachigo_history_response = client.get(
+        "/identity-mappings?provider=Tachigo&include_unlinked=true&limit=10",
+        headers=headers,
+    )
+
+    assert tachigo_response.status_code == 200
+    assert twitch_response.status_code == 200
+    assert active_response.status_code == 200
+    assert active_response.json()["mappings"] == [
+        {
+            "id": twitch_response.json()["id"],
+            "saleor_customer_id": "saleor-user-2",
+            "provider": "twitch",
+            "external_subject": "twitch-user-1",
+            "verified_at": twitch_response.json()["verified_at"],
+            "unlinked_at": None,
+        },
+    ]
+    assert tachigo_history_response.status_code == 200
+    assert tachigo_history_response.json()["mappings"][0]["id"] == tachigo_response.json()["id"]
+    assert tachigo_history_response.json()["mappings"][0]["unlinked_at"] is not None
+
+
+def test_list_identity_mappings_rejects_invalid_query(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings?provider=%20",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "provider is required"
+
+
 def test_resolve_identity_mapping_returns_404_for_missing_mapping(monkeypatch):
     session = build_session()
     client = build_client(session)

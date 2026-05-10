@@ -31,6 +31,10 @@ class IdentityMappingResponse(BaseModel):
     unlinked_at: datetime | None = None
 
 
+class IdentityMappingListResponse(BaseModel):
+    mappings: list[IdentityMappingResponse]
+
+
 class IdentityMappingResolveResponse(BaseModel):
     saleor_customer_id: str
     provider: str
@@ -82,6 +86,43 @@ def create_identity_mapping(
         external_subject=mapping.external_subject,
         verified_at=mapping.verified_at,
         unlinked_at=mapping.unlinked_at,
+    )
+
+
+@router.get(
+    "",
+    response_model=IdentityMappingListResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_identity_mappings(
+    provider: str | None = Query(default=None),
+    saleor_customer_id: str | None = Query(default=None),
+    include_unlinked: bool = Query(default=False),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    try:
+        mappings = IdentityMappingService(db).list_mappings(
+            provider=provider,
+            saleor_customer_id=saleor_customer_id,
+            include_unlinked=include_unlinked,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return IdentityMappingListResponse(
+        mappings=[
+            IdentityMappingResponse(
+                id=mapping.id,
+                saleor_customer_id=mapping.saleor_customer_id,
+                provider=mapping.provider,
+                external_subject=mapping.external_subject,
+                verified_at=mapping.verified_at,
+                unlinked_at=mapping.unlinked_at,
+            )
+            for mapping in mappings
+        ],
     )
 
 
