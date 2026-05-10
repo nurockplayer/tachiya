@@ -21,14 +21,14 @@ class StreamerProfileCreateRequest(BaseModel):
     slug: NonBlankStr
     display_name: NonBlankStr
     saleor_collection_id: str | None = None
-    commission_bps: int = Field(default=1000, ge=0, le=10000)
+    commission_bps: StrictInt = Field(default=1000, ge=0, le=10000)
     active: bool = True
 
 
 class StreamerProfileUpdateRequest(BaseModel):
     display_name: NonBlankStr | None = None
     saleor_collection_id: str | None = None
-    commission_bps: int | None = Field(default=None, ge=0, le=10000)
+    commission_bps: StrictInt | None = Field(default=None, ge=0, le=10000)
     active: bool | None = None
 
 
