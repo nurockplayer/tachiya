@@ -58,6 +58,30 @@ async def test_get_user_points_calls_tachigo_internal_api(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_get_user_points_trims_configured_internal_secret(monkeypatch):
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "email": "demo@tachigo.io",
+                "spendable_balance": 123,
+                "cumulative_total": 456,
+            },
+        )
+
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", " shared-secret ")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await get_user_points("demo@tachigo.io", settings, client=client)
+
+    assert requests[0].headers["X-Tachiya-Internal-Secret"] == "shared-secret"
+
+
+@pytest.mark.anyio
 async def test_get_user_points_fails_closed_without_internal_secret(monkeypatch):
     requests: list[httpx.Request] = []
 

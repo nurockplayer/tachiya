@@ -97,6 +97,16 @@ def test_internal_secret_still_rejects_missing_header_when_configured(monkeypatc
     assert response.json()["detail"] == "invalid internal secret"
 
 
+def test_internal_secret_trims_configured_secret(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", " shared-secret ")
+    client = build_client()
+
+    response = client.get("/internal", headers={"X-Tachiya-Internal-Secret": "shared-secret"})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
 def test_webhook_signature_uses_default_tolerance_when_not_configured(monkeypatch):
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     monkeypatch.delenv("TACHIYA_WEBHOOK_TOLERANCE_SECONDS", raising=False)
@@ -108,6 +118,22 @@ def test_webhook_signature_uses_default_tolerance_when_not_configured(monkeypatc
         "/webhook",
         content=body,
         headers=signed_webhook_headers(body=body, timestamp=1_699_999_760),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+def test_webhook_signature_trims_configured_secret(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", " shared-secret ")
+    monkeypatch.setattr(security.time, "time", lambda: 1_700_000_000)
+    client = build_client()
+    body = b'{"ok":true}'
+
+    response = client.post(
+        "/webhook",
+        content=body,
+        headers=signed_webhook_headers(body=body),
     )
 
     assert response.status_code == 200
