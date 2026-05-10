@@ -107,6 +107,53 @@ def test_list_product_ids_for_streamer_catalog():
     assert product_ids == ["product-2", "product-1"]
 
 
+def test_list_assignments_filters_for_operational_audit():
+    session = build_session()
+    create_streamer(session)
+    create_streamer(session, slug="streamer-two")
+    service = StreamerProductAssignmentService(session)
+    service.assign_product(
+        saleor_product_id="product-1",
+        streamer_slug="streamer-one",
+        source="saleor-metadata",
+    )
+    service.assign_product(
+        saleor_product_id="product-2",
+        streamer_slug="streamer-one",
+        source="manual",
+    )
+    service.assign_product(
+        saleor_product_id="product-3",
+        streamer_slug="streamer-two",
+        source="saleor-metadata",
+    )
+
+    assignments = service.list_assignments(
+        streamer_slug=" Streamer-One ",
+        source=" saleor-metadata ",
+        limit=10,
+    )
+
+    assert len(assignments) == 1
+    assert assignments[0].saleor_product_id == "product-1"
+    assert assignments[0].streamer_slug == "streamer-one"
+    assert assignments[0].source == "saleor-metadata"
+
+
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        ("streamer_slug", {"streamer_slug": " "}),
+        ("source", {"source": " "}),
+    ],
+)
+def test_list_assignments_rejects_blank_filters(field, kwargs):
+    session = build_session()
+
+    with pytest.raises(ValueError, match=f"{field} is required"):
+        StreamerProductAssignmentService(session).list_assignments(**kwargs)
+
+
 def test_remove_product_assignment():
     session = build_session()
     create_streamer(session)

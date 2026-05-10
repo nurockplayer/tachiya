@@ -326,6 +326,67 @@ def test_streamer_product_assignment_rejects_missing_streamer(monkeypatch):
     assert response.json()["detail"] == "streamer profile not found"
 
 
+def test_list_streamer_product_assignments(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post("/streamers", headers=headers, json={"slug": "streamer-two", "display_name": "Two"})
+    first_assignment_response = client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={
+            "saleor_product_id": "product-1",
+            "streamer_slug": "streamer-one",
+            "source": "saleor-metadata",
+        },
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={
+            "saleor_product_id": "product-2",
+            "streamer_slug": "streamer-two",
+            "source": "saleor-metadata",
+        },
+    )
+
+    response = client.get(
+        "/streamers/product-assignments?streamer_slug=Streamer-One&source=saleor-metadata&limit=10",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "assignments": [
+            {
+                "id": first_assignment_response.json()["id"],
+                "saleor_product_id": "product-1",
+                "streamer_profile_id": first_assignment_response.json()["streamer_profile_id"],
+                "streamer_slug": "streamer-one",
+                "source": "saleor-metadata",
+                "created_at": first_assignment_response.json()["created_at"],
+                "updated_at": first_assignment_response.json()["updated_at"],
+            },
+        ],
+    }
+
+
+def test_list_streamer_product_assignments_rejects_invalid_query(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers/product-assignments?source=%20",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "source is required"
+
+
 def test_get_streamer_product_assignment_returns_404(monkeypatch):
     session = build_session()
     client = build_client(session)

@@ -74,6 +74,36 @@ class StreamerProductAssignmentService:
         )
         return [assignment.saleor_product_id for assignment in assignments]
 
+    def list_assignments(
+        self,
+        *,
+        streamer_slug: str | None = None,
+        source: str | None = None,
+        limit: int = 20,
+    ) -> list[StreamerProductAssignment]:
+        normalized_streamer_slug = self._normalize_optional_filter(
+            streamer_slug,
+            "streamer_slug is required",
+        )
+        normalized_source = self._normalize_optional_filter(source, "source is required")
+
+        query = self.db.query(StreamerProductAssignment)
+        if normalized_streamer_slug is not None:
+            query = query.filter(
+                StreamerProductAssignment.streamer_slug == normalized_streamer_slug.lower(),
+            )
+        if normalized_source is not None:
+            query = query.filter(StreamerProductAssignment.source == normalized_source)
+
+        return (
+            query.order_by(
+                StreamerProductAssignment.created_at.desc(),
+                StreamerProductAssignment.id.asc(),
+            )
+            .limit(limit)
+            .all()
+        )
+
     def remove_product(self, saleor_product_id: str) -> StreamerProductAssignment | None:
         assignment = self.get_by_product_id(saleor_product_id)
         if assignment is None:
@@ -85,6 +115,15 @@ class StreamerProductAssignmentService:
 
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
+
+    @staticmethod
+    def _normalize_optional_filter(value: str | None, message: str) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
             raise ValueError(message)
