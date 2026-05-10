@@ -312,6 +312,40 @@ Request：
 
 - streamer 不存在：`404 streamer profile not found`。
 
+### `GET /streamers/product-assignments`
+
+用途：營運後台與 Saleor metadata sync 稽核目前的 product assignment 狀態。
+
+Query：
+
+- `streamer_slug`：可選，查詢單一 streamer 的 assignment。
+- `source`：可選，例如 `manual`、`saleor-metadata`。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "assignments": [
+    {
+      "id": "uuid",
+      "saleor_product_id": "product-1",
+      "streamer_profile_id": "uuid",
+      "streamer_slug": "streamer-one",
+      "source": "saleor-metadata",
+      "created_at": "2026-05-10T00:00:00",
+      "updated_at": "2026-05-10T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- `streamer_slug`、`source` 有提供時會 trim，空字串回 `422`。
+- `streamer_slug` 查詢會轉小寫。
+- 依 `created_at desc`、`id asc` 穩定排序。
+
 ### `GET /streamers/product-assignments/{saleor_product_id}`
 
 用途：依 Saleor product id 查詢目前 streamer assignment。

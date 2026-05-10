@@ -59,6 +59,10 @@ class StreamerProductAssignmentResponse(BaseModel):
     updated_at: datetime
 
 
+class StreamerProductAssignmentListResponse(BaseModel):
+    assignments: list[StreamerProductAssignmentResponse]
+
+
 class StreamerCatalogProfileResponse(BaseModel):
     slug: str
     display_name: str
@@ -207,6 +211,34 @@ def assign_streamer_product(
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
     return _streamer_product_assignment_response(assignment)
+
+
+@router.get(
+    "/product-assignments",
+    response_model=StreamerProductAssignmentListResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_streamer_product_assignments(
+    streamer_slug: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    try:
+        assignments = StreamerProductAssignmentService(db).list_assignments(
+            streamer_slug=streamer_slug,
+            source=source,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return StreamerProductAssignmentListResponse(
+        assignments=[
+            _streamer_product_assignment_response(assignment)
+            for assignment in assignments
+        ],
+    )
 
 
 @router.get(
