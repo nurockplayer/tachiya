@@ -483,6 +483,25 @@ def test_order_reward_webhook_credits_customer_points(monkeypatch):
     assert ledger_entry.reference_id == "order-reward:order-1"
 
 
+def test_order_reward_webhook_trims_order_id_for_reference(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_reward_request(
+        client,
+        payload={
+            "order_id": " order-1 ",
+            "user_id": "saleor-user-1",
+            "reward_points": 120,
+        },
+    )
+
+    assert response.status_code == 200
+    ledger_entry = session.query(PointsLedger).one()
+    assert ledger_entry.reference_id == "order-reward:order-1"
+
+
 def test_order_reward_webhook_rejects_missing_signature_headers(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -558,6 +577,26 @@ def test_order_reward_webhook_rejects_blank_order_id(monkeypatch):
     )
 
     assert response.status_code == 422
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
+def test_order_reward_webhook_rejects_whitespace_order_id(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_reward_request(
+        client,
+        payload={
+            "order_id": " ",
+            "user_id": "saleor-user-1",
+            "reward_points": 120,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "order_id is required"
     assert session.query(WebhookEvent).count() == 0
     assert session.query(PointsLedger).count() == 0
 
