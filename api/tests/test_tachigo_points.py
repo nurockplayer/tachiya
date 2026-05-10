@@ -197,6 +197,30 @@ async def test_get_user_points_rejects_string_balances(monkeypatch):
 
 
 @pytest.mark.anyio
+async def test_get_user_points_rejects_negative_balances(monkeypatch):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={
+                    "email": "demo@tachigo.io",
+                    "spendable_balance": -1,
+                    "cumulative_total": 456,
+                },
+            ),
+        ),
+    ) as client:
+        with pytest.raises(
+            TachigoUpstreamError,
+            match="tachigo upstream returned invalid points payload",
+        ):
+            await get_user_points("demo@tachigo.io", settings, client=client)
+
+
+@pytest.mark.anyio
 async def test_get_user_points_fails_closed_without_internal_secret(monkeypatch):
     requests: list[httpx.Request] = []
 
@@ -324,6 +348,31 @@ async def test_get_identity_points_rejects_boolean_balances(monkeypatch):
                     "external_subject": "tachigo-user-1",
                     "spendable_balance": True,
                     "cumulative_total": 456,
+                },
+            ),
+        ),
+    ) as client:
+        with pytest.raises(
+            TachigoUpstreamError,
+            match="tachigo upstream returned invalid points payload",
+        ):
+            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+
+
+@pytest.mark.anyio
+async def test_get_identity_points_rejects_negative_balances(monkeypatch):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={
+                    "provider": "tachigo",
+                    "external_subject": "tachigo-user-1",
+                    "spendable_balance": 123,
+                    "cumulative_total": -1,
                 },
             ),
         ),
