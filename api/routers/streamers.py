@@ -25,6 +25,13 @@ class StreamerProfileCreateRequest(BaseModel):
     active: bool = True
 
 
+class StreamerProfileUpdateRequest(BaseModel):
+    display_name: NonBlankStr | None = None
+    saleor_collection_id: str | None = None
+    commission_bps: int | None = Field(default=None, ge=0, le=10000)
+    active: bool | None = None
+
+
 class StreamerProfileResponse(BaseModel):
     id: str
     slug: str
@@ -395,6 +402,34 @@ def get_streamer_catalog(
         ),
         saleor_product_ids=saleor_product_ids,
     )
+
+
+@router.patch(
+    "/{slug}",
+    response_model=StreamerProfileResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def update_streamer_profile(
+    req: StreamerProfileUpdateRequest,
+    slug: str = Path(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    if not req.model_fields_set:
+        raise HTTPException(status_code=422, detail="at least one field is required")
+
+    update_kwargs = {
+        field_name: getattr(req, field_name)
+        for field_name in req.model_fields_set
+    }
+    try:
+        profile = StreamerService(db).update_profile(slug, **update_kwargs)
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "streamer profile not found":
+            raise HTTPException(status_code=404, detail=detail) from exc
+        raise HTTPException(status_code=409, detail=detail) from exc
+
+    return _streamer_profile_response(profile)
 
 
 @router.get(

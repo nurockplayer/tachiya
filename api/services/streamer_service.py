@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from models.streamer import StreamerProfile
 
+_UNSET = object()
+
 
 class StreamerService:
     def __init__(self, db: Session):
@@ -33,6 +35,40 @@ class StreamerService:
             active=active,
         )
         self.db.add(profile)
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            self.db.rollback()
+            raise ValueError("streamer profile already exists") from exc
+        self.db.refresh(profile)
+        return profile
+
+    def update_profile(
+        self,
+        slug: str,
+        *,
+        display_name=_UNSET,
+        saleor_collection_id=_UNSET,
+        commission_bps=_UNSET,
+        active=_UNSET,
+    ) -> StreamerProfile:
+        profile = self.get_by_slug(slug)
+        if profile is None:
+            raise ValueError("streamer profile not found")
+
+        if display_name is not _UNSET and display_name is not None:
+            profile.display_name = self._validate_required(
+                display_name,
+                "display_name is required",
+            )
+        if saleor_collection_id is not _UNSET:
+            profile.saleor_collection_id = self._normalize_optional(saleor_collection_id)
+        if commission_bps is not _UNSET and commission_bps is not None:
+            self._validate_commission_bps(commission_bps)
+            profile.commission_bps = commission_bps
+        if active is not _UNSET and active is not None:
+            profile.active = active
+
         try:
             self.db.commit()
         except IntegrityError as exc:
