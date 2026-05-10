@@ -172,6 +172,8 @@ def list_points_ledger_entries_for_admin(
     entry_type: str | None = Query(default=None),
     source_type: str | None = Query(default=None),
     reference_id: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
@@ -181,6 +183,8 @@ def list_points_ledger_entries_for_admin(
             entry_type=entry_type,
             source_type=source_type,
             reference_id=reference_id,
+            created_from=created_from,
+            created_to=created_to,
             limit=limit,
         )
     except ValueError as exc:

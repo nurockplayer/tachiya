@@ -619,6 +619,69 @@ def test_points_ledger_admin_entries_filter_across_users(monkeypatch):
     }
 
 
+def test_points_ledger_admin_entries_filters_created_range(monkeypatch):
+    session = build_session()
+    session.add_all(
+        [
+            PointsLedger(
+                id="before-range",
+                user_id="user-1",
+                amount=120,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:before",
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            PointsLedger(
+                id="range-start",
+                user_id="user-1",
+                amount=80,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:start",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="range-end",
+                user_id="user-2",
+                amount=-20,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout:end",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="after-range",
+                user_id="user-2",
+                amount=50,
+                entry_type="credit",
+                source_type="manual",
+                reference_id="manual:after",
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger/entries",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [entry["id"] for entry in response.json()["entries"]] == [
+        "range-end",
+        "range-start",
+    ]
+
+
 def test_points_ledger_expired_credits_returns_remaining_exposure(monkeypatch):
     session = build_session()
     session.add_all(
@@ -684,6 +747,24 @@ def test_points_ledger_admin_entries_rejects_invalid_filter(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "entry_type must be credit or debit"
+
+
+def test_points_ledger_admin_entries_rejects_invalid_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger/entries",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
 
 
 def test_points_ledger_rejects_limit_above_max(monkeypatch):

@@ -230,6 +230,8 @@ Query：
 - `entry_type`：可選，只接受 `credit` / `debit`。
 - `source_type`：可選，例如 `manual`、`tachigo`、`order-reward`、`checkout`。
 - `reference_id`：可選，例如 `tachigo:redemption-1` 或 `checkout-1`。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response：
@@ -255,6 +257,8 @@ Response：
 
 - 字串 filter 會 trim，空字串回 `422`。
 - `entry_type` 與 `source_type` filter 會轉小寫。
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
 - 結果依 `created_at desc`、`id desc` 穩定排序。
 - 此 endpoint 只查詢 ledger，不建立或修改點數。
 

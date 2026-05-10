@@ -155,6 +155,8 @@ class PointsService:
         entry_type: str | None = None,
         source_type: str | None = None,
         reference_id: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[PointsLedger]:
         normalized_user_id = self._normalize_optional_filter(user_id, "user_id is required")
@@ -172,6 +174,14 @@ class PointsService:
             reference_id,
             "reference_id is required",
         )
+        normalized_created_from = self._normalize_optional_datetime(created_from)
+        normalized_created_to = self._normalize_optional_datetime(created_to)
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("invalid created_at range")
 
         query = self.db.query(PointsLedger)
         if normalized_user_id is not None:
@@ -182,6 +192,10 @@ class PointsService:
             query = query.filter(PointsLedger.source_type == normalized_source_type)
         if normalized_reference_id is not None:
             query = query.filter(PointsLedger.reference_id == normalized_reference_id)
+        if normalized_created_from is not None:
+            query = query.filter(PointsLedger.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(PointsLedger.created_at <= normalized_created_to)
 
         return (
             query.order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
