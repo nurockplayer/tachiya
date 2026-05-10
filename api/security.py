@@ -39,6 +39,8 @@ async def verify_webhook_signature(
         or not x_tachiya_webhook_signature
     ):
         raise HTTPException(status_code=401, detail="invalid webhook signature")
+    if not x_tachiya_webhook_event_id.strip():
+        raise HTTPException(status_code=401, detail="invalid webhook signature")
 
     try:
         timestamp = int(x_tachiya_webhook_timestamp)

@@ -108,6 +108,22 @@ def test_webhook_signature_rejects_tampered_event_id(monkeypatch):
     assert response.json()["detail"] == "invalid webhook signature"
 
 
+def test_webhook_signature_rejects_blank_event_id(monkeypatch):
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    monkeypatch.setattr(security.time, "time", lambda: 1_700_000_000)
+    client = build_client()
+    body = b'{"ok":true}'
+
+    response = client.post(
+        "/webhook",
+        content=body,
+        headers=signed_webhook_headers(body=body, event_id=" "),
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid webhook signature"
+
+
 def test_webhook_signature_uses_configured_tolerance(monkeypatch):
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     monkeypatch.setenv("TACHIYA_WEBHOOK_TOLERANCE_SECONDS", "10")
