@@ -916,8 +916,8 @@ Response：
 
 Query：
 
-- `provider`
-- `external_subject`
+- `provider`：必填，會 trim 並轉小寫；trim 後為空回 `422 provider is required`。
+- `external_subject`：必填，會 trim；trim 後為空回 `422 external_subject is required`。
 
 成功時回傳 `saleor_customer_id`；找不到回傳 `404 identity mapping not found`。
 
