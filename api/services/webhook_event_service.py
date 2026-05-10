@@ -52,6 +52,28 @@ class WebhookEventService:
             self.db.rollback()
             raise WebhookEventReplayError("webhook event already processed") from exc
 
+    def list_events(
+        self,
+        *,
+        event_type: str | None = None,
+        limit: int = 20,
+    ) -> list[WebhookEvent]:
+        normalized_event_type = (
+            self._validate_required(event_type, "event_type is required")
+            if event_type is not None
+            else None
+        )
+
+        query = self.db.query(WebhookEvent)
+        if normalized_event_type is not None:
+            query = query.filter(WebhookEvent.event_type == normalized_event_type)
+
+        return (
+            query.order_by(WebhookEvent.received_at.desc(), WebhookEvent.id.desc())
+            .limit(limit)
+            .all()
+        )
+
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
         normalized = value.strip()

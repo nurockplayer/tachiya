@@ -119,3 +119,33 @@ def test_record_event_raises_for_unique_conflict():
 
     with pytest.raises(WebhookEventReplayError, match="webhook event already processed"):
         service.record_event(webhook, event_type="points.order_rewarded")
+
+
+def test_list_events_filters_by_event_type_and_orders_recent_first():
+    session = build_session()
+    service = WebhookEventService(session)
+    service.record_event(
+        VerifiedWebhookRequest(
+            event_id="evt-1",
+            occurred_at=datetime(2026, 1, 1, 0, 0, 0),
+        ),
+        event_type="points.order_rewarded",
+    )
+    service.record_event(
+        VerifiedWebhookRequest(
+            event_id="evt-2",
+            occurred_at=datetime(2026, 1, 2, 0, 0, 0),
+        ),
+        event_type="revenue_share.order_completed",
+    )
+    service.record_event(
+        VerifiedWebhookRequest(
+            event_id="evt-3",
+            occurred_at=datetime(2026, 1, 3, 0, 0, 0),
+        ),
+        event_type=" points.order_rewarded ",
+    )
+
+    events = service.list_events(event_type=" points.order_rewarded ", limit=10)
+
+    assert [event.event_id for event in events] == ["evt-3", "evt-1"]
