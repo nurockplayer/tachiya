@@ -436,6 +436,28 @@ def test_points_transaction_rejects_non_positive_amount_at_schema(monkeypatch):
     assert session.query(PointsLedger).count() == 0
 
 
+@pytest.mark.parametrize("amount", [True, "120"])
+def test_points_transaction_rejects_non_strict_amount_at_schema(monkeypatch, amount):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": "user-1",
+            "entry_type": "credit",
+            "amount": amount,
+            "reference_id": "order-1",
+            "source_type": "order-reward",
+        },
+    )
+
+    assert response.status_code == 422
+    assert session.query(PointsLedger).count() == 0
+
+
 def test_points_transaction_rejects_invalid_entry_type(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -579,6 +601,26 @@ def test_order_reward_webhook_rejects_non_positive_reward_points(monkeypatch):
             "order_id": "order-1",
             "user_id": "saleor-user-1",
             "reward_points": 0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert session.query(WebhookEvent).count() == 0
+    assert session.query(PointsLedger).count() == 0
+
+
+@pytest.mark.parametrize("reward_points", [True, "120"])
+def test_order_reward_webhook_rejects_non_strict_reward_points(monkeypatch, reward_points):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = signed_order_reward_request(
+        client,
+        payload={
+            "order_id": "order-1",
+            "user_id": "saleor-user-1",
+            "reward_points": reward_points,
         },
     )
 
