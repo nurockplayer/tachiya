@@ -98,6 +98,42 @@ def test_create_streamer_profile_rejects_invalid_payload(monkeypatch):
     assert response.status_code == 422
 
 
+def test_streamer_profile_rejects_non_strict_commission_bps(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+
+    for index, commission_bps in enumerate([True, "1000"], start=1):
+        response = client.post(
+            "/streamers",
+            headers=headers,
+            json={
+                "slug": f"streamer-{index}",
+                "display_name": "Streamer",
+                "commission_bps": commission_bps,
+            },
+        )
+
+        assert response.status_code == 422
+
+    create_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
+    assert create_response.status_code == 200
+
+    for commission_bps in [True, "1000"]:
+        response = client.patch(
+            "/streamers/streamer-one",
+            headers=headers,
+            json={"commission_bps": commission_bps},
+        )
+
+        assert response.status_code == 422
+
+
 def test_create_streamer_profile_rejects_duplicate_slug(monkeypatch):
     session = build_session()
     client = build_client(session)
