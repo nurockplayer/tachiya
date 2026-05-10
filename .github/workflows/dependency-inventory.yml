@@ -1,0 +1,68 @@
+name: Dependency inventory scan
+
+on:
+  schedule:
+    - cron: "41 3 * * 2"
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-inventory-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+jobs:
+  osv-api-lockfile:
+    name: OSV API lockfile inventory
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
+    with:
+      scan-args: |-
+        --lockfile=api/uv.lock
+      results-file-name: osv-api-lockfile.sarif
+      upload-sarif: true
+      fail-on-vuln: false
+      matrix-property: api-
+
+  build-api-image-archive:
+    timeout-minutes: 20
+    name: Build API dependency inventory image archive
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API inventory image
+        run: docker build -t tachiya-api-inventory:latest ./api
+
+      - name: Save API inventory image
+        run: docker save tachiya-api-inventory:latest -o tachiya-api-image.tar
+
+      - name: Upload API inventory image archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-inventory-api-image
+          path: tachiya-api-image.tar
+          if-no-files-found: error
+          retention-days: 5
+
+  osv-api-image:
+    name: OSV API image inventory
+    needs: build-api-image-archive
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.5
+    with:
+      download-artifact: dependency-inventory-api-image
+      scan-args: |-
+        scan
+        image
+        --archive
+        tachiya-api-image.tar
+      results-file-name: osv-api-image.sarif
+      upload-sarif: true
+      fail-on-vuln: false
+      matrix-property: api-image-
