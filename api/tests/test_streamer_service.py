@@ -135,6 +135,26 @@ def test_list_active_profiles_applies_limit():
     assert [profile.slug for profile in profiles] == ["alpha"]
 
 
+def test_list_profiles_supports_admin_active_filter():
+    session = build_session()
+    service = StreamerService(session)
+    service.create_profile(slug="zeta", display_name="Zeta")
+    inactive_profile = service.create_profile(
+        slug="inactive",
+        display_name="Inactive",
+        commission_bps=1250,
+        active=False,
+    )
+    service.create_profile(slug="alpha", display_name="Alpha")
+
+    all_profiles = service.list_profiles(limit=10)
+    inactive_profiles = service.list_profiles(active=False, limit=10)
+
+    assert [profile.slug for profile in all_profiles] == ["alpha", "inactive", "zeta"]
+    assert [profile.id for profile in inactive_profiles] == [inactive_profile.id]
+    assert inactive_profiles[0].commission_bps == 1250
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [

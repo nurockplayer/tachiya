@@ -43,6 +43,10 @@ class StreamerProfileResponse(BaseModel):
     updated_at: datetime
 
 
+class StreamerProfileListResponse(BaseModel):
+    profiles: list[StreamerProfileResponse]
+
+
 class StreamerProductAssignmentRequest(BaseModel):
     saleor_product_id: NonBlankStr
     streamer_slug: NonBlankStr
@@ -187,6 +191,22 @@ def list_streamer_profiles(
             )
             for profile in profiles
         ],
+    )
+
+
+@router.get(
+    "/profiles",
+    response_model=StreamerProfileListResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_streamer_profiles_for_admin(
+    active: bool | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    profiles = StreamerService(db).list_profiles(active=active, limit=limit)
+    return StreamerProfileListResponse(
+        profiles=[_streamer_profile_response(profile) for profile in profiles],
     )
 
 

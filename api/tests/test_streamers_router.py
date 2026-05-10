@@ -244,6 +244,62 @@ def test_list_streamer_profiles_rejects_invalid_limit(monkeypatch):
     assert response.status_code == 422
 
 
+def test_list_streamer_profiles_for_admin(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    active_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={
+            "slug": "streamer-one",
+            "display_name": "Streamer One",
+            "saleor_collection_id": "collection-1",
+            "commission_bps": 1000,
+        },
+    )
+    inactive_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={
+            "slug": "inactive-streamer",
+            "display_name": "Inactive Streamer",
+            "commission_bps": 1250,
+            "active": False,
+        },
+    )
+
+    response = client.get("/streamers/profiles?active=false&limit=10", headers=headers)
+    discovery_response = client.get("/streamers?limit=10", headers=headers)
+
+    assert active_response.status_code == 200
+    assert inactive_response.status_code == 200
+    assert response.status_code == 200
+    assert response.json() == {
+        "profiles": [
+            {
+                "id": inactive_response.json()["id"],
+                "slug": "inactive-streamer",
+                "display_name": "Inactive Streamer",
+                "saleor_collection_id": None,
+                "commission_bps": 1250,
+                "active": False,
+                "created_at": inactive_response.json()["created_at"],
+                "updated_at": inactive_response.json()["updated_at"],
+            },
+        ],
+    }
+    assert discovery_response.status_code == 200
+    assert discovery_response.json()["streamers"] == [
+        {
+            "slug": "streamer-one",
+            "display_name": "Streamer One",
+            "saleor_collection_id": "collection-1",
+        },
+    ]
+
+
 def test_create_and_get_streamer_product_assignment(monkeypatch):
     session = build_session()
     client = build_client(session)

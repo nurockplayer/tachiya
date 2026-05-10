@@ -286,6 +286,39 @@ Response：
 - 依 `display_name`、`slug` 穩定排序。
 - 不回傳 commission 或 revenue share 欄位。
 
+### `GET /streamers/profiles`
+
+用途：受信任後台列出 streamer profile 主檔，用於 onboarding、分潤設定與營運稽核。
+
+Query：
+
+- `active`：可選；未提供時列出全部 profile。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "profiles": [
+    {
+      "id": "uuid",
+      "slug": "streamer-one",
+      "display_name": "Streamer One",
+      "saleor_collection_id": "collection-1",
+      "commission_bps": 1000,
+      "active": false,
+      "created_at": "2026-05-10T00:00:00",
+      "updated_at": "2026-05-10T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- 依 `display_name asc`、`slug asc` 穩定排序。
+- 本 endpoint 保留營運欄位；前台 discovery 仍使用 `GET /streamers`。
+
 ### `POST /streamers/product-assignments`
 
 用途：將 Saleor product id 指派給 streamer profile，作為前台歸屬與後續分潤計算的資料基礎。
