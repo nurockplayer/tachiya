@@ -129,6 +129,38 @@ Query：
 - 未提供 `redemption_token` 時回傳 `400 redemption_token is required`。
 - 若未來需要營運列表，必須另建受 internal secret 保護的 admin endpoint。
 
+### `GET /coupons/admin`
+
+用途：受信任後台、客服或對帳腳本查詢最近建立的 coupons。這個 endpoint 需要 internal secret；公開 coupon 查詢仍只能透過 redemption token。
+
+Query：
+
+- `status`：可選，例如 `active`、`redeemed`；提供時會 trim，空字串回 `422 status is required`。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "coupons": [
+    {
+      "coupon_id": "tachiya-95",
+      "voucher_code": "TACHIYA-ABC123",
+      "coupon_type": "PERCENT_5",
+      "tcg_cost": 18,
+      "status": "active",
+      "redemption_token": "token-1",
+      "created_at": "2026-05-10T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- 依 `created_at desc`、`id desc` 回傳最近 coupons。
+- 回傳 `redemption_token` 僅供受信任後台查核，不得暴露在公開列表。
+
 ### `GET /coupons/redemption-audit-events`
 
 用途：查詢最近 coupon redemption audit events。

@@ -374,3 +374,63 @@ def test_list_redemption_audit_events_returns_recent_events(monkeypatch):
         "reason": None,
         "created_at": "2026-01-01T00:00:00",
     }
+
+
+def test_list_admin_coupons_requires_internal_secret(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get("/coupons/admin")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid internal secret"
+
+
+def test_list_admin_coupons_returns_recent_coupons(monkeypatch):
+    coupon = SimpleNamespace(
+        coupon_id="tachiya-95",
+        voucher_code="TACHIYA-ABC123",
+        coupon_type="PERCENT_5",
+        tcg_cost=18,
+        status="active",
+        redemption_token="token-1",
+        created_at="2026-01-01T00:00:00",
+    )
+    fake_db = FakeDB(list_coupons=[coupon])
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/admin",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"status": " active "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["coupons"] == [
+        {
+            "coupon_id": "tachiya-95",
+            "voucher_code": "TACHIYA-ABC123",
+            "coupon_type": "PERCENT_5",
+            "tcg_cost": 18,
+            "status": "active",
+            "redemption_token": "token-1",
+            "created_at": "2026-01-01T00:00:00",
+        },
+    ]
+
+
+def test_list_admin_coupons_rejects_blank_status(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/admin",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"status": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "status is required"
