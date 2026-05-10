@@ -127,6 +127,52 @@ async def test_get_user_points_rejects_blank_email_before_upstream_request(monke
 
 
 @pytest.mark.anyio
+async def test_get_user_points_rejects_upstream_email_mismatch(monkeypatch):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={
+                    "email": "other@tachigo.io",
+                    "spendable_balance": 123,
+                    "cumulative_total": 456,
+                },
+            ),
+        ),
+    ) as client:
+        with pytest.raises(TachigoUpstreamError, match="tachigo upstream email mismatch"):
+            await get_user_points("demo@tachigo.io", settings, client=client)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("email", ["   ", 123])
+async def test_get_user_points_rejects_invalid_upstream_email(monkeypatch, email):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                200,
+                json={
+                    "email": email,
+                    "spendable_balance": 123,
+                    "cumulative_total": 456,
+                },
+            ),
+        ),
+    ) as client:
+        with pytest.raises(
+            TachigoUpstreamError,
+            match="tachigo upstream returned invalid points payload",
+        ):
+            await get_user_points("demo@tachigo.io", settings, client=client)
+
+
+@pytest.mark.anyio
 async def test_get_user_points_fails_closed_without_internal_secret(monkeypatch):
     requests: list[httpx.Request] = []
 
