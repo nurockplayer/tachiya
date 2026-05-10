@@ -118,3 +118,17 @@ def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):
         "status": "unavailable",
         "checks": {"database": "error", "internal_secret": "ok"},
     }
+
+
+def test_app_mounts_product_api_routers():
+    route_paths = {route.path for route in main.app.routes}
+
+    assert {
+        "/coupons/redeem",
+        "/identity-mappings",
+        "/points/balance",
+        "/referrals/webhooks/order-completed",
+        "/streamers",
+        "/tachigo/users/points",
+        "/webhooks/events",
+    }.issubset(route_paths)
