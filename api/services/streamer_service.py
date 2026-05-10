@@ -88,11 +88,12 @@ class StreamerService:
         )
 
     def list_active_profiles(self, *, limit: int = 20) -> list[StreamerProfile]:
+        normalized_limit = self._validate_read_limit(limit)
         return (
             self.db.query(StreamerProfile)
             .filter(StreamerProfile.active.is_(True))
             .order_by(StreamerProfile.display_name.asc(), StreamerProfile.slug.asc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -105,6 +106,7 @@ class StreamerService:
         created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[StreamerProfile]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_slug = self._normalize_optional_filter(slug, "slug is required")
         normalized_created_from = self._normalize_optional_datetime(created_from)
         normalized_created_to = self._normalize_optional_datetime(created_to)
@@ -127,7 +129,7 @@ class StreamerService:
 
         return (
             query.order_by(StreamerProfile.display_name.asc(), StreamerProfile.slug.asc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -170,3 +172,9 @@ class StreamerService:
     def _validate_commission_bps(commission_bps: int) -> None:
         if commission_bps < 0 or commission_bps > 10000:
             raise ValueError("commission_bps must be between 0 and 10000")
+
+    @staticmethod
+    def _validate_read_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return limit
