@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
-from models.streamer import StreamerRevenueShareRecord
+from models.streamer import StreamerProfile, StreamerRevenueShareRecord
 from services.revenue_share_service import RevenueShareLine, RevenueShareService
 from services.streamer_product_assignment_service import StreamerProductAssignmentService
 from services.streamer_service import StreamerService
@@ -175,6 +175,52 @@ def test_record_order_share_rejects_conflicting_replay():
         )
 
     assert session.query(StreamerRevenueShareRecord).count() == 1
+
+
+def test_record_order_share_rejects_conflict_without_partial_new_records():
+    session = build_session()
+    create_streamer_with_assignment(
+        session,
+        slug="streamer-one",
+        saleor_product_id="product-1",
+        commission_bps=1000,
+    )
+    create_streamer_with_assignment(
+        session,
+        slug="streamer-two",
+        saleor_product_id="product-2",
+        commission_bps=1000,
+    )
+    streamer_two = (
+        session.query(StreamerProfile)
+        .filter(StreamerProfile.slug == "streamer-two")
+        .one()
+    )
+    existing_conflict = StreamerRevenueShareRecord(
+        order_id="order-1",
+        streamer_profile_id=streamer_two.id,
+        streamer_slug="streamer-two",
+        gross_amount=999,
+        commission_bps=1000,
+        share_amount=99,
+        status="pending",
+    )
+    session.add(existing_conflict)
+    session.commit()
+
+    with pytest.raises(ValueError, match="revenue share record conflict"):
+        RevenueShareService(session).record_order_share(
+            order_id="order-1",
+            lines=[
+                RevenueShareLine(saleor_product_id="product-1", gross_amount=1200),
+                RevenueShareLine(saleor_product_id="product-2", gross_amount=2400),
+            ],
+        )
+
+    records = session.query(StreamerRevenueShareRecord).all()
+    assert [(record.streamer_slug, record.gross_amount) for record in records] == [
+        ("streamer-two", 999),
+    ]
 
 
 def test_list_records_filters_and_sorts_payout_queue():
