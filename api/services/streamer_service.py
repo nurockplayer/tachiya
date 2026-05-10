@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -98,11 +100,30 @@ class StreamerService:
         self,
         *,
         active: bool | None = None,
+        slug: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[StreamerProfile]:
+        normalized_slug = self._normalize_optional_filter(slug, "slug is required")
+        normalized_created_from = self._normalize_optional_datetime(created_from)
+        normalized_created_to = self._normalize_optional_datetime(created_to)
+        if (
+            normalized_created_from is not None
+            and normalized_created_to is not None
+            and normalized_created_from > normalized_created_to
+        ):
+            raise ValueError("invalid created_at range")
+
         query = self.db.query(StreamerProfile)
         if active is not None:
             query = query.filter(StreamerProfile.active.is_(active))
+        if normalized_slug is not None:
+            query = query.filter(StreamerProfile.slug == normalized_slug.lower())
+        if normalized_created_from is not None:
+            query = query.filter(StreamerProfile.created_at >= normalized_created_from)
+        if normalized_created_to is not None:
+            query = query.filter(StreamerProfile.created_at <= normalized_created_to)
 
         return (
             query.order_by(StreamerProfile.display_name.asc(), StreamerProfile.slug.asc())
@@ -120,6 +141,23 @@ class StreamerService:
             return None
         normalized = value.strip()
         return normalized or None
+
+    @staticmethod
+    def _normalize_optional_filter(value: str | None, message: str) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
+
+    @staticmethod
+    def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
 
     @staticmethod
     def _validate_required(value: str, message: str) -> str:

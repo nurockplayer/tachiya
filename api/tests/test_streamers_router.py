@@ -15,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
-from models.streamer import StreamerProductAssignment, StreamerRevenueShareRecord
+from models.streamer import StreamerProductAssignment, StreamerProfile, StreamerRevenueShareRecord
 from models.webhook_event import WebhookEvent
 from routers import streamers
 
@@ -299,6 +299,60 @@ def test_list_streamer_profiles_for_admin(monkeypatch):
             "saleor_collection_id": "collection-1",
         },
     ]
+
+
+def test_list_streamer_profiles_for_admin_filters_slug_and_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    for slug, display_name in [
+        ("streamer-before", "Before"),
+        ("streamer-one", "One"),
+        ("streamer-after", "After"),
+    ]:
+        client.post("/streamers", headers=headers, json={"slug": slug, "display_name": display_name})
+    profiles = {profile.slug: profile for profile in session.query(StreamerProfile).all()}
+    profiles["streamer-before"].created_at = datetime(2026, 1, 1, 23, 59, 59)
+    profiles["streamer-one"].created_at = datetime(2026, 1, 2, 12, 0, 0)
+    profiles["streamer-after"].created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    response = client.get(
+        "/streamers/profiles",
+        headers=headers,
+        params={
+            "slug": " Streamer-One ",
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [profile["slug"] for profile in response.json()["profiles"]] == ["streamer-one"]
+
+
+def test_list_streamer_profiles_for_admin_rejects_invalid_filters(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+
+    blank_slug_response = client.get("/streamers/profiles?slug=%20", headers=headers)
+    invalid_range_response = client.get(
+        "/streamers/profiles",
+        headers=headers,
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert blank_slug_response.status_code == 422
+    assert blank_slug_response.json()["detail"] == "slug is required"
+    assert invalid_range_response.status_code == 422
+    assert invalid_range_response.json()["detail"] == "invalid created_at range"
 
 
 def test_create_and_get_streamer_product_assignment(monkeypatch):

@@ -202,10 +202,23 @@ def list_streamer_profiles(
 )
 def list_streamer_profiles_for_admin(
     active: bool | None = Query(default=None),
+    slug: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    profiles = StreamerService(db).list_profiles(active=active, limit=limit)
+    try:
+        profiles = StreamerService(db).list_profiles(
+            active=active,
+            slug=slug,
+            created_from=created_from,
+            created_to=created_to,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     return StreamerProfileListResponse(
         profiles=[_streamer_profile_response(profile) for profile in profiles],
     )

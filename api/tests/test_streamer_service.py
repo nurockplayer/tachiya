@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -153,6 +154,41 @@ def test_list_profiles_supports_admin_active_filter():
     assert [profile.slug for profile in all_profiles] == ["alpha", "inactive", "zeta"]
     assert [profile.id for profile in inactive_profiles] == [inactive_profile.id]
     assert inactive_profiles[0].commission_bps == 1250
+
+
+def test_list_profiles_filters_slug_and_created_range():
+    session = build_session()
+    service = StreamerService(session)
+    before = service.create_profile(slug="streamer-before", display_name="Before")
+    target = service.create_profile(slug="streamer-one", display_name="One")
+    after = service.create_profile(slug="streamer-after", display_name="After")
+    before.created_at = datetime(2026, 1, 1, 23, 59, 59)
+    target.created_at = datetime(2026, 1, 2, 12, 0, 0)
+    after.created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    profiles = service.list_profiles(
+        slug=" Streamer-One ",
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+        limit=10,
+    )
+
+    assert [profile.id for profile in profiles] == [target.id]
+
+
+def test_list_profiles_rejects_invalid_filters():
+    session = build_session()
+    service = StreamerService(session)
+
+    with pytest.raises(ValueError, match="slug is required"):
+        service.list_profiles(slug=" ")
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        service.list_profiles(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
 
 
 @pytest.mark.parametrize(
