@@ -3,6 +3,7 @@ import hmac
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -14,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
-from models.streamer import StreamerRevenueShareRecord
+from models.streamer import StreamerProductAssignment, StreamerRevenueShareRecord
 from models.webhook_event import WebhookEvent
 from routers import streamers
 
@@ -429,6 +430,50 @@ def test_list_streamer_product_assignments(monkeypatch):
     }
 
 
+def test_list_streamer_product_assignments_filters_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    for product_id in ["product-before", "product-start", "product-end", "product-after"]:
+        client.post(
+            "/streamers/product-assignments",
+            headers=headers,
+            json={
+                "saleor_product_id": product_id,
+                "streamer_slug": "streamer-one",
+                "source": "saleor-metadata",
+            },
+        )
+
+    assignments = {
+        assignment.saleor_product_id: assignment
+        for assignment in session.query(StreamerProductAssignment).all()
+    }
+    assignments["product-before"].created_at = datetime(2026, 1, 1, 23, 59, 59)
+    assignments["product-start"].created_at = datetime(2026, 1, 2, 0, 0, 0)
+    assignments["product-end"].created_at = datetime(2026, 1, 3, 0, 0, 0)
+    assignments["product-after"].created_at = datetime(2026, 1, 3, 0, 0, 1)
+    session.commit()
+
+    response = client.get(
+        "/streamers/product-assignments",
+        headers=headers,
+        params={
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [assignment["saleor_product_id"] for assignment in response.json()["assignments"]] == [
+        "product-end",
+        "product-start",
+    ]
+
+
 def test_list_streamer_product_assignments_rejects_invalid_query(monkeypatch):
     session = build_session()
     client = build_client(session)
@@ -441,6 +486,24 @@ def test_list_streamer_product_assignments_rejects_invalid_query(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "source is required"
+
+
+def test_list_streamer_product_assignments_rejects_invalid_created_range(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers/product-assignments",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
 
 
 def test_get_streamer_product_assignment_returns_404(monkeypatch):

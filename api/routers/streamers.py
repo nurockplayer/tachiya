@@ -241,6 +241,8 @@ def assign_streamer_product(
 def list_streamer_product_assignments(
     streamer_slug: str | None = Query(default=None),
     source: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
@@ -248,6 +250,8 @@ def list_streamer_product_assignments(
         assignments = StreamerProductAssignmentService(db).list_assignments(
             streamer_slug=streamer_slug,
             source=source,
+            created_from=created_from,
+            created_to=created_to,
             limit=limit,
         )
     except ValueError as exc:
