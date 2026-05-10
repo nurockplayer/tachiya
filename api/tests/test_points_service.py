@@ -394,6 +394,71 @@ def test_list_admin_entries_filters_and_returns_newest_first():
     assert [entry.id for entry in reference_entries] == ["checkout-entry"]
 
 
+def test_list_admin_entries_filters_created_range_inclusively():
+    session = build_session()
+    service = PointsService(session)
+    session.add_all(
+        [
+            PointsLedger(
+                id="before-range",
+                user_id="user-1",
+                amount=120,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:before",
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            PointsLedger(
+                id="range-start",
+                user_id="user-1",
+                amount=80,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:start",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="range-end",
+                user_id="user-2",
+                amount=-20,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout:end",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="after-range",
+                user_id="user-2",
+                amount=50,
+                entry_type="credit",
+                source_type="manual",
+                reference_id="manual:after",
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    entries = service.list_admin_entries(
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+        limit=10,
+    )
+
+    assert [entry.id for entry in entries] == ["range-end", "range-start"]
+
+
+def test_list_admin_entries_rejects_invalid_created_range():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        service.list_admin_entries(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
