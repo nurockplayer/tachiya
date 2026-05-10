@@ -1,12 +1,18 @@
 import sys
 from pathlib import Path
+from datetime import datetime
 from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from database import Base
+from models.coupon import UserCoupon
 from routers import coupons
 
 
@@ -57,6 +63,17 @@ def build_client(fake_db: FakeDB) -> TestClient:
 
     app.dependency_overrides[coupons.get_db] = override_db
     return TestClient(app)
+
+
+def build_real_session():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
 
 
 def test_redeem_rejects_missing_internal_secret(monkeypatch):
@@ -526,6 +543,77 @@ def test_list_admin_coupons_returns_recent_coupons(monkeypatch):
     ]
 
 
+def test_list_admin_coupons_filters_created_range(monkeypatch):
+    session = build_real_session()
+    session.add_all(
+        [
+            UserCoupon(
+                id="before-range",
+                coupon_id="tachiya-95",
+                voucher_code="TACHIYA-BEFORE",
+                saleor_voucher_id="saleor-before",
+                redemption_token="token-before",
+                coupon_type="PERCENT_5",
+                tcg_cost=18,
+                status="active",
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            UserCoupon(
+                id="range-start",
+                coupon_id="tachiya-95",
+                voucher_code="TACHIYA-START",
+                saleor_voucher_id="saleor-start",
+                redemption_token="token-start",
+                coupon_type="PERCENT_5",
+                tcg_cost=18,
+                status="active",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            UserCoupon(
+                id="range-end",
+                coupon_id="tachiya-100",
+                voucher_code="TACHIYA-END",
+                saleor_voucher_id="saleor-end",
+                redemption_token="token-end",
+                coupon_type="PERCENT_10",
+                tcg_cost=35,
+                status="redeemed",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            UserCoupon(
+                id="after-range",
+                coupon_id="tachiya-95",
+                voucher_code="TACHIYA-AFTER",
+                saleor_voucher_id="saleor-after",
+                redemption_token="token-after",
+                coupon_type="PERCENT_5",
+                tcg_cost=18,
+                status="active",
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/admin",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-02T00:00:00",
+            "created_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [coupon["voucher_code"] for coupon in response.json()["coupons"]] == [
+        "TACHIYA-END",
+        "TACHIYA-START",
+    ]
+
+
 def test_list_admin_coupons_rejects_blank_status(monkeypatch):
     fake_db = FakeDB()
     client = build_client(fake_db)
@@ -539,3 +627,21 @@ def test_list_admin_coupons_rejects_blank_status(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "status is required"
+
+
+def test_list_admin_coupons_rejects_invalid_created_range(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/coupons/admin",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "created_from": "2026-01-03T00:00:00",
+            "created_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid created_at range"
