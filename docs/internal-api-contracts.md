@@ -145,6 +145,9 @@ Query：
 
 Query：
 
+- `coupon_id`：可選，例如 `tachiya-95`；提供時會 trim，空字串回 `422 coupon_id is required`。
+- `voucher_code`：可選，提供時會 trim，空字串回 `422 voucher_code is required`。
+- `redemption_token`：可選，提供時會 trim，空字串回 `422 redemption_token is required`。
 - `status`：可選，例如 `active`、`redeemed`；提供時會 trim，空字串回 `422 status is required`。
 - `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
 - `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
@@ -170,6 +173,7 @@ Response：
 
 規則：
 
+- `coupon_id`、`voucher_code`、`redemption_token` 為 exact match，可與 `status` / `created_from` / `created_to` 合併使用。
 - `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
 - `created_from > created_to` 回 `422 invalid created_at range`。
 - 依 `created_at desc`、`id desc` 回傳最近 coupons。
