@@ -102,6 +102,8 @@ Response：
 
 規則：
 
+- `coupon_id` 與 `idempotency_key` 會 trim；`idempotency_key` trim 後為空時視為未提供。
+- `coupon_id` trim 後不可為空。
 - `coupon_id` 必須存在於 `api/services/saleor_voucher.py` 的 `COUPON_CONFIG`。
 - `tcg_cost` 必須大於 0，且必須等於 coupon 設定成本。
 - voucher code prefix 由 `TACHIYA_VOUCHER_CODE_PREFIX` 控制，預設 `TACHIYA`。
@@ -111,6 +113,7 @@ Response：
 
 錯誤：
 
+- 空白 coupon：`400 coupon_id is required`。
 - 未知 coupon：`400 unknown coupon_id: <id>`。
 - 成本小於等於 0：`400 tcg_cost must be positive`。
 - 成本不符：`400 tcg_cost mismatch for coupon_id: <id>`。

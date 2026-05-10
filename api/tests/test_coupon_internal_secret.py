@@ -126,6 +126,77 @@ def test_redeem_accepts_matching_internal_secret(monkeypatch):
     assert fake_db.commits == 1
 
 
+def test_redeem_normalizes_coupon_id_and_idempotency_key(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fake_create_voucher(coupon_id: str, code: str):
+        assert coupon_id == "tachiya-95"
+        return {"code": code, "voucher_id": "saleor-voucher-1"}
+
+    monkeypatch.setattr(coupons, "create_voucher", fake_create_voucher)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "coupon_id": " tachiya-95 ",
+            "tcg_cost": 18,
+            "idempotency_key": " redeem-1 ",
+        },
+    )
+
+    assert response.status_code == 200
+    assert fake_db.records[0].coupon_id == "tachiya-95"
+    assert fake_db.records[0].idempotency_key == "redeem-1"
+    assert fake_db.records[1].coupon_id == "tachiya-95"
+    assert fake_db.records[1].idempotency_key == "redeem-1"
+
+
+def test_redeem_rejects_blank_coupon_id(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fail_create_voucher(coupon_id: str, code: str):
+        raise AssertionError("create_voucher should not be called")
+
+    monkeypatch.setattr(coupons, "create_voucher", fail_create_voucher)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"coupon_id": " ", "tcg_cost": 18},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "coupon_id is required"
+    assert fake_db.records[0].status == "failed"
+    assert fake_db.records[0].reason == "coupon_id is required"
+
+
+def test_redeem_treats_blank_idempotency_key_as_missing(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fake_create_voucher(coupon_id: str, code: str):
+        return {"code": code, "voucher_id": "saleor-voucher-1"}
+
+    monkeypatch.setattr(coupons, "create_voucher", fake_create_voucher)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"coupon_id": "tachiya-95", "tcg_cost": 18, "idempotency_key": " "},
+    )
+
+    assert response.status_code == 200
+    assert fake_db.records[0].idempotency_key is None
+    assert fake_db.records[1].idempotency_key is None
+
+
 def test_redeem_uses_configured_voucher_code_prefix(monkeypatch):
     fake_db = FakeDB()
     client = build_client(fake_db)
