@@ -206,6 +206,7 @@ def test_redeem_reuses_existing_coupon_for_same_idempotency_key(monkeypatch):
         coupon_id="tachiya-95",
         voucher_code="DEMO-EXISTING",
         redemption_token="token-existing",
+        tcg_cost=18,
     )
     fake_db = FakeDB(existing_coupon=existing_coupon)
     client = build_client(fake_db)
@@ -231,6 +232,39 @@ def test_redeem_reuses_existing_coupon_for_same_idempotency_key(monkeypatch):
     assert response.json()["redemption_token"] == "token-existing"
     assert fake_db.records[0].status == "replayed"
     assert fake_db.records[0].redemption_token == "token-existing"
+    assert fake_db.commits == 1
+
+
+def test_redeem_rejects_mismatched_idempotency_replay(monkeypatch):
+    existing_coupon = SimpleNamespace(
+        coupon_id="tachiya-95",
+        voucher_code="DEMO-EXISTING",
+        redemption_token="token-existing",
+        tcg_cost=18,
+    )
+    fake_db = FakeDB(existing_coupon=existing_coupon)
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    def fail_create_voucher(coupon_id: str, code: str):
+        raise AssertionError("create_voucher should not be called")
+
+    monkeypatch.setattr(coupons, "create_voucher", fail_create_voucher)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "coupon_id": "free-ship",
+            "tcg_cost": 30,
+            "idempotency_key": "redeem-1",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "idempotency key conflict"
+    assert fake_db.records[0].status == "failed"
+    assert fake_db.records[0].reason == "idempotency key conflict"
     assert fake_db.commits == 1
 
 

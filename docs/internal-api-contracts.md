@@ -106,6 +106,7 @@ Response：
 - `tcg_cost` 必須大於 0，且必須等於 coupon 設定成本。
 - voucher code prefix 由 `TACHIYA_VOUCHER_CODE_PREFIX` 控制，預設 `TACHIYA`。
 - `idempotency_key` 重放時回傳同一筆 voucher 與 redemption token。
+- `idempotency_key` 重放但 `coupon_id` 或 `tcg_cost` 不一致時回傳 `409 idempotency key conflict`，並寫入 failed audit event。
 - 成功、失敗、重放都會寫入 coupon redemption audit event。
 
 錯誤：
@@ -113,6 +114,7 @@ Response：
 - 未知 coupon：`400 unknown coupon_id: <id>`。
 - 成本小於等於 0：`400 tcg_cost must be positive`。
 - 成本不符：`400 tcg_cost mismatch for coupon_id: <id>`。
+- idempotency key 不一致重放：`409 idempotency key conflict`。
 
 ### `GET /coupons`
 
