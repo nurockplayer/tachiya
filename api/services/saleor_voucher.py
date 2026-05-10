@@ -80,7 +80,9 @@ def _get_session_and_token():
 
 
 def create_voucher(coupon_id: str, code: str) -> dict:
-    cfg = COUPON_CONFIG[coupon_id]
+    normalized_coupon_id = _normalize_coupon_id(coupon_id)
+    normalized_code = _normalize_required(code, "voucher code is required")
+    cfg = COUPON_CONFIG[normalized_coupon_id]
     session, token = _get_session_and_token()
 
     # Step 1: create voucher (no discountValue in this Saleor version)
@@ -89,8 +91,8 @@ def create_voucher(coupon_id: str, code: str) -> dict:
         VOUCHER_CREATE,
         {
             "input": {
-                "name": code,
-                "code": code,
+                "name": normalized_code,
+                "code": normalized_code,
                 "type": cfg["type"],
                 "discountValueType": cfg["value_type"],
                 "singleUse": True,
@@ -129,3 +131,19 @@ def create_voucher(coupon_id: str, code: str) -> dict:
         raise RuntimeError(f"voucherChannelListingUpdate errors: {errors2}")
 
     return {"voucher_id": voucher_id, "code": voucher_code}
+
+
+def _normalize_coupon_id(coupon_id: str) -> str:
+    normalized = _normalize_required(coupon_id, "coupon_id is required")
+    if normalized not in COUPON_CONFIG:
+        raise ValueError(f"unknown coupon_id: {normalized}")
+    return normalized
+
+
+def _normalize_required(value: str, message: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(message)
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(message)
+    return normalized
