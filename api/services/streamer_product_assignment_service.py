@@ -74,6 +74,15 @@ class StreamerProductAssignmentService:
         )
         return [assignment.saleor_product_id for assignment in assignments]
 
+    def remove_product(self, saleor_product_id: str) -> StreamerProductAssignment | None:
+        assignment = self.get_by_product_id(saleor_product_id)
+        if assignment is None:
+            return None
+
+        self.db.delete(assignment)
+        self.db.commit()
+        return assignment
+
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
         normalized = value.strip()

@@ -107,6 +107,27 @@ def test_list_product_ids_for_streamer_catalog():
     assert product_ids == ["product-2", "product-1"]
 
 
+def test_remove_product_assignment():
+    session = build_session()
+    create_streamer(session)
+    service = StreamerProductAssignmentService(session)
+    service.assign_product(saleor_product_id="product-1", streamer_slug="streamer-one")
+
+    removed_assignment = service.remove_product(" product-1 ")
+
+    assert removed_assignment.saleor_product_id == "product-1"
+    assert service.get_by_product_id("product-1") is None
+    assert session.query(StreamerProductAssignment).count() == 0
+
+
+def test_remove_product_assignment_returns_none_for_missing_product():
+    session = build_session()
+
+    removed_assignment = StreamerProductAssignmentService(session).remove_product("missing-product")
+
+    assert removed_assignment is None
+
+
 def test_assign_product_rejects_missing_streamer():
     session = build_session()
 
