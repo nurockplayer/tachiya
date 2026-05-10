@@ -165,8 +165,8 @@ make logs   # 查看 logs
 
 這些指令都會刻意限制輸出格式，避免貼完整 diff、冗長 log 或大段原始碼，讓 Codex 只接收高密度摘要。
 
-完整教學請見 [docs/Codex-codex-workflow.md](docs/Codex-codex-workflow.md)。
-快速版可見 [docs/Codex-codex-cheatsheet.md](docs/Codex-codex-cheatsheet.md)。
+完整教學請見 [docs/claude-codex-workflow.md](docs/claude-codex-workflow.md)。
+快速版可見 [docs/claude-codex-cheatsheet.md](docs/claude-codex-cheatsheet.md)。
 
 **指令操作的分界：**
 
@@ -187,6 +187,12 @@ make logs   # 查看 logs
 可切分的探索、文件、測試、一般實作、GitHub readback、CI log 分析，可以依任務風險委派給 worker/subagent。routine GitHub / terminal / repo 探索優先使用 Spark 或較低推理成本的 worker；schema、migration、ledger、金流、權限模型與 merge decision 必須由總控或高推理 worker 審查。
 
 完整 worker profile、路由規則與 GitHub 操作分工見 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)。
+
+### Automated Review Gate
+
+Autonomous PR merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback。若 reviewer 提出 actionable finding，merge 前必須修正並回覆/resolve，或留下不採用的技術佐證 comment 並 resolve。不得只因 CodeRabbit status context 是 success 就視為 review 完成，因為 skip path 也可能回報 success。
+
+CodeRabbit 由 `.coderabbit.yaml` 設定為對所有 PR target branch 啟用 auto review。
 
 ## Codex 設定
 
