@@ -34,6 +34,7 @@ X-Tachiya-Webhook-Signature: <hex-hmac-sha256>
 
 - HMAC secret：`TACHIYA_INTERNAL_SHARED_SECRET`。
 - `event-id` 必須與 `X-Tachiya-Webhook-Event-Id` header 完全一致；修改 event id 會讓簽章失效，避免改 id 重放同一 payload。
+- `X-Tachiya-Webhook-Event-Id` 必須存在且 trim 後不可為空；空白 event id 回傳 `401 invalid webhook signature`。
 - timestamp tolerance：`TACHIYA_WEBHOOK_TOLERANCE_SECONDS`，預設 `300` 秒。
 - tolerance 非整數、零或負數：回傳 `500 webhook tolerance is not configured correctly`。
 - timestamp 超出 tolerance：回傳 `401 stale webhook timestamp`。
