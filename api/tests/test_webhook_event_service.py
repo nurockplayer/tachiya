@@ -149,3 +149,82 @@ def test_list_events_filters_by_event_type_and_orders_recent_first():
     events = service.list_events(event_type=" points.order_rewarded ", limit=10)
 
     assert [event.event_id for event in events] == ["evt-3", "evt-1"]
+
+
+def test_list_events_filters_event_id():
+    session = build_session()
+    service = WebhookEventService(session)
+    session.add_all(
+        [
+            WebhookEvent(
+                event_id="evt-other",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 1, 0, 0, 0),
+                received_at=datetime(2026, 1, 1, 0, 0, 1),
+            ),
+            WebhookEvent(
+                event_id="evt-target",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 2, 0, 0, 0),
+                received_at=datetime(2026, 1, 2, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    events = service.list_events(event_id=" evt-target ", limit=10)
+
+    assert [event.event_id for event in events] == ["evt-target"]
+
+
+def test_list_events_filters_received_range_inclusively():
+    session = build_session()
+    service = WebhookEventService(session)
+    session.add_all(
+        [
+            WebhookEvent(
+                event_id="evt-before",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 1, 0, 0, 0),
+                received_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            WebhookEvent(
+                event_id="evt-start",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 2, 0, 0, 0),
+                received_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            WebhookEvent(
+                event_id="evt-end",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 3, 0, 0, 0),
+                received_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            WebhookEvent(
+                event_id="evt-after",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 4, 0, 0, 0),
+                received_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    events = service.list_events(
+        received_from=datetime(2026, 1, 2, 0, 0, 0),
+        received_to=datetime(2026, 1, 3, 0, 0, 0),
+        limit=10,
+    )
+
+    assert [event.event_id for event in events] == ["evt-end", "evt-start"]
+
+
+def test_list_events_rejects_invalid_received_range():
+    session = build_session()
+    service = WebhookEventService(session)
+
+    with pytest.raises(ValueError, match="invalid received_at range"):
+        service.list_events(
+            received_from=datetime(2026, 1, 3, 0, 0, 0),
+            received_to=datetime(2026, 1, 2, 0, 0, 0),
+        )

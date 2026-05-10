@@ -95,6 +95,49 @@ def test_list_webhook_events_filters_recent_events(monkeypatch):
     }
 
 
+def test_list_webhook_events_filters_event_id_and_received_range(monkeypatch):
+    session = build_session()
+    session.add_all(
+        [
+            WebhookEvent(
+                event_id="evt-before",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 1, 0, 0, 0),
+                received_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            WebhookEvent(
+                event_id="evt-target",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 2, 0, 0, 0),
+                received_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            WebhookEvent(
+                event_id="evt-after",
+                event_type="points.order_rewarded",
+                occurred_at=datetime(2026, 1, 3, 0, 0, 0),
+                received_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    client = build_client(session)
+
+    response = client.get(
+        "/webhooks/events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "event_id": " evt-target ",
+            "received_from": "2026-01-02T00:00:00",
+            "received_to": "2026-01-03T00:00:00",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    assert [event["event_id"] for event in response.json()["events"]] == ["evt-target"]
+
+
 def test_list_webhook_events_requires_internal_secret(monkeypatch):
     session = build_session()
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
@@ -119,3 +162,36 @@ def test_list_webhook_events_rejects_blank_event_type(monkeypatch):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "event_type is required"
+
+
+def test_list_webhook_events_rejects_blank_event_id(monkeypatch):
+    session = build_session()
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    client = build_client(session)
+
+    response = client.get(
+        "/webhooks/events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"event_id": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "event_id is required"
+
+
+def test_list_webhook_events_rejects_invalid_received_range(monkeypatch):
+    session = build_session()
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    client = build_client(session)
+
+    response = client.get(
+        "/webhooks/events",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={
+            "received_from": "2026-01-03T00:00:00",
+            "received_to": "2026-01-02T00:00:00",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid received_at range"

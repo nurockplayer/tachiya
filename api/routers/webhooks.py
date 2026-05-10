@@ -29,13 +29,19 @@ class WebhookEventsResponse(BaseModel):
     dependencies=[Depends(verify_internal_secret)],
 )
 def list_webhook_events(
+    event_id: str | None = Query(default=None),
     event_type: str | None = Query(default=None),
+    received_from: datetime | None = Query(default=None),
+    received_to: datetime | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     try:
         events = WebhookEventService(db).list_events(
+            event_id=event_id,
             event_type=event_type,
+            received_from=received_from,
+            received_to=received_to,
             limit=limit,
         )
     except ValueError as exc:

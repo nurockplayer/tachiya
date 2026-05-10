@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -55,18 +57,40 @@ class WebhookEventService:
     def list_events(
         self,
         *,
+        event_id: str | None = None,
         event_type: str | None = None,
+        received_from: datetime | None = None,
+        received_to: datetime | None = None,
         limit: int = 20,
     ) -> list[WebhookEvent]:
+        normalized_event_id = (
+            self._validate_required(event_id, "event_id is required")
+            if event_id is not None
+            else None
+        )
         normalized_event_type = (
             self._validate_required(event_type, "event_type is required")
             if event_type is not None
             else None
         )
+        normalized_received_from = self._normalize_optional_datetime(received_from)
+        normalized_received_to = self._normalize_optional_datetime(received_to)
+        if (
+            normalized_received_from is not None
+            and normalized_received_to is not None
+            and normalized_received_from > normalized_received_to
+        ):
+            raise ValueError("invalid received_at range")
 
         query = self.db.query(WebhookEvent)
+        if normalized_event_id is not None:
+            query = query.filter(WebhookEvent.event_id == normalized_event_id)
         if normalized_event_type is not None:
             query = query.filter(WebhookEvent.event_type == normalized_event_type)
+        if normalized_received_from is not None:
+            query = query.filter(WebhookEvent.received_at >= normalized_received_from)
+        if normalized_received_to is not None:
+            query = query.filter(WebhookEvent.received_at <= normalized_received_to)
 
         return (
             query.order_by(WebhookEvent.received_at.desc(), WebhookEvent.id.desc())
@@ -80,3 +104,11 @@ class WebhookEventService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)

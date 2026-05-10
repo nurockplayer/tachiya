@@ -50,7 +50,10 @@ X-Tachiya-Webhook-Signature: <hex-hmac-sha256>
 
 Query：
 
+- `event_id`：可選，上游 webhook event id；提供時會 trim，空字串回 `422 event_id is required`。
 - `event_type`：可選，例如 `points.order_rewarded` 或 `revenue_share.order_completed`；提供時會 trim，空字串回 `422 event_type is required`。
+- `received_from`：可選，ISO datetime，篩選 `received_at >= received_from`。
+- `received_to`：可選，ISO datetime，篩選 `received_at <= received_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response：
@@ -72,6 +75,8 @@ Response：
 規則：
 
 - 需要 internal secret，不需要 webhook 簽章。
+- `received_from` / `received_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `received_from > received_to` 回 `422 invalid received_at range`。
 - 依 `received_at desc`、`id desc` 回傳最近事件。
 
 ## Coupons
