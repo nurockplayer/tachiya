@@ -766,16 +766,26 @@ GET <TACHIGO_API_URL>/internal/users/points?email=<email>
 X-Tachiya-Internal-Secret: <TACHIYA_INTERNAL_SHARED_SECRET>
 ```
 
-### `GET /tachigo/identity/{provider}/{external_subject}/points`
+### `GET /tachigo/identity/points`
 
-用途：依外部身份查 Tachigo points，並確認 Tachiya 端已有 active identity mapping。
+用途：依外部身份查 Tachigo points，並確認 Tachiya 端已有 active identity mapping。產品級串接優先使用 query 版本，避免外部 subject 含 `/`、wallet namespace 或第三方複合 id 時發生 path encoding 問題。
+
+Query：
+
+- `provider`：必填，例如 `tachigo`、`twitch`、`wallet`。
+- `external_subject`：必填，例如 `tachigo-user-1` 或 `eip155:1/0xabc`。
 
 規則：
 
 - `provider` 正規化為小寫。
 - `external_subject` 會 trim。
+- `provider` 或 `external_subject` trim 後為空時回傳 `422`。
 - Tachiya 找不到 mapping 時回傳 `404 identity mapping not found`，不呼叫 Tachigo upstream。
 - Tachigo upstream 非 200、連線失敗、payload 不合法或 outbound secret 缺失時，router 回傳 `502`。
+
+### `GET /tachigo/identity/{provider}/{external_subject}/points`
+
+用途：既有 path 版本，保留給已整合的 caller；行為與 query 版本相同。新整合應優先使用 `GET /tachigo/identity/points`。
 
 ## 環境變數
 
