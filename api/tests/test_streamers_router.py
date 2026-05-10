@@ -789,6 +789,26 @@ def test_preview_streamer_revenue_shares_rejects_invalid_payload(monkeypatch):
     assert response.status_code == 422
 
 
+def test_revenue_share_endpoints_reject_non_strict_gross_amount(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+
+    for endpoint in ["/streamers/revenue-shares/preview", "/streamers/revenue-shares/record"]:
+        for gross_amount in [True, "1200"]:
+            response = client.post(
+                endpoint,
+                headers=headers,
+                json={
+                    "order_id": "order-1",
+                    "lines": [{"saleor_product_id": "product-1", "gross_amount": gross_amount}],
+                },
+            )
+
+            assert response.status_code == 422
+
+
 def test_record_streamer_revenue_shares(monkeypatch):
     session = build_session()
     client = build_client(session)
