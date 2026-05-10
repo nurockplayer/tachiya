@@ -101,10 +101,18 @@ class StreamerRevenueShareRecordResponse(BaseModel):
     created_at: datetime
 
 
+class StreamerRevenueShareRecordListItemResponse(StreamerRevenueShareRecordResponse):
+    order_id: str
+
+
 class RevenueShareRecordResponse(BaseModel):
     order_id: str
     records: list[StreamerRevenueShareRecordResponse]
     unassigned_product_ids: list[str]
+
+
+class RevenueShareRecordListResponse(BaseModel):
+    records: list[StreamerRevenueShareRecordListItemResponse]
 
 
 @router.post(
@@ -173,6 +181,46 @@ def assign_streamer_product(
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
     return _streamer_product_assignment_response(assignment)
+
+
+@router.get(
+    "/revenue-shares/records",
+    response_model=RevenueShareRecordListResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_streamer_revenue_share_records(
+    status: str | None = Query(default=None),
+    streamer_slug: str | None = Query(default=None),
+    order_id: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    try:
+        records = RevenueShareService(db).list_records(
+            status=status,
+            streamer_slug=streamer_slug,
+            order_id=order_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return RevenueShareRecordListResponse(
+        records=[
+            StreamerRevenueShareRecordListItemResponse(
+                id=record.id,
+                order_id=record.order_id,
+                streamer_slug=record.streamer_slug,
+                streamer_profile_id=record.streamer_profile_id,
+                gross_amount=record.gross_amount,
+                commission_bps=record.commission_bps,
+                share_amount=record.share_amount,
+                status=record.status,
+                created_at=record.created_at,
+            )
+            for record in records
+        ],
+    )
 
 
 @router.post(

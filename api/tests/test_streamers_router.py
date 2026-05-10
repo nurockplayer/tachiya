@@ -626,3 +626,59 @@ def test_revenue_share_order_completed_webhook_rejects_record_conflict(monkeypat
     assert conflict_response.json()["detail"] == "revenue share record conflict"
     assert session.query(WebhookEvent).count() == 1
     assert session.query(StreamerRevenueShareRecord).count() == 1
+
+
+def test_list_revenue_share_records(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    streamer_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One", "commission_bps": 1250},
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+    )
+
+    response = client.get(
+        "/streamers/revenue-shares/records?status=pending&streamer_slug=streamer-one&limit=10",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["records"][0]["order_id"] == "order-1"
+    assert response.json()["records"][0]["streamer_profile_id"] == streamer_response.json()["id"]
+    assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
+    assert response.json()["records"][0]["share_amount"] == 150
+    assert response.json()["records"][0]["status"] == "pending"
+
+
+def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+
+    invalid_limit_response = client.get(
+        "/streamers/revenue-shares/records?limit=101",
+        headers=headers,
+    )
+    blank_status_response = client.get(
+        "/streamers/revenue-shares/records?status=%20",
+        headers=headers,
+    )
+
+    assert invalid_limit_response.status_code == 422
+    assert blank_status_response.status_code == 422
