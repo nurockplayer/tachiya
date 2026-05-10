@@ -102,6 +102,47 @@ class PointsService:
             .all()
         )
 
+    def list_admin_entries(
+        self,
+        *,
+        user_id: str | None = None,
+        entry_type: str | None = None,
+        source_type: str | None = None,
+        reference_id: str | None = None,
+        limit: int = 20,
+    ) -> list[PointsLedger]:
+        normalized_user_id = self._normalize_optional_filter(user_id, "user_id is required")
+        normalized_entry_type = (
+            self._validate_entry_type(entry_type)
+            if entry_type is not None
+            else None
+        )
+        normalized_source_type = (
+            self._validate_source_type(source_type)
+            if source_type is not None
+            else None
+        )
+        normalized_reference_id = self._normalize_optional_filter(
+            reference_id,
+            "reference_id is required",
+        )
+
+        query = self.db.query(PointsLedger)
+        if normalized_user_id is not None:
+            query = query.filter(PointsLedger.user_id == normalized_user_id)
+        if normalized_entry_type is not None:
+            query = query.filter(PointsLedger.entry_type == normalized_entry_type)
+        if normalized_source_type is not None:
+            query = query.filter(PointsLedger.source_type == normalized_source_type)
+        if normalized_reference_id is not None:
+            query = query.filter(PointsLedger.reference_id == normalized_reference_id)
+
+        return (
+            query.order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
+            .limit(limit)
+            .all()
+        )
+
     def _create_entry(
         self,
         *,
@@ -184,10 +225,26 @@ class PointsService:
         normalized = source_type.strip()
         if not normalized:
             raise ValueError("source_type is required")
+        return normalized.lower()
+
+    @staticmethod
+    def _validate_entry_type(entry_type: str) -> str:
+        normalized = entry_type.strip().lower()
+        if normalized not in {"credit", "debit"}:
+            raise ValueError("entry_type must be credit or debit")
         return normalized
 
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
+
+    @staticmethod
+    def _normalize_optional_filter(value: str | None, message: str) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
             raise ValueError(message)

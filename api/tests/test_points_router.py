@@ -474,6 +474,91 @@ def test_points_ledger_returns_recent_entries(monkeypatch):
     }
 
 
+def test_points_ledger_admin_entries_filter_across_users(monkeypatch):
+    session = build_session()
+    session.add_all(
+        [
+            PointsLedger(
+                id="older-entry",
+                user_id="user-1",
+                amount=120,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:redemption-1",
+                created_at=datetime(2026, 1, 1, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="newer-entry",
+                user_id="user-2",
+                amount=80,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:redemption-2",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="checkout-entry",
+                user_id="user-1",
+                amount=-20,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout-1",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger/entries",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"entry_type": "credit", "source_type": " Tachigo ", "limit": 10},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "entries": [
+            {
+                "id": "newer-entry",
+                "user_id": "user-2",
+                "amount": 80,
+                "entry_type": "credit",
+                "source_type": "tachigo",
+                "reference_id": "tachigo:redemption-2",
+                "expires_at": None,
+                "created_at": "2026-01-02T00:00:00",
+            },
+            {
+                "id": "older-entry",
+                "user_id": "user-1",
+                "amount": 120,
+                "entry_type": "credit",
+                "source_type": "tachigo",
+                "reference_id": "tachigo:redemption-1",
+                "expires_at": None,
+                "created_at": "2026-01-01T00:00:00",
+            },
+        ],
+    }
+
+
+def test_points_ledger_admin_entries_rejects_invalid_filter(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger/entries",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"entry_type": "adjust"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "entry_type must be credit or debit"
+
+
 def test_points_ledger_rejects_limit_above_max(monkeypatch):
     session = build_session()
     client = build_client(session)

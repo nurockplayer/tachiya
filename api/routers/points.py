@@ -33,6 +33,14 @@ class PointsLedgerResponse(BaseModel):
     entries: list[PointsLedgerEntryResponse]
 
 
+class PointsLedgerAdminEntryResponse(PointsLedgerEntryResponse):
+    user_id: str
+
+
+class PointsLedgerAdminEntriesResponse(BaseModel):
+    entries: list[PointsLedgerAdminEntryResponse]
+
+
 class PointsTransactionRequest(BaseModel):
     user_id: str = Field(min_length=1)
     entry_type: Literal["credit", "debit"]
@@ -140,6 +148,35 @@ async def order_rewarded_webhook(
 
 
 @router.get(
+    "/ledger/entries",
+    response_model=PointsLedgerAdminEntriesResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_points_ledger_entries_for_admin(
+    user_id: str | None = Query(default=None),
+    entry_type: str | None = Query(default=None),
+    source_type: str | None = Query(default=None),
+    reference_id: str | None = Query(default=None),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    try:
+        entries = PointsService(db).list_admin_entries(
+            user_id=user_id,
+            entry_type=entry_type,
+            source_type=source_type,
+            reference_id=reference_id,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return PointsLedgerAdminEntriesResponse(
+        entries=[_ledger_admin_entry_response(entry) for entry in entries],
+    )
+
+
+@router.get(
     "/ledger",
     response_model=PointsLedgerResponse,
     dependencies=[Depends(verify_internal_secret)],
@@ -159,6 +196,19 @@ async def list_points_ledger(
 def _ledger_entry_response(entry) -> PointsLedgerEntryResponse:
     return PointsLedgerEntryResponse(
         id=entry.id,
+        amount=entry.amount,
+        entry_type=entry.entry_type,
+        source_type=entry.source_type,
+        reference_id=entry.reference_id,
+        expires_at=entry.expires_at,
+        created_at=entry.created_at,
+    )
+
+
+def _ledger_admin_entry_response(entry) -> PointsLedgerAdminEntryResponse:
+    return PointsLedgerAdminEntryResponse(
+        id=entry.id,
+        user_id=entry.user_id,
         amount=entry.amount,
         entry_type=entry.entry_type,
         source_type=entry.source_type,
