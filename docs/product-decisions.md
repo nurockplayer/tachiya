@@ -236,7 +236,8 @@ Email、Twitch user id、Tachigo member id、wallet address 都是可連結身�
 
 - 更換 email 不搬移 ledger；ledger 仍屬於同一 Saleor customer id。
 - 解除 Twitch 連結不刪除既有 Tachiya 點數或推薦紀錄，只停止新的 Tachigo 兌換。
-- 更換 wallet 需要重新驗證持有權；Tachiya 點數不因 wallet 轉移而轉移。
+- 更換 wallet 或重新連結外部身份需要重新驗證持有權；Tachiya 點數不因 wallet 轉移而轉移。
+- 已解除連結的外部身份可在重新驗證後 relink，並必須留下 `identity.relinked` audit trail。
 - 若真的需要帳號合併，必須以後台操作或 migration 方式執行，並記錄來源帳號、目標帳號、操作者與原因。
 
 ### 後續待補

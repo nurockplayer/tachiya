@@ -743,7 +743,8 @@ Request：
 - `provider` 會正規化成小寫。
 - 同一外部身份只能有一個 active mapping。
 - 同一 Saleor customer id 同 provider 只能有一個 active mapping。
-- link / unlink 都會寫入 identity audit event。
+- link / unlink / relink 都會寫入 identity audit event。
+- 若同一外部身份先前已解除連結，重新送出 `POST /identity-mappings` 會更新既有 mapping、清空 `unlinked_at`、刷新 `verified_at`，並寫入 `identity.relinked` audit event。
 
 錯誤：
 
