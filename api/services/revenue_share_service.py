@@ -134,6 +134,38 @@ class RevenueShareService:
             unassigned_product_ids=preview.unassigned_product_ids,
         )
 
+    def list_records(
+        self,
+        *,
+        status: str | None = None,
+        streamer_slug: str | None = None,
+        order_id: str | None = None,
+        limit: int = 20,
+    ) -> list[StreamerRevenueShareRecord]:
+        normalized_status = self._normalize_optional_filter(status, "status is required")
+        normalized_streamer_slug = self._normalize_optional_filter(
+            streamer_slug,
+            "streamer_slug is required",
+        )
+        normalized_order_id = self._normalize_optional_filter(order_id, "order_id is required")
+
+        query = self.db.query(StreamerRevenueShareRecord)
+        if normalized_status is not None:
+            query = query.filter(StreamerRevenueShareRecord.status == normalized_status)
+        if normalized_streamer_slug is not None:
+            query = query.filter(StreamerRevenueShareRecord.streamer_slug == normalized_streamer_slug.lower())
+        if normalized_order_id is not None:
+            query = query.filter(StreamerRevenueShareRecord.order_id == normalized_order_id)
+
+        return (
+            query.order_by(
+                StreamerRevenueShareRecord.created_at.desc(),
+                StreamerRevenueShareRecord.id.asc(),
+            )
+            .limit(limit)
+            .all()
+        )
+
     def _get_assignment(self, saleor_product_id: str) -> StreamerProductAssignment | None:
         return (
             self.db.query(StreamerProductAssignment)
@@ -181,6 +213,15 @@ class RevenueShareService:
 
     @staticmethod
     def _validate_required(value: str, message: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError(message)
+        return normalized
+
+    @staticmethod
+    def _normalize_optional_filter(value: str | None, message: str) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
             raise ValueError(message)

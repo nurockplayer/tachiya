@@ -173,3 +173,61 @@ def test_record_order_share_rejects_conflicting_replay():
         )
 
     assert session.query(StreamerRevenueShareRecord).count() == 1
+
+
+def test_list_records_filters_and_sorts_payout_queue():
+    session = build_session()
+    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
+    create_streamer_with_assignment(session, slug="streamer-two", saleor_product_id="product-2")
+    service = RevenueShareService(session)
+    paid_result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+    paid_result.records[0].status = "paid"
+    session.commit()
+    pending_result = service.record_order_share(
+        order_id="order-2",
+        lines=[RevenueShareLine(saleor_product_id="product-2", gross_amount=2400)],
+    )
+
+    pending_records = service.list_records(status=" pending ", limit=10)
+    streamer_records = service.list_records(streamer_slug=" Streamer-One ", limit=10)
+    order_records = service.list_records(order_id=" order-2 ", limit=10)
+
+    assert [record.id for record in pending_records] == [pending_result.records[0].id]
+    assert [record.id for record in streamer_records] == [paid_result.records[0].id]
+    assert [record.id for record in order_records] == [pending_result.records[0].id]
+
+
+def test_list_records_applies_limit():
+    session = build_session()
+    create_streamer_with_assignment(session)
+    service = RevenueShareService(session)
+    service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+    service.record_order_share(
+        order_id="order-2",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1300)],
+    )
+
+    records = service.list_records(limit=1)
+
+    assert len(records) == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        ("status", {"status": " "}),
+        ("streamer_slug", {"streamer_slug": " "}),
+        ("order_id", {"order_id": " "}),
+    ],
+)
+def test_list_records_rejects_blank_filters(field, kwargs):
+    session = build_session()
+
+    with pytest.raises(ValueError, match=f"{field} is required"):
+        RevenueShareService(session).list_records(**kwargs)

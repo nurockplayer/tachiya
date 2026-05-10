@@ -398,6 +398,44 @@ Response：
 }
 ```
 
+### `GET /streamers/revenue-shares/records`
+
+用途：營運與 payout 流程查詢分潤紀錄 queue。
+
+Query：
+
+- `status`：可選，例如 `pending`、`paid` 或 `void`。
+- `streamer_slug`：可選，查詢單一 streamer 的分潤紀錄。
+- `order_id`：可選，查詢單一 Saleor order 的分潤紀錄。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "records": [
+    {
+      "id": "uuid",
+      "order_id": "saleor-order-1",
+      "streamer_slug": "streamer-one",
+      "streamer_profile_id": "uuid",
+      "gross_amount": 1200,
+      "commission_bps": 1000,
+      "share_amount": 120,
+      "status": "pending",
+      "created_at": "2026-05-10T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- `status`、`streamer_slug`、`order_id` 有提供時會 trim，空字串回 `422`。
+- `streamer_slug` 查詢會轉小寫。
+- 依 `created_at desc`、`id asc` 穩定排序。
+- 本 endpoint 只查詢 records，不更新 payout 狀態。
+
 ### `POST /streamers/webhooks/order-completed`
 
 用途：Saleor 訂單完成 webhook 入口，使用與 record endpoint 相同的分潤計算規則，自動寫入每張訂單、每位 streamer 的分潤紀錄。
