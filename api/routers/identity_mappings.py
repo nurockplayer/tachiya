@@ -155,10 +155,28 @@ def resolve_identity_mapping(
     dependencies=[Depends(verify_internal_secret)],
 )
 def list_identity_audit_events(
+    action: str | None = Query(default=None),
+    actor: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    target: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    events = IdentityMappingService(db).list_audit_events(limit)
+    try:
+        events = IdentityMappingService(db).list_audit_events(
+            action=action,
+            actor=actor,
+            source=source,
+            target=target,
+            created_from=created_from,
+            created_to=created_to,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     return IdentityAuditEventsResponse(
         events=[
             IdentityAuditEventResponse(

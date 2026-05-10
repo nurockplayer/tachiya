@@ -1,4 +1,5 @@
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -147,6 +148,75 @@ def test_list_mappings_filters_active_and_unlinked_mappings():
     assert [mapping.id for mapping in active_mappings] == [twitch_mapping.id]
     assert [mapping.id for mapping in tachigo_history] == [tachigo_mapping.id]
     assert [mapping.id for mapping in customer_mappings] == [twitch_mapping.id]
+
+
+def test_list_audit_events_filters_fields_and_created_range():
+    session = build_session()
+    service = IdentityMappingService(session)
+    session.add_all(
+        [
+            IdentityAuditEvent(
+                id="before-range",
+                action="identity.linked",
+                actor="ops-user-1",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-1",
+                reason="before",
+                created_at=datetime(2026, 1, 1, 23, 59, 59),
+            ),
+            IdentityAuditEvent(
+                id="matching-old",
+                action="identity.relinked",
+                actor="ops-user-2",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-2",
+                reason="older match",
+                created_at=datetime(2026, 1, 2, 0, 0, 0),
+            ),
+            IdentityAuditEvent(
+                id="matching-new",
+                action="identity.relinked",
+                actor="ops-user-2",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-2",
+                reason="newer match",
+                created_at=datetime(2026, 1, 3, 0, 0, 0),
+            ),
+            IdentityAuditEvent(
+                id="after-range",
+                action="identity.relinked",
+                actor="ops-user-2",
+                source="tachigo:tachigo-user-1",
+                target="saleor:saleor-user-2",
+                reason="after",
+                created_at=datetime(2026, 1, 3, 0, 0, 1),
+            ),
+        ],
+    )
+    session.commit()
+
+    events = service.list_audit_events(
+        action=" identity.relinked ",
+        actor=" ops-user-2 ",
+        source=" tachigo:tachigo-user-1 ",
+        target=" saleor:saleor-user-2 ",
+        created_from=datetime(2026, 1, 2, 0, 0, 0),
+        created_to=datetime(2026, 1, 3, 0, 0, 0),
+        limit=10,
+    )
+
+    assert [event.reason for event in events] == ["newer match", "older match"]
+
+
+def test_list_audit_events_rejects_invalid_created_range():
+    session = build_session()
+    service = IdentityMappingService(session)
+
+    with pytest.raises(ValueError, match="invalid created_at range"):
+        service.list_audit_events(
+            created_from=datetime(2026, 1, 3, 0, 0, 0),
+            created_to=datetime(2026, 1, 2, 0, 0, 0),
+        )
 
 
 @pytest.mark.parametrize(
