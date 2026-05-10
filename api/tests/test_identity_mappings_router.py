@@ -472,6 +472,36 @@ def test_unlink_identity_mapping(monkeypatch):
     assert response.json()["unlinked"] is True
 
 
+def test_unlink_identity_mapping_rejects_blank_actor_without_writing(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    create_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+        },
+    )
+    mapping_id = create_response.json()["id"]
+
+    response = client.delete(
+        f"/identity-mappings/{mapping_id}",
+        headers=headers,
+        params={"actor": " "},
+    )
+
+    mapping = session.get(IdentityMapping, mapping_id)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "actor is required"
+    assert mapping is not None
+    assert mapping.unlinked_at is None
+    assert session.query(IdentityAuditEvent).count() == 1
+
+
 def test_create_identity_mapping_relinks_unlinked_mapping(monkeypatch):
     session = build_session()
     client = build_client(session)
