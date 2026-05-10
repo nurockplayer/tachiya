@@ -188,24 +188,18 @@ def list_coupons(
     redemption_token: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    if redemption_token:
-        coupon = (
-            db.query(UserCoupon)
-            .filter(
-                UserCoupon.redemption_token == redemption_token,
-                UserCoupon.status == "active",
-            )
-            .first()
-        )
-        return [] if coupon is None else [_coupon_response(coupon)]
+    if not redemption_token:
+        raise HTTPException(status_code=400, detail="redemption_token is required")
 
-    coupons = (
+    coupon = (
         db.query(UserCoupon)
-        .filter(UserCoupon.status == "active")
-        .order_by(UserCoupon.created_at.desc())
-        .all()
+        .filter(
+            UserCoupon.redemption_token == redemption_token,
+            UserCoupon.status == "active",
+        )
+        .first()
     )
-    return [_coupon_response(c) for c in coupons]
+    return [] if coupon is None else [_coupon_response(coupon)]
 
 
 def _coupon_response(coupon: UserCoupon) -> dict:

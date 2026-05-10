@@ -320,6 +320,22 @@ def test_list_coupons_returns_empty_for_unknown_redemption_token():
     assert response.json() == []
 
 
+def test_list_coupons_requires_redemption_token():
+    matching_coupon = SimpleNamespace(
+        voucher_code="TACHIYA-MATCH",
+        coupon_type="PERCENT_5",
+        tcg_cost=18,
+        status="active",
+    )
+    fake_db = FakeDB(list_coupons=[matching_coupon])
+    client = build_client(fake_db)
+
+    response = client.get("/coupons")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "redemption_token is required"
+
+
 def test_list_redemption_audit_events_requires_internal_secret(monkeypatch):
     fake_db = FakeDB()
     client = build_client(fake_db)
