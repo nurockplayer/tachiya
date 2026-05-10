@@ -309,6 +309,14 @@ def test_list_expired_credit_exposures_returns_unspent_expired_credit_amounts():
     assert exposures[0].remaining_amount == 70
 
 
+def test_list_expired_credit_exposures_rejects_invalid_limit():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        service.list_expired_credit_exposures("user-1", limit=-1)
+
+
 def test_list_entries_returns_requested_user_newest_first():
     session = build_session()
     service = PointsService(session)
@@ -382,6 +390,14 @@ def test_list_entries_rejects_blank_user_id():
 
     with pytest.raises(ValueError, match="user_id is required"):
         asyncio.run(service.list_entries("   "))
+
+
+def test_list_entries_rejects_invalid_limit():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        asyncio.run(service.list_entries("user-1", limit=0))
 
 
 def test_list_admin_entries_filters_and_returns_newest_first():
@@ -519,6 +535,14 @@ def test_list_admin_entries_rejects_invalid_filters(kwargs, message):
 
     with pytest.raises(ValueError, match=message):
         service.list_admin_entries(**kwargs)
+
+
+def test_list_admin_entries_rejects_invalid_limit():
+    session = build_session()
+    service = PointsService(session)
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        service.list_admin_entries(limit=101)
 
 
 @pytest.mark.parametrize("method", ["credit", "debit"])
