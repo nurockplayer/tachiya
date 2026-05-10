@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StrictInt, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -84,7 +84,7 @@ class StreamerListResponse(BaseModel):
 
 class RevenueSharePreviewLineRequest(BaseModel):
     saleor_product_id: NonBlankStr
-    gross_amount: int = Field(gt=0)
+    gross_amount: StrictInt = Field(gt=0)
 
 
 class RevenueSharePreviewRequest(BaseModel):
