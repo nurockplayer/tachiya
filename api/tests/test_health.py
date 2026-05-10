@@ -58,18 +58,36 @@ def test_cors_preflight_rejects_unconfigured_origin():
 
 def test_ready_returns_database_status(monkeypatch):
     monkeypatch.setattr(main, "check_database_ready", lambda: True)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
-    assert main.ready() == {"status": "ok", "checks": {"database": "ok"}}
+    assert main.ready() == {
+        "status": "ok",
+        "checks": {"database": "ok", "internal_secret": "ok"},
+    }
 
 
 def test_ready_endpoint_returns_database_status(monkeypatch):
     monkeypatch.setattr(main, "check_database_ready", lambda: True)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     client = TestClient(main.app)
 
     response = client.get("/ready")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "checks": {"database": "ok"}}
+    assert response.json() == {
+        "status": "ok",
+        "checks": {"database": "ok", "internal_secret": "ok"},
+    }
+
+
+def test_ready_returns_503_when_internal_secret_is_missing(monkeypatch):
+    monkeypatch.setattr(main, "check_database_ready", lambda: True)
+    monkeypatch.delenv("TACHIYA_INTERNAL_SHARED_SECRET", raising=False)
+
+    response = main.ready()
+
+    assert response.status_code == 503
+    assert response.body == b'{"status":"unavailable","checks":{"database":"ok","internal_secret":"error"}}'
 
 
 def test_ready_returns_503_when_database_check_fails(monkeypatch):
@@ -77,11 +95,12 @@ def test_ready_returns_503_when_database_check_fails(monkeypatch):
         raise SQLAlchemyError("database unavailable")
 
     monkeypatch.setattr(main, "check_database_ready", fail_database_check)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
     response = main.ready()
 
     assert response.status_code == 503
-    assert response.body == b'{"status":"unavailable","checks":{"database":"error"}}'
+    assert response.body == b'{"status":"unavailable","checks":{"database":"error","internal_secret":"ok"}}'
 
 
 def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):
@@ -89,9 +108,13 @@ def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):
         raise SQLAlchemyError("database unavailable")
 
     monkeypatch.setattr(main, "check_database_ready", fail_database_check)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     client = TestClient(main.app)
 
     response = client.get("/ready")
 
     assert response.status_code == 503
-    assert response.json() == {"status": "unavailable", "checks": {"database": "error"}}
+    assert response.json() == {
+        "status": "unavailable",
+        "checks": {"database": "error", "internal_secret": "ok"},
+    }
