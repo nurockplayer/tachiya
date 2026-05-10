@@ -94,6 +94,22 @@ class StreamerService:
             .all()
         )
 
+    def list_profiles(
+        self,
+        *,
+        active: bool | None = None,
+        limit: int = 20,
+    ) -> list[StreamerProfile]:
+        query = self.db.query(StreamerProfile)
+        if active is not None:
+            query = query.filter(StreamerProfile.active.is_(active))
+
+        return (
+            query.order_by(StreamerProfile.display_name.asc(), StreamerProfile.slug.asc())
+            .limit(limit)
+            .all()
+        )
+
     @staticmethod
     def _normalize_slug(slug: str) -> str:
         return StreamerService._validate_required(slug, "slug is required").lower()
