@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -195,13 +195,28 @@ def redeem_coupon(
 )
 def list_admin_coupons(
     status: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     normalized_status = _normalize_optional_filter(status, "status is required")
+    normalized_created_from = _normalize_optional_datetime(created_from)
+    normalized_created_to = _normalize_optional_datetime(created_to)
+    if (
+        normalized_created_from is not None
+        and normalized_created_to is not None
+        and normalized_created_from > normalized_created_to
+    ):
+        raise HTTPException(status_code=422, detail="invalid created_at range")
+
     query = db.query(UserCoupon)
     if normalized_status is not None:
         query = query.filter(UserCoupon.status == normalized_status)
+    if normalized_created_from is not None:
+        query = query.filter(UserCoupon.created_at >= normalized_created_from)
+    if normalized_created_to is not None:
+        query = query.filter(UserCoupon.created_at <= normalized_created_to)
 
     coupons = (
         query.order_by(UserCoupon.created_at.desc(), UserCoupon.id.desc())
@@ -321,3 +336,11 @@ def _normalize_optional_value(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _normalize_optional_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)

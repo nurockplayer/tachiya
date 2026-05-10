@@ -141,6 +141,8 @@ Query：
 Query：
 
 - `status`：可選，例如 `active`、`redeemed`；提供時會 trim，空字串回 `422 status is required`。
+- `created_from`：可選，ISO datetime，篩選 `created_at >= created_from`。
+- `created_to`：可選，ISO datetime，篩選 `created_at <= created_to`。
 - `limit`：預設 `20`，範圍 `1..100`。
 
 Response：
@@ -163,6 +165,8 @@ Response：
 
 規則：
 
+- `created_from` / `created_to` 為 inclusive range；若帶 timezone，會轉成 UTC 後比對。
+- `created_from > created_to` 回 `422 invalid created_at range`。
 - 依 `created_at desc`、`id desc` 回傳最近 coupons。
 - 回傳 `redemption_token` 僅供受信任後台查核，不得暴露在公開列表。
 
