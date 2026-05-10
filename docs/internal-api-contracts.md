@@ -391,6 +391,7 @@ Request：
 規則：
 
 - 需要 webhook 簽章。
+- `order_id` 與 `referee_id` 會 trim，trim 後為空回 `422`。
 - event id 重放回傳 `409 webhook event already processed`。
 - 若訂單沒有符合推薦關係，回傳 `{"rewarded": false}`。
 - 若有獎勵，回傳 `reward_points` 與 `ledger_entry_id`。

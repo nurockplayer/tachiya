@@ -1,5 +1,7 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -9,10 +11,12 @@ from services.webhook_event_service import WebhookEventReplayError, WebhookEvent
 
 router = APIRouter(prefix="/referrals", tags=["referrals"])
 
+NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
 
 class OrderCompletedRequest(BaseModel):
-    order_id: str = Field(min_length=1)
-    referee_id: str = Field(min_length=1)
+    order_id: NonBlankStr
+    referee_id: NonBlankStr
     order_total_amount: int = Field(gt=0)
 
 

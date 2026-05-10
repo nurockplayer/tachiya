@@ -287,8 +287,18 @@ def test_order_completed_webhook_rejects_invalid_payload_before_processing(monke
             "order_total_amount": 1200,
         },
         {
+            "order_id": "   ",
+            "referee_id": "referee-1",
+            "order_total_amount": 1200,
+        },
+        {
             "order_id": "order-1",
             "referee_id": "",
+            "order_total_amount": 1200,
+        },
+        {
+            "order_id": "order-1",
+            "referee_id": "   ",
             "order_total_amount": 1200,
         },
         {
