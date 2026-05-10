@@ -210,6 +210,28 @@ def test_points_transaction_creates_credit_and_returns_balance(monkeypatch):
     }
 
 
+def test_points_transaction_uses_normalized_user_for_credit_balance(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": " user-1 ",
+            "entry_type": "credit",
+            "amount": 120,
+            "reference_id": "order-1",
+            "source_type": "order-reward",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["balance"] == 120
+    assert asyncio.run(PointsService(session).get_balance("user-1")) == 120
+
+
 def test_points_transaction_creates_debit_and_returns_balance(monkeypatch):
     session = build_session()
     asyncio.run(PointsService(session).credit("user-1", 120, "order-1"))
@@ -235,6 +257,29 @@ def test_points_transaction_creates_debit_and_returns_balance(monkeypatch):
     assert body["entry"]["entry_type"] == "debit"
     assert body["entry"]["source_type"] == "checkout"
     assert body["entry"]["reference_id"] == "checkout-1"
+
+
+def test_points_transaction_uses_normalized_user_for_debit_balance(monkeypatch):
+    session = build_session()
+    asyncio.run(PointsService(session).credit("user-1", 120, "order-1"))
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.post(
+        "/points/transactions",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={
+            "user_id": " user-1 ",
+            "entry_type": "debit",
+            "amount": 45,
+            "reference_id": "checkout-1",
+            "source_type": "checkout",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["balance"] == 75
+    assert asyncio.run(PointsService(session).get_balance("user-1")) == 75
 
 
 def test_points_transaction_replays_same_reference(monkeypatch):
