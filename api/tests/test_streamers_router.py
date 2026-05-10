@@ -791,6 +791,80 @@ def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
     assert blank_status_response.status_code == 422
 
 
+def test_summarize_revenue_share_records(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post("/streamers", headers=headers, json={"slug": "streamer-two", "display_name": "Two"})
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+    client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-2", "streamer_slug": "streamer-two"},
+    )
+    paid_record_response = client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+    )
+    client.post(
+        f"/streamers/revenue-shares/records/{paid_record_response.json()['records'][0]['id']}/status",
+        headers=headers,
+        json={"status": "paid"},
+    )
+    client.post(
+        "/streamers/revenue-shares/record",
+        headers=headers,
+        json={
+            "order_id": "order-2",
+            "lines": [{"saleor_product_id": "product-2", "gross_amount": 2400}],
+        },
+    )
+
+    response = client.get("/streamers/revenue-shares/summary", headers=headers)
+    filtered_response = client.get(
+        "/streamers/revenue-shares/summary?streamer_slug=streamer-two",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "summaries": [
+            {"status": "paid", "record_count": 1, "gross_amount": 1200, "share_amount": 120},
+            {"status": "pending", "record_count": 1, "gross_amount": 2400, "share_amount": 240},
+        ],
+    }
+    assert filtered_response.status_code == 200
+    assert filtered_response.json() == {
+        "summaries": [
+            {"status": "pending", "record_count": 1, "gross_amount": 2400, "share_amount": 240},
+        ],
+    }
+
+
+def test_summarize_revenue_share_records_rejects_invalid_query(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/streamers/revenue-shares/summary?status=%20",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "status is required"
+
+
 def test_update_revenue_share_record_status(monkeypatch):
     session = build_session()
     client = build_client(session)

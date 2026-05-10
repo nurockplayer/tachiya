@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models.streamer import (
@@ -35,6 +36,14 @@ class RevenueShareRecordResult:
     order_id: str
     records: list[StreamerRevenueShareRecord]
     unassigned_product_ids: list[str]
+
+
+@dataclass(frozen=True)
+class RevenueShareRecordSummary:
+    status: str
+    record_count: int
+    gross_amount: int
+    share_amount: int
 
 
 class RevenueShareService:
@@ -165,6 +174,50 @@ class RevenueShareService:
             .limit(limit)
             .all()
         )
+
+    def summarize_records(
+        self,
+        *,
+        status: str | None = None,
+        streamer_slug: str | None = None,
+        order_id: str | None = None,
+    ) -> list[RevenueShareRecordSummary]:
+        normalized_status = self._normalize_optional_filter(status, "status is required")
+        normalized_streamer_slug = self._normalize_optional_filter(
+            streamer_slug,
+            "streamer_slug is required",
+        )
+        normalized_order_id = self._normalize_optional_filter(order_id, "order_id is required")
+
+        query = self.db.query(
+            StreamerRevenueShareRecord.status,
+            func.count(StreamerRevenueShareRecord.id),
+            func.coalesce(func.sum(StreamerRevenueShareRecord.gross_amount), 0),
+            func.coalesce(func.sum(StreamerRevenueShareRecord.share_amount), 0),
+        )
+        if normalized_status is not None:
+            query = query.filter(StreamerRevenueShareRecord.status == normalized_status)
+        if normalized_streamer_slug is not None:
+            query = query.filter(
+                StreamerRevenueShareRecord.streamer_slug == normalized_streamer_slug.lower(),
+            )
+        if normalized_order_id is not None:
+            query = query.filter(StreamerRevenueShareRecord.order_id == normalized_order_id)
+
+        rows = (
+            query.group_by(StreamerRevenueShareRecord.status)
+            .order_by(StreamerRevenueShareRecord.status.asc())
+            .all()
+        )
+        return [
+            RevenueShareRecordSummary(
+                status=row[0],
+                record_count=int(row[1]),
+                gross_amount=int(row[2]),
+                share_amount=int(row[3]),
+            )
+            for row in rows
+        ]
 
     def update_record_status(
         self,

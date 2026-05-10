@@ -122,6 +122,17 @@ class RevenueShareRecordListResponse(BaseModel):
     records: list[StreamerRevenueShareRecordListItemResponse]
 
 
+class RevenueShareRecordSummaryItemResponse(BaseModel):
+    status: str
+    record_count: int
+    gross_amount: int
+    share_amount: int
+
+
+class RevenueShareRecordSummaryResponse(BaseModel):
+    summaries: list[RevenueShareRecordSummaryItemResponse]
+
+
 class RevenueShareRecordStatusRequest(BaseModel):
     status: NonBlankStr
 
@@ -222,6 +233,39 @@ def list_streamer_revenue_share_records(
 
     return RevenueShareRecordListResponse(
         records=[_revenue_share_record_list_item_response(record) for record in records],
+    )
+
+
+@router.get(
+    "/revenue-shares/summary",
+    response_model=RevenueShareRecordSummaryResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def summarize_streamer_revenue_share_records(
+    status: str | None = Query(default=None),
+    streamer_slug: str | None = Query(default=None),
+    order_id: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    try:
+        summaries = RevenueShareService(db).summarize_records(
+            status=status,
+            streamer_slug=streamer_slug,
+            order_id=order_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return RevenueShareRecordSummaryResponse(
+        summaries=[
+            RevenueShareRecordSummaryItemResponse(
+                status=summary.status,
+                record_count=summary.record_count,
+                gross_amount=summary.gross_amount,
+                share_amount=summary.share_amount,
+            )
+            for summary in summaries
+        ],
     )
 
 
