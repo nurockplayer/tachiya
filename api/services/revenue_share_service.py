@@ -9,6 +9,9 @@ from models.streamer import (
     StreamerRevenueShareRecord,
 )
 
+REVENUE_SHARE_RECORD_STATUSES = {"pending", "paid", "void"}
+REVENUE_SHARE_TERMINAL_STATUSES = {"paid", "void"}
+
 
 @dataclass(frozen=True)
 class RevenueShareLine:
@@ -151,7 +154,11 @@ class RevenueShareService:
         order_id: str | None = None,
         limit: int = 20,
     ) -> list[StreamerRevenueShareRecord]:
-        normalized_status = self._normalize_optional_filter(status, "status is required")
+        normalized_status = (
+            self._validate_record_status_filter(status)
+            if status is not None
+            else None
+        )
         normalized_streamer_slug = self._normalize_optional_filter(
             streamer_slug,
             "streamer_slug is required",
@@ -182,7 +189,11 @@ class RevenueShareService:
         streamer_slug: str | None = None,
         order_id: str | None = None,
     ) -> list[RevenueShareRecordSummary]:
-        normalized_status = self._normalize_optional_filter(status, "status is required")
+        normalized_status = (
+            self._validate_record_status_filter(status)
+            if status is not None
+            else None
+        )
         normalized_streamer_slug = self._normalize_optional_filter(
             streamer_slug,
             "streamer_slug is required",
@@ -294,9 +305,18 @@ class RevenueShareService:
 
     @staticmethod
     def _validate_record_status(status: str) -> str:
-        normalized_status = status.strip()
-        if normalized_status not in {"paid", "void"}:
+        normalized_status = status.strip().lower()
+        if normalized_status not in REVENUE_SHARE_TERMINAL_STATUSES:
             raise ValueError("status must be paid or void")
+        return normalized_status
+
+    @staticmethod
+    def _validate_record_status_filter(status: str) -> str:
+        normalized_status = status.strip().lower()
+        if not normalized_status:
+            raise ValueError("status is required")
+        if normalized_status not in REVENUE_SHARE_RECORD_STATUSES:
+            raise ValueError("status must be pending, paid, or void")
         return normalized_status
 
     @staticmethod

@@ -877,7 +877,7 @@ def test_list_revenue_share_records(monkeypatch):
     )
 
     response = client.get(
-        "/streamers/revenue-shares/records?status=pending&streamer_slug=streamer-one&limit=10",
+        "/streamers/revenue-shares/records?status=Pending&streamer_slug=streamer-one&limit=10",
         headers=headers,
     )
 
@@ -899,13 +899,14 @@ def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
         "/streamers/revenue-shares/records?limit=101",
         headers=headers,
     )
-    blank_status_response = client.get(
-        "/streamers/revenue-shares/records?status=%20",
+    invalid_status_response = client.get(
+        "/streamers/revenue-shares/records?status=settled",
         headers=headers,
     )
 
     assert invalid_limit_response.status_code == 422
-    assert blank_status_response.status_code == 422
+    assert invalid_status_response.status_code == 422
+    assert invalid_status_response.json()["detail"] == "status must be pending, paid, or void"
 
 
 def test_summarize_revenue_share_records(monkeypatch):
@@ -936,7 +937,7 @@ def test_summarize_revenue_share_records(monkeypatch):
     client.post(
         f"/streamers/revenue-shares/records/{paid_record_response.json()['records'][0]['id']}/status",
         headers=headers,
-        json={"status": "paid"},
+        json={"status": " Paid "},
     )
     client.post(
         "/streamers/revenue-shares/record",

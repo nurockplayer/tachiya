@@ -192,10 +192,12 @@ def test_list_records_filters_and_sorts_payout_queue():
     )
 
     pending_records = service.list_records(status=" pending ", limit=10)
+    paid_records = service.list_records(status=" Paid ", limit=10)
     streamer_records = service.list_records(streamer_slug=" Streamer-One ", limit=10)
     order_records = service.list_records(order_id=" order-2 ", limit=10)
 
     assert [record.id for record in pending_records] == [pending_result.records[0].id]
+    assert [record.id for record in paid_records] == [paid_result.records[0].id]
     assert [record.id for record in streamer_records] == [paid_result.records[0].id]
     assert [record.id for record in order_records] == [pending_result.records[0].id]
 
@@ -233,6 +235,13 @@ def test_list_records_rejects_blank_filters(field, kwargs):
         RevenueShareService(session).list_records(**kwargs)
 
 
+def test_list_records_rejects_invalid_status_filter():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="status must be pending, paid, or void"):
+        RevenueShareService(session).list_records(status="settled")
+
+
 def test_summarize_records_groups_totals_by_status_and_filters():
     session = build_session()
     create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
@@ -254,6 +263,7 @@ def test_summarize_records_groups_totals_by_status_and_filters():
 
     summaries = service.summarize_records()
     streamer_summaries = service.summarize_records(streamer_slug=" Streamer-One ")
+    paid_summaries = service.summarize_records(status=" Paid ")
     order_summaries = service.summarize_records(order_id=" order-2 ")
 
     assert [
@@ -272,8 +282,19 @@ def test_summarize_records_groups_totals_by_status_and_filters():
     ]
     assert [
         (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        for summary in paid_summaries
+    ] == [("paid", 1, 1200, 120)]
+    assert [
+        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
         for summary in order_summaries
     ] == [("pending", 1, 2400, 240)]
+
+
+def test_summarize_records_rejects_invalid_status_filter():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="status must be pending, paid, or void"):
+        RevenueShareService(session).summarize_records(status="settled")
 
 
 def test_update_record_status_marks_pending_record_paid():
@@ -285,7 +306,7 @@ def test_update_record_status_marks_pending_record_paid():
         lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
     )
 
-    record = service.update_record_status(record_id=result.records[0].id, status=" paid ")
+    record = service.update_record_status(record_id=result.records[0].id, status=" Paid ")
 
     assert record.status == "paid"
     assert session.query(StreamerRevenueShareRecord).one().status == "paid"
