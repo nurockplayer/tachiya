@@ -27,7 +27,7 @@ def build_session():
     return SessionLocal()
 
 
-def build_client(session) -> TestClient:
+def build_client(session, *, raise_server_exceptions: bool = True) -> TestClient:
     app = FastAPI()
     app.include_router(identity_mappings.router)
 
@@ -35,7 +35,7 @@ def build_client(session) -> TestClient:
         yield session
 
     app.dependency_overrides[identity_mappings.get_db] = override_db
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=raise_server_exceptions)
 
 
 def test_create_and_resolve_identity_mapping(monkeypatch):
@@ -413,6 +413,38 @@ def test_resolve_identity_mapping_returns_404_for_missing_mapping(monkeypatch):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "identity mapping not found"
+
+
+def test_resolve_identity_mapping_rejects_blank_provider(monkeypatch):
+    session = build_session()
+    client = build_client(session, raise_server_exceptions=False)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings/resolve",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"provider": " ", "external_subject": "tachigo-user-1"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "provider is required"
+    assert session.query(IdentityMapping).count() == 0
+
+
+def test_resolve_identity_mapping_rejects_blank_external_subject(monkeypatch):
+    session = build_session()
+    client = build_client(session, raise_server_exceptions=False)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/identity-mappings/resolve",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"provider": "tachigo", "external_subject": " "},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "external_subject is required"
+    assert session.query(IdentityMapping).count() == 0
 
 
 def test_unlink_identity_mapping(monkeypatch):

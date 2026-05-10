@@ -144,7 +144,10 @@ def resolve_identity_mapping(
     db: Session = Depends(get_db),
 ):
     service = IdentityMappingService(db)
-    saleor_customer_id = service.resolve_customer_id(provider, external_subject)
+    try:
+        saleor_customer_id = service.resolve_customer_id(provider, external_subject)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if saleor_customer_id is None:
         raise HTTPException(status_code=404, detail="identity mapping not found")
 
