@@ -66,6 +66,14 @@ def ensure_coupon_extension_columns(bind=engine):
         index_name="ix_tachiya_demo_coupons_redemption_token",
         unique=True,
     )
+    for column_name in ["coupon_id", "status", "created_at"]:
+        _ensure_index(
+            bind,
+            inspector,
+            table_name="tachiya_demo_coupons",
+            index_name=f"ix_tachiya_demo_coupons_{column_name}",
+            columns=[column_name],
+        )
 
 
 def ensure_coupon_idempotency_key_column(bind=engine):

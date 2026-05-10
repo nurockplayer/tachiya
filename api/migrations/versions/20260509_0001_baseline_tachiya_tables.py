@@ -34,6 +34,21 @@ def upgrade() -> None:
         sa.UniqueConstraint("redemption_token"),
         sa.UniqueConstraint("voucher_code"),
     )
+    op.create_index(
+        "ix_tachiya_demo_coupons_coupon_id",
+        "tachiya_demo_coupons",
+        ["coupon_id"],
+    )
+    op.create_index(
+        "ix_tachiya_demo_coupons_status",
+        "tachiya_demo_coupons",
+        ["status"],
+    )
+    op.create_index(
+        "ix_tachiya_demo_coupons_created_at",
+        "tachiya_demo_coupons",
+        ["created_at"],
+    )
 
     op.create_table(
         "tachiya_identity_audit_events",
@@ -255,4 +270,7 @@ def downgrade() -> None:
     )
     op.drop_table("tachiya_identity_audit_events")
 
+    op.drop_index("ix_tachiya_demo_coupons_created_at", table_name="tachiya_demo_coupons")
+    op.drop_index("ix_tachiya_demo_coupons_status", table_name="tachiya_demo_coupons")
+    op.drop_index("ix_tachiya_demo_coupons_coupon_id", table_name="tachiya_demo_coupons")
     op.drop_table("tachiya_demo_coupons")

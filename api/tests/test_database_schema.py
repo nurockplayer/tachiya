@@ -36,8 +36,28 @@ def test_ensure_coupon_extension_columns_adds_missing_columns():
     ensure_coupon_extension_columns(engine)
 
     columns = {column["name"] for column in inspect(engine).get_columns("tachiya_demo_coupons")}
+    indexes = {index["name"] for index in inspect(engine).get_indexes("tachiya_demo_coupons")}
     assert "idempotency_key" in columns
     assert "redemption_token" in columns
+    assert "ix_tachiya_demo_coupons_coupon_id" in indexes
+    assert "ix_tachiya_demo_coupons_status" in indexes
+    assert "ix_tachiya_demo_coupons_created_at" in indexes
+
+
+def test_metadata_includes_coupon_admin_lookup_indexes():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    indexes = {
+        index["name"]: index
+        for index in inspect(engine).get_indexes("tachiya_demo_coupons")
+    }
+
+    assert "ix_tachiya_demo_coupons_coupon_id" in indexes
+    assert "ix_tachiya_demo_coupons_status" in indexes
+    assert "ix_tachiya_demo_coupons_created_at" in indexes
 
 
 def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
