@@ -43,3 +43,16 @@ test("develop merge issue closer only closes explicit same-repo references", () 
   assert.match(workflow, /state_reason: 'completed'/);
   assert.doesNotMatch(workflow, /pull_request_target/);
 });
+
+test("API CI keeps lint, timeout, and compile-scope hardening", () => {
+  const workflow = readWorkflow("api-ci.yml");
+
+  assert.match(workflow, /api-lint:/);
+  assert.match(workflow, /name: API lint/);
+  assert.match(workflow, /uv run --group dev ruff check \./);
+  assert.match(workflow, /timeout-minutes: 5/);
+  assert.match(workflow, /timeout-minutes: 10/);
+  assert.match(workflow, /timeout-minutes: 20/);
+  assert.match(workflow, /python -m compileall config\.py database\.py main\.py security\.py models routers services tests/);
+  assert.doesNotMatch(workflow, /python -m compileall \./);
+});
