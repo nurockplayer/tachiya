@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from config import Settings, get_settings
 from database import get_db
 from models.coupon import UserCoupon
 from models.coupon_redemption_audit import CouponRedemptionAuditEvent
@@ -46,7 +47,11 @@ class RedemptionAuditEventsResponse(BaseModel):
     response_model=RedeemResponse,
     dependencies=[Depends(verify_internal_secret)],
 )
-def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
+def redeem_coupon(
+    req: RedeemRequest,
+    settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
+):
     if req.coupon_id not in VALID_COUPON_IDS:
         _record_redemption_audit(
             db,
@@ -104,7 +109,7 @@ def redeem_coupon(req: RedeemRequest, db: Session = Depends(get_db)):
                 redemption_token=existing.redemption_token,
             )
 
-    code = f"DEMO-{uuid.uuid4().hex[:6].upper()}"
+    code = f"{settings.voucher_code_prefix}-{uuid.uuid4().hex[:6].upper()}"
     redemption_token = str(uuid.uuid4())
     try:
         result = create_voucher(req.coupon_id, code)
