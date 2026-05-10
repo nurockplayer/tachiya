@@ -212,10 +212,14 @@ def unlink_identity_mapping(
     reason: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
+    normalized_actor = actor.strip()
+    if not normalized_actor:
+        raise HTTPException(status_code=422, detail="actor is required")
+
     try:
         mapping = IdentityMappingService(db).unlink_identity(
             mapping_id,
-            actor=actor,
+            actor=normalized_actor,
             reason=reason,
         )
     except ValueError as exc:

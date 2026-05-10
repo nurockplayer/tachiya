@@ -925,7 +925,7 @@ Query：
 
 Query：
 
-- `actor`：預設 `system`。
+- `actor`：預設 `system`；會 trim，trim 後為空回 `422 actor is required`。
 - `reason`：可選。
 
 用途：解除外部身份連結並留下 audit trail。
