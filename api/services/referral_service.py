@@ -1,14 +1,16 @@
+import uuid
+
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from models.points_ledger import PointsLedger
 from models.referral import ReferralRelationship, ReferralReward
-from services.points_service import PointsService
 
 
 class ReferralService:
     def __init__(self, db: Session, reward_rate: float = 0.05):
         self.db = db
         self.reward_rate = reward_rate
-        self.points_service = PointsService(db)
 
     async def process_referral_reward(
         self,
@@ -49,9 +51,11 @@ class ReferralService:
         if reward_points <= 0:
             return None
 
-        ledger_entry = await self.points_service.credit(
+        ledger_entry = PointsLedger(
+            id=str(uuid.uuid4()),
             user_id=relationship.referrer_id,
             amount=reward_points,
+            entry_type="credit",
             reference_id=f"referral:{normalized_order_id}",
             source_type="referral",
         )
@@ -64,8 +68,27 @@ class ReferralService:
             reward_points=reward_points,
             ledger_entry_id=ledger_entry.id,
         )
+        self.db.add(ledger_entry)
         self.db.add(reward)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            existing_order_reward = (
+                self.db.query(ReferralReward)
+                .filter(ReferralReward.order_id == normalized_order_id)
+                .first()
+            )
+            if existing_order_reward:
+                return existing_order_reward
+            existing_referee_reward = (
+                self.db.query(ReferralReward)
+                .filter(ReferralReward.referee_id == normalized_referee_id)
+                .first()
+            )
+            if existing_referee_reward:
+                return None
+            raise
         self.db.refresh(reward)
         return reward
 
