@@ -153,4 +153,6 @@ def _json_payload(response: httpx.Response):
 def _required_int(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError("value must be an integer")
+    if value < 0:
+        raise ValueError("value must be non-negative")
     return value
