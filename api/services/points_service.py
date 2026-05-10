@@ -9,8 +9,15 @@ from models.points_ledger import PointsLedger
 
 @dataclass
 class PointsBucket:
+    entry: PointsLedger
     amount: int
     expires_at: datetime | None
+
+
+@dataclass(frozen=True)
+class ExpiredCreditExposure:
+    entry: PointsLedger
+    remaining_amount: int
 
 
 class PointsService:
@@ -93,42 +100,7 @@ class PointsService:
 
     async def get_balance(self, user_id: str, *, at: datetime | None = None) -> int:
         effective_at = self._normalize_datetime(at or datetime.now(UTC))
-        entries = (
-            self.db.query(PointsLedger)
-            .filter(
-                PointsLedger.user_id == user_id,
-                PointsLedger.created_at <= effective_at,
-            )
-            .order_by(PointsLedger.created_at.asc(), PointsLedger.id.asc())
-            .all()
-        )
-        buckets: list[PointsBucket] = []
-        debit_deficit = 0
-
-        for entry in entries:
-            if entry.amount > 0:
-                buckets.append(
-                    PointsBucket(
-                        entry.amount,
-                        self._normalize_optional_datetime(entry.expires_at),
-                    ),
-                )
-                continue
-
-            if entry.amount >= 0:
-                continue
-
-            debit_remaining = abs(entry.amount)
-            entry_created_at = self._normalize_datetime(entry.created_at)
-            for bucket in self._spendable_buckets(buckets, at=entry_created_at):
-                bucket_amount = bucket.amount
-                spent = min(bucket_amount, debit_remaining)
-                bucket.amount = bucket_amount - spent
-                debit_remaining -= spent
-                if debit_remaining == 0:
-                    break
-
-            debit_deficit += debit_remaining
+        buckets, debit_deficit = self._build_credit_buckets(user_id, at=effective_at)
 
         active_balance = sum(
             bucket.amount
@@ -139,6 +111,33 @@ class PointsService:
             )
         )
         return int(active_balance - debit_deficit)
+
+    def list_expired_credit_exposures(
+        self,
+        user_id: str,
+        *,
+        at: datetime | None = None,
+        limit: int = 20,
+    ) -> list[ExpiredCreditExposure]:
+        normalized_user_id = self._validate_required(user_id, "user_id is required")
+        effective_at = self._normalize_datetime(at or datetime.now(UTC))
+        buckets, _debit_deficit = self._build_credit_buckets(
+            normalized_user_id,
+            at=effective_at,
+        )
+        exposures = [
+            ExpiredCreditExposure(entry=bucket.entry, remaining_amount=bucket.amount)
+            for bucket in buckets
+            if bucket.amount > 0 and self._is_expired(bucket.expires_at, effective_at)
+        ]
+        exposures.sort(
+            key=lambda exposure: (
+                exposure.entry.expires_at or datetime.max,
+                exposure.entry.created_at,
+                exposure.entry.id,
+            ),
+        )
+        return exposures[:limit]
 
     async def list_entries(self, user_id: str, limit: int = 20) -> list[PointsLedger]:
         return (
@@ -296,6 +295,51 @@ class PointsService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    def _build_credit_buckets(
+        self,
+        user_id: str,
+        *,
+        at: datetime,
+    ) -> tuple[list[PointsBucket], int]:
+        entries = (
+            self.db.query(PointsLedger)
+            .filter(
+                PointsLedger.user_id == user_id,
+                PointsLedger.created_at <= at,
+            )
+            .order_by(PointsLedger.created_at.asc(), PointsLedger.id.asc())
+            .all()
+        )
+        buckets: list[PointsBucket] = []
+        debit_deficit = 0
+
+        for entry in entries:
+            if entry.amount > 0:
+                buckets.append(
+                    PointsBucket(
+                        entry=entry,
+                        amount=entry.amount,
+                        expires_at=self._normalize_optional_datetime(entry.expires_at),
+                    ),
+                )
+                continue
+
+            if entry.amount >= 0:
+                continue
+
+            debit_remaining = abs(entry.amount)
+            entry_created_at = self._normalize_datetime(entry.created_at)
+            for bucket in self._spendable_buckets(buckets, at=entry_created_at):
+                spent = min(bucket.amount, debit_remaining)
+                bucket.amount -= spent
+                debit_remaining -= spent
+                if debit_remaining == 0:
+                    break
+
+            debit_deficit += debit_remaining
+
+        return buckets, debit_deficit
 
     @classmethod
     def _spendable_buckets(

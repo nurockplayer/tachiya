@@ -176,6 +176,40 @@ Response：
 - 結果依 `created_at desc`、`id desc` 穩定排序。
 - 此 endpoint 只查詢 ledger，不建立或修改點數。
 
+### `GET /points/ledger/expired-credits`
+
+用途：受信任營運、客服或對帳工具查詢單一使用者已過期但尚未消耗完的 credit exposure。
+
+Query：
+
+- `user_id`：Saleor customer id，必填。
+- `limit`：預設 `20`，範圍 `1..100`。
+
+Response：
+
+```json
+{
+  "entries": [
+    {
+      "id": "uuid",
+      "user_id": "saleor-user-1",
+      "amount": 120,
+      "remaining_amount": 70,
+      "source_type": "tachigo",
+      "reference_id": "tachigo:redemption-1",
+      "expires_at": "2026-01-10T00:00:00",
+      "created_at": "2026-01-01T00:00:00"
+    }
+  ]
+}
+```
+
+規則：
+
+- 只回傳 `expires_at <= now` 且 `remaining_amount > 0` 的 credit entries。
+- `remaining_amount` 使用與 `/points/balance` 相同的 FIFO 扣帳政策計算。
+- 此 endpoint 只提供 exposure 查詢，不建立 expiration adjustment ledger。
+
 ### `POST /points/transactions`
 
 用途：受信任營運或系統服務建立 manual points credit/debit。

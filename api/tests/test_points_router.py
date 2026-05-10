@@ -619,6 +619,58 @@ def test_points_ledger_admin_entries_filter_across_users(monkeypatch):
     }
 
 
+def test_points_ledger_expired_credits_returns_remaining_exposure(monkeypatch):
+    session = build_session()
+    session.add_all(
+        [
+            PointsLedger(
+                id="expired-credit",
+                user_id="user-1",
+                amount=45,
+                entry_type="credit",
+                source_type="tachigo",
+                reference_id="tachigo:expired",
+                expires_at=datetime(2000, 1, 1, 0, 0, 0),
+                created_at=datetime(1999, 12, 1, 0, 0, 0),
+            ),
+            PointsLedger(
+                id="checkout-debit",
+                user_id="user-1",
+                amount=-10,
+                entry_type="debit",
+                source_type="checkout",
+                reference_id="checkout-1",
+                created_at=datetime(1999, 12, 15, 0, 0, 0),
+            ),
+        ],
+    )
+    session.commit()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.get(
+        "/points/ledger/expired-credits",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        params={"user_id": "user-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "entries": [
+            {
+                "id": "expired-credit",
+                "user_id": "user-1",
+                "amount": 45,
+                "remaining_amount": 35,
+                "source_type": "tachigo",
+                "reference_id": "tachigo:expired",
+                "expires_at": "2000-01-01T00:00:00",
+                "created_at": "1999-12-01T00:00:00",
+            },
+        ],
+    }
+
+
 def test_points_ledger_admin_entries_rejects_invalid_filter(monkeypatch):
     session = build_session()
     client = build_client(session)
