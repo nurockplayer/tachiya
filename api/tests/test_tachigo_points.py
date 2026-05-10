@@ -184,6 +184,40 @@ async def test_get_user_points_raises_for_upstream_error(monkeypatch):
             await get_user_points("demo@tachigo.io", settings, client=client)
 
 
+@pytest.mark.anyio
+async def test_get_user_points_raises_for_invalid_json_payload(monkeypatch):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, content=b"not-json"),
+        ),
+    ) as client:
+        with pytest.raises(
+            TachigoUpstreamError,
+            match="tachigo upstream returned invalid points payload",
+        ):
+            await get_user_points("demo@tachigo.io", settings, client=client)
+
+
+@pytest.mark.anyio
+async def test_get_identity_points_raises_for_invalid_json_payload(monkeypatch):
+    settings = Settings(tachigo_api_url="http://tachigo.local")
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, content=b"not-json"),
+        ),
+    ) as client:
+        with pytest.raises(
+            TachigoUpstreamError,
+            match="tachigo upstream returned invalid points payload",
+        ):
+            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+
+
 def build_session():
     engine = create_engine(
         "sqlite:///:memory:",
