@@ -85,6 +85,7 @@ class StreamerProductAssignmentService:
         created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[StreamerProductAssignment]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_streamer_slug = self._normalize_optional_filter(
             streamer_slug,
             "streamer_slug is required",
@@ -116,7 +117,7 @@ class StreamerProductAssignmentService:
                 StreamerProductAssignment.created_at.desc(),
                 StreamerProductAssignment.id.asc(),
             )
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -152,3 +153,9 @@ class StreamerProductAssignmentService:
         if value.tzinfo is None:
             return value
         return value.astimezone(UTC).replace(tzinfo=None)
+
+    @staticmethod
+    def _validate_read_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return limit

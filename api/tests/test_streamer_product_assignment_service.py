@@ -203,6 +203,14 @@ def test_list_assignments_rejects_blank_filters(field, kwargs):
         StreamerProductAssignmentService(session).list_assignments(**kwargs)
 
 
+@pytest.mark.parametrize("limit", [0, 101, True])
+def test_list_assignments_rejects_invalid_limit(limit):
+    session = build_session()
+
+    with pytest.raises(ValueError, match="limit must be between 1 and 100"):
+        StreamerProductAssignmentService(session).list_assignments(limit=limit)
+
+
 def test_remove_product_assignment():
     session = build_session()
     create_streamer(session)
