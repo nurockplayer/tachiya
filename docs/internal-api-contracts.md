@@ -318,6 +318,16 @@ Request：
 
 找不到時回傳 `404 streamer product assignment not found`。
 
+### `DELETE /streamers/product-assignments/{saleor_product_id}`
+
+用途：解除 Saleor product id 與 streamer 的歸屬關聯。成功時回傳被刪除的 assignment 摘要，格式與 `GET /streamers/product-assignments/{saleor_product_id}` 相同。
+
+規則：
+
+- `saleor_product_id` 會 trim。
+- 找不到 assignment 時回傳 `404 streamer product assignment not found`。
+- 刪除後，後續 revenue share preview / record 會將該 product id 視為 unassigned。
+
 ### `GET /streamers/{slug}/catalog`
 
 用途：Storefront 依 streamer slug 取得可展示的實況主 catalog 摘要，再用回傳的 Saleor product ids 向 Saleor 查商品詳情。

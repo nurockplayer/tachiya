@@ -340,6 +340,51 @@ def test_get_streamer_product_assignment_returns_404(monkeypatch):
     assert response.json()["detail"] == "streamer product assignment not found"
 
 
+def test_delete_streamer_product_assignment(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    assign_response = client.post(
+        "/streamers/product-assignments",
+        headers=headers,
+        json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
+    )
+
+    delete_response = client.delete("/streamers/product-assignments/product-1", headers=headers)
+    get_response = client.get("/streamers/product-assignments/product-1", headers=headers)
+    preview_response = client.post(
+        "/streamers/revenue-shares/preview",
+        headers=headers,
+        json={
+            "order_id": "order-1",
+            "lines": [{"saleor_product_id": "product-1", "gross_amount": 1200}],
+        },
+    )
+
+    assert assign_response.status_code == 200
+    assert delete_response.status_code == 200
+    assert delete_response.json()["id"] == assign_response.json()["id"]
+    assert delete_response.json()["saleor_product_id"] == "product-1"
+    assert get_response.status_code == 404
+    assert preview_response.json()["unassigned_product_ids"] == ["product-1"]
+
+
+def test_delete_streamer_product_assignment_returns_404(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.delete(
+        "/streamers/product-assignments/missing-product",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "streamer product assignment not found"
+
+
 def test_get_streamer_catalog(monkeypatch):
     session = build_session()
     client = build_client(session)

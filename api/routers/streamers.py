@@ -378,6 +378,22 @@ def get_streamer_product_assignment(
     return _streamer_product_assignment_response(assignment)
 
 
+@router.delete(
+    "/product-assignments/{saleor_product_id}",
+    response_model=StreamerProductAssignmentResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def delete_streamer_product_assignment(
+    saleor_product_id: str = Path(..., min_length=1),
+    db: Session = Depends(get_db),
+):
+    assignment = StreamerProductAssignmentService(db).remove_product(saleor_product_id)
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="streamer product assignment not found")
+
+    return _streamer_product_assignment_response(assignment)
+
+
 @router.get(
     "/{slug}/catalog",
     response_model=StreamerCatalogResponse,
