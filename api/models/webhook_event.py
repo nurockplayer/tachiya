@@ -17,4 +17,4 @@ class WebhookEvent(Base):
     event_id = Column(String, nullable=False, unique=True, index=True)
     event_type = Column(String, nullable=False, index=True)
     occurred_at = Column(DateTime, nullable=False)
-    received_at = Column(DateTime, default=utcnow, nullable=False)
+    received_at = Column(DateTime, default=utcnow, nullable=False, index=True)

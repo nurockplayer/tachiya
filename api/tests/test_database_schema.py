@@ -160,6 +160,22 @@ def test_metadata_includes_points_ledger_admin_lookup_indexes():
     assert "ix_tachiya_points_ledger_created_at" in indexes
 
 
+def test_metadata_includes_webhook_event_lookup_indexes():
+    engine = create_engine("sqlite:///:memory:")
+    import_models()
+
+    Base.metadata.create_all(bind=engine)
+
+    indexes = {
+        index["name"]: index
+        for index in inspect(engine).get_indexes("tachiya_webhook_events")
+    }
+
+    assert "ix_tachiya_webhook_events_event_id" in indexes
+    assert "ix_tachiya_webhook_events_event_type" in indexes
+    assert "ix_tachiya_webhook_events_received_at" in indexes
+
+
 def test_metadata_includes_streamer_profiles_table():
     engine = create_engine("sqlite:///:memory:")
     import_models()
