@@ -121,6 +121,7 @@ class PointsService:
         limit: int = 20,
     ) -> list[ExpiredCreditExposure]:
         normalized_user_id = self._validate_required(user_id, "user_id is required")
+        normalized_limit = self._validate_read_limit(limit)
         effective_at = self._normalize_datetime(at or datetime.now(UTC))
         buckets, _debit_deficit = self._build_credit_buckets(
             normalized_user_id,
@@ -138,15 +139,16 @@ class PointsService:
                 exposure.entry.id,
             ),
         )
-        return exposures[:limit]
+        return exposures[:normalized_limit]
 
     async def list_entries(self, user_id: str, limit: int = 20) -> list[PointsLedger]:
         normalized_user_id = self._validate_required(user_id, "user_id is required")
+        normalized_limit = self._validate_read_limit(limit)
         return (
             self.db.query(PointsLedger)
             .filter(PointsLedger.user_id == normalized_user_id)
             .order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -161,6 +163,7 @@ class PointsService:
         created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[PointsLedger]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_user_id = self._normalize_optional_filter(user_id, "user_id is required")
         normalized_entry_type = (
             self._validate_entry_type(entry_type)
@@ -201,7 +204,7 @@ class PointsService:
 
         return (
             query.order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -311,6 +314,12 @@ class PointsService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @staticmethod
+    def _validate_read_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return limit
 
     def _build_credit_buckets(
         self,
