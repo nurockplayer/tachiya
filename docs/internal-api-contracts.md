@@ -234,6 +234,30 @@ Request：
 
 找不到時回傳 `404 streamer profile not found`。
 
+### `PATCH /streamers/{slug}`
+
+用途：受信任後台更新 streamer profile 的可變欄位；`slug` 不可變。
+
+Request 欄位皆 optional，但至少需提供一個欄位：
+
+```json
+{
+  "display_name": "Streamer One",
+  "saleor_collection_id": "collection-1",
+  "commission_bps": 1250,
+  "active": true
+}
+```
+
+規則：
+
+- path `slug` 會 trim 並轉小寫。
+- `display_name` 若提供會 trim，且不可為空。
+- `saleor_collection_id` 若提供會 trim，空白或 `null` 視為清空。
+- `commission_bps` 若提供，範圍為 `0..10000`。
+- profile 不存在回傳 `404 streamer profile not found`。
+- 重複 Saleor collection 回傳 `409 streamer profile already exists`。
+
 ### `GET /streamers`
 
 用途：Storefront 實況主探索入口使用，列出可展示的 active streamer profiles。

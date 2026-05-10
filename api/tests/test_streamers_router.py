@@ -129,6 +129,68 @@ def test_get_streamer_profile_returns_404(monkeypatch):
     assert response.json()["detail"] == "streamer profile not found"
 
 
+def test_update_streamer_profile(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    create_response = client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One", "saleor_collection_id": "collection-1"},
+    )
+
+    response = client.patch(
+        "/streamers/Streamer-One",
+        headers=headers,
+        json={
+            "display_name": " Streamer Uno ",
+            "saleor_collection_id": " ",
+            "commission_bps": 1250,
+            "active": False,
+        },
+    )
+
+    assert create_response.status_code == 200
+    assert response.status_code == 200
+    assert response.json()["id"] == create_response.json()["id"]
+    assert response.json()["slug"] == "streamer-one"
+    assert response.json()["display_name"] == "Streamer Uno"
+    assert response.json()["saleor_collection_id"] is None
+    assert response.json()["commission_bps"] == 1250
+    assert response.json()["active"] is False
+
+
+def test_update_streamer_profile_rejects_empty_payload(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.patch(
+        "/streamers/streamer-one",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "at least one field is required"
+
+
+def test_update_streamer_profile_returns_404(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+
+    response = client.patch(
+        "/streamers/missing-streamer",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"display_name": "Missing"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "streamer profile not found"
+
+
 def test_list_streamer_profiles(monkeypatch):
     session = build_session()
     client = build_client(session)

@@ -56,6 +56,62 @@ def test_get_by_slug_normalizes_lookup():
     assert profile.slug == "streamer-one"
 
 
+def test_update_profile_updates_mutable_fields():
+    session = build_session()
+    service = StreamerService(session)
+    service.create_profile(
+        slug="streamer-one",
+        display_name="One",
+        saleor_collection_id="collection-1",
+        commission_bps=1000,
+    )
+
+    profile = service.update_profile(
+        " Streamer-One ",
+        display_name=" Streamer Uno ",
+        saleor_collection_id=" collection-2 ",
+        commission_bps=1250,
+        active=False,
+    )
+
+    assert profile.slug == "streamer-one"
+    assert profile.display_name == "Streamer Uno"
+    assert profile.saleor_collection_id == "collection-2"
+    assert profile.commission_bps == 1250
+    assert profile.active is False
+
+
+def test_update_profile_can_clear_saleor_collection_id():
+    session = build_session()
+    service = StreamerService(session)
+    service.create_profile(
+        slug="streamer-one",
+        display_name="One",
+        saleor_collection_id="collection-1",
+    )
+
+    profile = service.update_profile("streamer-one", saleor_collection_id=" ")
+
+    assert profile.saleor_collection_id is None
+
+
+def test_update_profile_rejects_missing_profile():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="streamer profile not found"):
+        StreamerService(session).update_profile("missing-streamer", display_name="Missing")
+
+
+def test_update_profile_rejects_duplicate_saleor_collection_id():
+    session = build_session()
+    service = StreamerService(session)
+    service.create_profile(slug="streamer-one", display_name="One", saleor_collection_id="collection-1")
+    service.create_profile(slug="streamer-two", display_name="Two", saleor_collection_id="collection-2")
+
+    with pytest.raises(ValueError, match="streamer profile already exists"):
+        service.update_profile("streamer-two", saleor_collection_id="collection-1")
+
+
 def test_list_active_profiles_returns_active_profiles_in_display_order():
     session = build_session()
     service = StreamerService(session)
