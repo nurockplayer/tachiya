@@ -494,7 +494,11 @@ def get_streamer_product_assignment(
     saleor_product_id: str = Path(..., min_length=1),
     db: Session = Depends(get_db),
 ):
-    assignment = StreamerProductAssignmentService(db).get_by_product_id(saleor_product_id)
+    normalized_product_id = _normalize_path_param(
+        saleor_product_id,
+        "saleor_product_id is required",
+    )
+    assignment = StreamerProductAssignmentService(db).get_by_product_id(normalized_product_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="streamer product assignment not found")
 
@@ -510,7 +514,11 @@ def delete_streamer_product_assignment(
     saleor_product_id: str = Path(..., min_length=1),
     db: Session = Depends(get_db),
 ):
-    assignment = StreamerProductAssignmentService(db).remove_product(saleor_product_id)
+    normalized_product_id = _normalize_path_param(
+        saleor_product_id,
+        "saleor_product_id is required",
+    )
+    assignment = StreamerProductAssignmentService(db).remove_product(normalized_product_id)
     if assignment is None:
         raise HTTPException(status_code=404, detail="streamer product assignment not found")
 
@@ -526,7 +534,8 @@ def get_streamer_catalog(
     slug: str = Path(..., min_length=1),
     db: Session = Depends(get_db),
 ):
-    profile = StreamerService(db).get_by_slug(slug)
+    normalized_slug = _normalize_path_param(slug, "slug is required")
+    profile = StreamerService(db).get_by_slug(normalized_slug)
     if profile is None or not profile.active:
         raise HTTPException(status_code=404, detail="streamer catalog not found")
 
@@ -560,8 +569,9 @@ def update_streamer_profile(
         field_name: getattr(req, field_name)
         for field_name in req.model_fields_set
     }
+    normalized_slug = _normalize_path_param(slug, "slug is required")
     try:
-        profile = StreamerService(db).update_profile(slug, **update_kwargs)
+        profile = StreamerService(db).update_profile(normalized_slug, **update_kwargs)
     except ValueError as exc:
         detail = str(exc)
         if detail == "streamer profile not found":
@@ -580,11 +590,19 @@ def get_streamer_profile(
     slug: str = Path(..., min_length=1),
     db: Session = Depends(get_db),
 ):
-    profile = StreamerService(db).get_by_slug(slug)
+    normalized_slug = _normalize_path_param(slug, "slug is required")
+    profile = StreamerService(db).get_by_slug(normalized_slug)
     if profile is None:
         raise HTTPException(status_code=404, detail="streamer profile not found")
 
     return _streamer_profile_response(profile)
+
+
+def _normalize_path_param(value: str, message: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail=message)
+    return normalized
 
 
 def _streamer_profile_response(profile) -> StreamerProfileResponse:

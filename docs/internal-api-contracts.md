@@ -427,7 +427,7 @@ Request：
 
 ### `GET /streamers/{slug}`
 
-用途：依 streamer slug 讀取 profile。`slug` 查詢時會 trim 並轉小寫。
+用途：依 streamer slug 讀取 profile。`slug` 查詢時會 trim 並轉小寫，trim 後為空回 `422 slug is required`。
 
 找不到時回傳 `404 streamer profile not found`。
 
@@ -448,7 +448,7 @@ Request 欄位皆 optional，但至少需提供一個欄位：
 
 規則：
 
-- path `slug` 會 trim 並轉小寫。
+- path `slug` 會 trim 並轉小寫，trim 後為空回 `422 slug is required`。
 - `display_name` 若提供會 trim，且不可為空。
 - `saleor_collection_id` 若提供會 trim，空白或 `null` 視為清空。
 - `commission_bps` 若提供，範圍為 `0..10000`。
@@ -590,6 +590,8 @@ Response：
 
 用途：依 Saleor product id 查詢目前 streamer assignment。
 
+- `saleor_product_id` 會 trim，trim 後為空回 `422 saleor_product_id is required`。
+
 找不到時回傳 `404 streamer product assignment not found`。
 
 ### `DELETE /streamers/product-assignments/{saleor_product_id}`
@@ -598,7 +600,7 @@ Response：
 
 規則：
 
-- `saleor_product_id` 會 trim。
+- `saleor_product_id` 會 trim，trim 後為空回 `422 saleor_product_id is required`。
 - 找不到 assignment 時回傳 `404 streamer product assignment not found`。
 - 刪除後，後續 revenue share preview / record 會將該 product id 視為 unassigned。
 
@@ -621,7 +623,7 @@ Response：
 
 規則：
 
-- `slug` 查詢時會 trim 並轉小寫。
+- `slug` 查詢時會 trim 並轉小寫，trim 後為空回 `422 slug is required`。
 - 只回傳 active streamer 的 catalog。
 - streamer 不存在或 inactive 時回傳 `404 streamer catalog not found`。
 - `saleor_product_ids` 依 product assignment 建立時間排序。
