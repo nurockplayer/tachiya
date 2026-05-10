@@ -183,7 +183,19 @@ def redeem_coupon(
             reason=None,
         ),
     )
-    db.commit()
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        _record_redemption_audit(
+            db,
+            coupon_id=coupon_id,
+            idempotency_key=idempotency_key,
+            redemption_token=None,
+            status="failed",
+            reason=f"coupon persistence failed: {exc}",
+        )
+        raise HTTPException(status_code=500, detail="coupon persistence failed") from exc
 
     return RedeemResponse(voucher_code=result["code"], redemption_token=redemption_token)
 
