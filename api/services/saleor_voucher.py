@@ -104,8 +104,7 @@ def create_voucher(coupon_id: str, code: str) -> dict:
     errors = result.get("errors") or []
     if errors:
         raise RuntimeError(f"voucherCreate errors: {errors}")
-    voucher_id = result["voucher"]["id"]
-    voucher_code = result["voucher"]["code"]
+    voucher_id, voucher_code = _require_voucher(result, "voucherCreate missing voucher")
 
     # Step 2: set discount value via channel listing
     payload2 = execute_graphql(
@@ -129,6 +128,7 @@ def create_voucher(coupon_id: str, code: str) -> dict:
     errors2 = result2.get("errors") or []
     if errors2:
         raise RuntimeError(f"voucherChannelListingUpdate errors: {errors2}")
+    _require_voucher(result2, "voucherChannelListingUpdate missing voucher")
 
     return {"voucher_id": voucher_id, "code": voucher_code}
 
@@ -147,3 +147,16 @@ def _normalize_required(value: str, message: str) -> str:
     if not normalized:
         raise ValueError(message)
     return normalized
+
+
+def _require_voucher(result: dict, message: str) -> tuple[str, str]:
+    voucher = result.get("voucher")
+    if not isinstance(voucher, dict):
+        raise RuntimeError(message)
+    voucher_id = voucher.get("id")
+    voucher_code = voucher.get("code")
+    if not isinstance(voucher_id, str) or not voucher_id:
+        raise RuntimeError(message)
+    if not isinstance(voucher_code, str) or not voucher_code:
+        raise RuntimeError(message)
+    return voucher_id, voucher_code
