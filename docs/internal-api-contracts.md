@@ -136,7 +136,7 @@ Query：
 
 - 符合 token 且 `status = active` 時回傳單筆 coupon array。
 - 找不到或 coupon 非 active 時回傳空 array。
-- 未提供 `redemption_token` 時回傳 `400 redemption_token is required`。
+- `redemption_token` 會 trim；未提供或 trim 後為空時回傳 `400 redemption_token is required`。
 - 若未來需要營運列表，必須另建受 internal secret 保護的 admin endpoint。
 
 ### `GET /coupons/admin`

@@ -433,6 +433,30 @@ def test_list_coupons_filters_by_redemption_token():
     ]
 
 
+def test_list_coupons_normalizes_redemption_token():
+    session = build_real_session()
+    session.add(
+        UserCoupon(
+            id="matching-coupon",
+            coupon_id="tachiya-95",
+            voucher_code="TACHIYA-ABC123",
+            saleor_voucher_id="saleor-1",
+            redemption_token="token-1",
+            coupon_type="PERCENT_5",
+            tcg_cost=18,
+            status="active",
+            created_at=datetime(2026, 1, 2, 0, 0, 0),
+        ),
+    )
+    session.commit()
+    client = build_client(session)
+
+    response = client.get("/coupons", params={"redemption_token": " token-1 "})
+
+    assert response.status_code == 200
+    assert response.json()[0]["voucher_code"] == "TACHIYA-ABC123"
+
+
 def test_list_coupons_returns_empty_for_unknown_redemption_token():
     fake_db = FakeDB(existing_coupon=None)
     client = build_client(fake_db)
@@ -454,6 +478,16 @@ def test_list_coupons_requires_redemption_token():
     client = build_client(fake_db)
 
     response = client.get("/coupons")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "redemption_token is required"
+
+
+def test_list_coupons_rejects_blank_redemption_token():
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+
+    response = client.get("/coupons", params={"redemption_token": " "})
 
     assert response.status_code == 400
     assert response.json()["detail"] == "redemption_token is required"
