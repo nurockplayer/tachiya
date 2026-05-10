@@ -102,6 +102,12 @@ Query：
 
 - `user_id`：Saleor customer id，必填。
 
+到期政策：
+
+- `balance` 是目前可用餘額，不包含已過期且尚未被消耗的 credit。
+- 扣點依 ledger 時序計算，並以 FIFO 優先消耗較早到期的 credit；已在到期前消耗的 credit 不會在到期後被重複扣除。
+- `expires_at = null` 的 credit 不會自動過期。
+
 Response：
 
 ```json
@@ -129,6 +135,8 @@ Response entry 欄位：
 - `reference_id`
 - `expires_at`
 - `created_at`
+
+`GET /points/ledger` 回傳原始 ledger entries；到期後不會改寫歷史 credit，呼叫端應以 `/points/balance` 作為可用餘額來源。
 
 ### `GET /points/ledger/entries`
 
@@ -191,7 +199,7 @@ Request：
 - `amount` 必須大於 0。
 - `user_id`、`reference_id`、`source_type` 不可為空字串。
 - 同一個使用者、同一個 `reference_id`、同一個 `entry_type` 重送時維持 idempotent。
-- debit 不可讓 balance 變成負數。
+- debit 不可讓目前可用 balance 變成負數；已過期且尚未消耗的 credit 不可被 debit 花用。
 
 ### `POST /points/webhooks/order-rewarded`
 

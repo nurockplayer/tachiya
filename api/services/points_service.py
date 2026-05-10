@@ -1,10 +1,16 @@
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from models.points_ledger import PointsLedger
+
+
+@dataclass
+class PointsBucket:
+    amount: int
+    expires_at: datetime | None
 
 
 class PointsService:
@@ -85,13 +91,54 @@ class PointsService:
             expires_at=expires_at,
         )
 
-    async def get_balance(self, user_id: str) -> int:
-        balance = (
-            self.db.query(func.coalesce(func.sum(PointsLedger.amount), 0))
-            .filter(PointsLedger.user_id == user_id)
-            .scalar()
+    async def get_balance(self, user_id: str, *, at: datetime | None = None) -> int:
+        effective_at = self._normalize_datetime(at or datetime.now(UTC))
+        entries = (
+            self.db.query(PointsLedger)
+            .filter(
+                PointsLedger.user_id == user_id,
+                PointsLedger.created_at <= effective_at,
+            )
+            .order_by(PointsLedger.created_at.asc(), PointsLedger.id.asc())
+            .all()
         )
-        return int(balance or 0)
+        buckets: list[PointsBucket] = []
+        debit_deficit = 0
+
+        for entry in entries:
+            if entry.amount > 0:
+                buckets.append(
+                    PointsBucket(
+                        entry.amount,
+                        self._normalize_optional_datetime(entry.expires_at),
+                    ),
+                )
+                continue
+
+            if entry.amount >= 0:
+                continue
+
+            debit_remaining = abs(entry.amount)
+            entry_created_at = self._normalize_datetime(entry.created_at)
+            for bucket in self._spendable_buckets(buckets, at=entry_created_at):
+                bucket_amount = bucket.amount
+                spent = min(bucket_amount, debit_remaining)
+                bucket.amount = bucket_amount - spent
+                debit_remaining -= spent
+                if debit_remaining == 0:
+                    break
+
+            debit_deficit += debit_remaining
+
+        active_balance = sum(
+            bucket.amount
+            for bucket in buckets
+            if not self._is_expired(
+                bucket.expires_at,
+                effective_at,
+            )
+        )
+        return int(active_balance - debit_deficit)
 
     async def list_entries(self, user_id: str, limit: int = 20) -> list[PointsLedger]:
         return (
@@ -249,3 +296,49 @@ class PointsService:
         if not normalized:
             raise ValueError(message)
         return normalized
+
+    @classmethod
+    def _spendable_buckets(
+        cls,
+        buckets: list[PointsBucket],
+        *,
+        at: datetime,
+    ) -> list[PointsBucket]:
+        active_buckets = [
+            (index, bucket)
+            for index, bucket in enumerate(buckets)
+            if bucket.amount > 0
+            and not cls._is_expired(
+                bucket.expires_at,
+                at,
+            )
+        ]
+        active_buckets.sort(
+            key=lambda indexed_bucket: cls._expiration_sort_key(
+                indexed_bucket[1].expires_at,
+                indexed_bucket[0],
+            ),
+        )
+        return [bucket for _, bucket in active_buckets]
+
+    @staticmethod
+    def _expiration_sort_key(expires_at: datetime | None, index: int):
+        return (expires_at is None, expires_at or datetime.max, index)
+
+    @staticmethod
+    def _is_expired(expires_at: datetime | None, at: datetime) -> bool:
+        return expires_at is not None and expires_at <= at
+
+    @classmethod
+    def _normalize_optional_datetime(cls, value) -> datetime | None:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return cls._normalize_datetime(value)
+        return value
+
+    @staticmethod
+    def _normalize_datetime(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(UTC).replace(tzinfo=None)
