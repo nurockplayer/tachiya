@@ -144,12 +144,13 @@ async def order_rewarded_webhook(
     db: Session = Depends(get_db),
 ):
     _reject_replayed_webhook_event(db, webhook)
+    normalized_order_id = _normalize_required_query(req.order_id, "order_id is required")
     service = PointsService(db)
     try:
         entry = await service.credit(
             user_id=req.user_id,
             amount=req.reward_points,
-            reference_id=f"order-reward:{req.order_id}",
+            reference_id=f"order-reward:{normalized_order_id}",
             source_type="order-reward",
         )
     except ValueError as exc:
