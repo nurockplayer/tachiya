@@ -91,8 +91,9 @@ async def get_points_balance(
     user_id: str = Query(..., min_length=1),
     db: Session = Depends(get_db),
 ):
-    balance = await PointsService(db).get_balance(user_id)
-    return PointsBalanceResponse(user_id=user_id, balance=balance)
+    normalized_user_id = _normalize_required_query(user_id, "user_id is required")
+    balance = await PointsService(db).get_balance(normalized_user_id)
+    return PointsBalanceResponse(user_id=normalized_user_id, balance=balance)
 
 
 @router.post(
@@ -240,9 +241,10 @@ async def list_points_ledger(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    entries = await PointsService(db).list_entries(user_id, limit)
+    normalized_user_id = _normalize_required_query(user_id, "user_id is required")
+    entries = await PointsService(db).list_entries(normalized_user_id, limit)
     return PointsLedgerResponse(
-        user_id=user_id,
+        user_id=normalized_user_id,
         entries=[_ledger_entry_response(entry) for entry in entries],
     )
 
@@ -270,6 +272,13 @@ def _ledger_admin_entry_response(entry) -> PointsLedgerAdminEntryResponse:
         expires_at=entry.expires_at,
         created_at=entry.created_at,
     )
+
+
+def _normalize_required_query(value: str, message: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail=message)
+    return normalized
 
 
 def _reject_replayed_webhook_event(
