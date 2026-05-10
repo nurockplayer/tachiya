@@ -42,6 +42,20 @@ class RedemptionAuditEventsResponse(BaseModel):
     events: list[RedemptionAuditEventResponse]
 
 
+class AdminCouponResponse(BaseModel):
+    coupon_id: str
+    voucher_code: str
+    coupon_type: str
+    tcg_cost: int
+    status: str
+    redemption_token: str
+    created_at: datetime
+
+
+class AdminCouponsResponse(BaseModel):
+    coupons: list[AdminCouponResponse]
+
+
 @router.post(
     "/redeem",
     response_model=RedeemResponse,
@@ -150,6 +164,42 @@ def redeem_coupon(
 
 
 @router.get(
+    "/admin",
+    response_model=AdminCouponsResponse,
+    dependencies=[Depends(verify_internal_secret)],
+)
+def list_admin_coupons(
+    status: str | None = Query(default=None),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    normalized_status = _normalize_optional_filter(status, "status is required")
+    query = db.query(UserCoupon)
+    if normalized_status is not None:
+        query = query.filter(UserCoupon.status == normalized_status)
+
+    coupons = (
+        query.order_by(UserCoupon.created_at.desc(), UserCoupon.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return AdminCouponsResponse(
+        coupons=[
+            AdminCouponResponse(
+                coupon_id=coupon.coupon_id,
+                voucher_code=coupon.voucher_code,
+                coupon_type=coupon.coupon_type,
+                tcg_cost=coupon.tcg_cost,
+                status=coupon.status,
+                redemption_token=coupon.redemption_token,
+                created_at=coupon.created_at,
+            )
+            for coupon in coupons
+        ],
+    )
+
+
+@router.get(
     "/redemption-audit-events",
     response_model=RedemptionAuditEventsResponse,
     dependencies=[Depends(verify_internal_secret)],
@@ -230,3 +280,12 @@ def _record_redemption_audit(
         ),
     )
     db.commit()
+
+
+def _normalize_optional_filter(value: str | None, message: str) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        raise HTTPException(status_code=422, detail=message)
+    return normalized
