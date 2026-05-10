@@ -231,3 +231,69 @@ def test_list_records_rejects_blank_filters(field, kwargs):
 
     with pytest.raises(ValueError, match=f"{field} is required"):
         RevenueShareService(session).list_records(**kwargs)
+
+
+def test_update_record_status_marks_pending_record_paid():
+    session = build_session()
+    create_streamer_with_assignment(session)
+    service = RevenueShareService(session)
+    result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+
+    record = service.update_record_status(record_id=result.records[0].id, status=" paid ")
+
+    assert record.status == "paid"
+    assert session.query(StreamerRevenueShareRecord).one().status == "paid"
+
+
+def test_update_record_status_is_idempotent_for_same_terminal_status():
+    session = build_session()
+    create_streamer_with_assignment(session)
+    service = RevenueShareService(session)
+    result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+    first_record = service.update_record_status(record_id=result.records[0].id, status="paid")
+
+    second_record = service.update_record_status(record_id=result.records[0].id, status="paid")
+
+    assert second_record.id == first_record.id
+    assert second_record.status == "paid"
+
+
+def test_update_record_status_rejects_terminal_status_conflict():
+    session = build_session()
+    create_streamer_with_assignment(session)
+    service = RevenueShareService(session)
+    result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+    service.update_record_status(record_id=result.records[0].id, status="paid")
+
+    with pytest.raises(ValueError, match="revenue share status conflict"):
+        service.update_record_status(record_id=result.records[0].id, status="void")
+
+
+@pytest.mark.parametrize("status", ["pending", "settled", " "])
+def test_update_record_status_rejects_invalid_target_status(status):
+    session = build_session()
+    create_streamer_with_assignment(session)
+    service = RevenueShareService(session)
+    result = service.record_order_share(
+        order_id="order-1",
+        lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
+    )
+
+    with pytest.raises(ValueError, match="status must be paid or void"):
+        service.update_record_status(record_id=result.records[0].id, status=status)
+
+
+def test_update_record_status_rejects_missing_record():
+    session = build_session()
+
+    with pytest.raises(ValueError, match="revenue share record not found"):
+        RevenueShareService(session).update_record_status(record_id="missing-record", status="paid")
