@@ -1,0 +1,211 @@
+name: PR Scope Police
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  scope-police:
+    name: Scope police
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Evaluate PR scope
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            if (!pr) {
+              core.setFailed('pull_request payload is required')
+              return
+            }
+
+            const bypassLabels = new Set(['scope-exception'])
+            const labels = (pr.labels || []).map((label) => label.name)
+            const bypassed = labels.some((label) => bypassLabels.has(label))
+            if (bypassed) {
+              core.notice('Scope police bypassed by scope-exception label.')
+              return
+            }
+
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+            const hardMaxChangedFiles = 35
+            const hardMaxDiffLines = 1000
+            const warningDiffLines = 600
+            const commentHeader = '<!-- tachiya-pr-scope-police -->'
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pr.number,
+              per_page: 100,
+            })
+
+            const filenames = files.map((file) => file.filename)
+            const allFilePaths = files.flatMap((file) =>
+              file.status === 'renamed' && file.previous_filename
+                ? [file.filename, file.previous_filename]
+                : [file.filename],
+            )
+            const diffLines = files.reduce((sum, file) => sum + file.additions + file.deletions, 0)
+            const title = pr.title || ''
+            const body = pr.body || ''
+
+            const allowedPrefixes = ['[backend]', '[frontend]', '[discussion]']
+            const titlePrefix = allowedPrefixes.find((prefix) => title.startsWith(prefix))
+            const hasSourceOfTruth = /(?:^|\n)\s*-?\s*Source of truth\s*[：:]/i.test(body)
+            const hasExplicitNonGoals = body.includes('本 PR 明確不做')
+            const dependsOnMatch = body.match(/(?:^|\n)\s*-?\s*Depends on PR\s*[：:]\s*(.+)/i)
+            const dependsOnRaw = dependsOnMatch?.[1]?.trim()
+            const dependsOnNone = dependsOnRaw?.toLowerCase() === 'none'
+            const dependsOnPrMatch = dependsOnRaw?.match(/^#(\d+)$/)
+
+            const isDocsOrMetadataPath = (name) =>
+              name.startsWith('docs/') ||
+              name.startsWith('.github/ISSUE_TEMPLATE/') ||
+              name === '.github/PULL_REQUEST_TEMPLATE.md' ||
+              name === 'AGENTS.md' ||
+              name === 'README.md' ||
+              /^[^/]+\.md$/i.test(name)
+
+            const touches = {
+              api: allFilePaths.some((name) => name.startsWith('api/')),
+              dashboard: allFilePaths.some((name) => name.startsWith('dashboard/')),
+              workflow: allFilePaths.some((name) => name.startsWith('.github/workflows/')),
+              docs: allFilePaths.some(isDocsOrMetadataPath),
+              rootConfig: allFilePaths.some((name) =>
+                ['Makefile', 'docker-compose.yml', '.gitignore', '.gitattributes'].includes(name) ||
+                /^docker-compose\..+\.ya?ml$/.test(name),
+              ),
+            }
+
+            const productSurfaces = Object.entries({
+              api: touches.api,
+              dashboard: touches.dashboard,
+            })
+              .filter(([, touched]) => touched)
+              .map(([name]) => name)
+
+            const failures = []
+            const warnings = []
+
+            if (!titlePrefix) {
+              failures.push(`PR title must start with one of: ${allowedPrefixes.join(', ')}. Current title: "${title}".`)
+            }
+
+            if (!/#\d+/.test(body)) {
+              failures.push('PR body must reference at least one issue or PR number such as `#123`.')
+            }
+
+            if (!hasSourceOfTruth) {
+              failures.push('PR body must include a `Source of truth` line.')
+            }
+
+            if (!dependsOnRaw) {
+              failures.push('PR body must include a `Depends on PR` line with `none` or `#123`.')
+            } else if (!dependsOnNone && !dependsOnPrMatch) {
+              failures.push('`Depends on PR` must be `none` or a single PR number such as `#123`.')
+            }
+
+            if (!hasExplicitNonGoals) {
+              failures.push('PR body must include a `本 PR 明確不做` section.')
+            }
+
+            if (filenames.length > hardMaxChangedFiles) {
+              failures.push(`PR changes ${filenames.length} files, which exceeds the hard limit of ${hardMaxChangedFiles}.`)
+            }
+
+            if (diffLines > hardMaxDiffLines) {
+              failures.push(`PR diff size is ${diffLines} lines (+/-), which exceeds the hard limit of ${hardMaxDiffLines}.`)
+            } else if (diffLines > warningDiffLines) {
+              warnings.push(`PR diff size is ${diffLines} lines (+/-), which exceeds the soft limit of ${warningDiffLines}.`)
+            }
+
+            if (productSurfaces.length > 1) {
+              failures.push(`PR touches multiple product surfaces (${productSurfaces.join(', ')}). Split API and dashboard work.`)
+            }
+
+            if (titlePrefix === '[backend]' && touches.dashboard) {
+              failures.push('[backend] PR must not change dashboard surfaces.')
+            }
+
+            if (titlePrefix === '[frontend]' && touches.api) {
+              failures.push('[frontend] PR must not change API/backend surfaces.')
+            }
+
+            const summaryLines = [
+              commentHeader,
+              '## PR Scope Police',
+              '',
+              failures.length === 0
+                ? '- PASS: scope checks passed.'
+                : '- FAIL: this PR is blocked by policy or scope issues.',
+            ]
+
+            if (failures.length > 0) {
+              summaryLines.push('')
+              summaryLines.push('### Issues')
+              for (const failure of failures) {
+                summaryLines.push(`- ${failure}`)
+              }
+            }
+
+            if (warnings.length > 0) {
+              summaryLines.push('')
+              summaryLines.push('### Warnings')
+              for (const warning of warnings) {
+                summaryLines.push(`- ${warning}`)
+              }
+            }
+
+            summaryLines.push('')
+            summaryLines.push('### Snapshot')
+            summaryLines.push(`- Changed files: ${filenames.length}`)
+            summaryLines.push(`- Diff lines (+/-): ${diffLines}`)
+            summaryLines.push(`- Product surfaces: ${productSurfaces.length > 0 ? productSurfaces.join(', ') : 'none'}`)
+            summaryLines.push(`- Workflow touched: ${touches.workflow ? 'yes' : 'no'}`)
+            summaryLines.push('- Bypass label: `scope-exception`')
+
+            const commentBody = summaryLines.join('\n')
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number: pr.number,
+              per_page: 100,
+            })
+            const previous = comments.find(
+              (comment) =>
+                comment.user?.type === 'Bot' &&
+                typeof comment.body === 'string' &&
+                comment.body.includes(commentHeader),
+            )
+
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: previous.id,
+                body: commentBody,
+              })
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.number,
+                body: commentBody,
+              })
+            }
+
+            if (failures.length > 0) {
+              core.setFailed('PR Scope Police blocked this PR. See sticky comment for details.')
+            } else {
+              core.notice('PR scope police passed.')
+            }
