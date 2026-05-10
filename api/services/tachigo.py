@@ -52,7 +52,7 @@ async def get_user_points(
     if response.status_code != 200:
         raise TachigoUpstreamError(f"tachigo upstream returned {response.status_code}")
 
-    payload = response.json()
+    payload = _json_payload(response)
     try:
         return TachigoPoints(
             email=str(payload["email"]),
@@ -92,7 +92,7 @@ async def get_identity_points(
     if response.status_code != 200:
         raise TachigoUpstreamError(f"tachigo upstream returned {response.status_code}")
 
-    payload = response.json()
+    payload = _json_payload(response)
     try:
         requested_provider = provider.strip().lower()
         requested_external_subject = external_subject.strip()
@@ -121,3 +121,12 @@ def _internal_headers() -> dict[str, str]:
     if not secret:
         raise TachigoUpstreamError("tachigo internal secret is not configured")
     return {"X-Tachiya-Internal-Secret": secret}
+
+
+def _json_payload(response: httpx.Response):
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise TachigoUpstreamError(
+            "tachigo upstream returned invalid points payload",
+        ) from exc
