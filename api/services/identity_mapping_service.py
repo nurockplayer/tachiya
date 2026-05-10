@@ -46,6 +46,36 @@ class IdentityMappingService:
         if existing_provider_mapping is not None:
             raise ValueError("saleor customer already has active provider mapping")
 
+        existing_external_mapping = (
+            self.db.query(IdentityMapping)
+            .filter(
+                IdentityMapping.provider == normalized_provider,
+                IdentityMapping.external_subject == normalized_external_subject,
+            )
+            .first()
+        )
+        if existing_external_mapping is not None:
+            if existing_external_mapping.unlinked_at is None:
+                raise ValueError("identity mapping already exists")
+
+            existing_external_mapping.saleor_customer_id = normalized_saleor_customer_id
+            existing_external_mapping.verified_at = utcnow()
+            existing_external_mapping.unlinked_at = None
+            self._record_audit_event(
+                action="identity.relinked",
+                actor=actor,
+                source=self._identity_source(
+                    normalized_provider,
+                    normalized_external_subject,
+                ),
+                target=self._saleor_target(normalized_saleor_customer_id),
+                reason=reason,
+                commit=False,
+            )
+            self.db.commit()
+            self.db.refresh(existing_external_mapping)
+            return existing_external_mapping
+
         mapping = IdentityMapping(
             saleor_customer_id=normalized_saleor_customer_id,
             provider=normalized_provider,

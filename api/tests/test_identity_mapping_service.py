@@ -103,6 +103,36 @@ def test_unlink_identity_records_audit_event():
     assert events[-1].reason == "user requested unlink"
 
 
+def test_link_identity_relinks_unlinked_external_subject_with_audit_event():
+    session = build_session()
+    service = IdentityMappingService(session)
+    mapping = service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    service.unlink_identity(mapping.id, actor="ops-user-1", reason="user requested unlink")
+
+    relinked = service.link_identity(
+        "saleor-user-2",
+        "tachigo",
+        "tachigo-user-1",
+        actor="ops-user-2",
+        reason="verified new owner",
+    )
+
+    events = session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    assert relinked.id == mapping.id
+    assert relinked.saleor_customer_id == "saleor-user-2"
+    assert relinked.unlinked_at is None
+    assert service.resolve_customer_id("tachigo", "tachigo-user-1") == "saleor-user-2"
+    assert [event.action for event in events] == [
+        "identity.linked",
+        "identity.unlinked",
+        "identity.relinked",
+    ]
+    assert events[-1].actor == "ops-user-2"
+    assert events[-1].source == "tachigo:tachigo-user-1"
+    assert events[-1].target == "saleor:saleor-user-2"
+    assert events[-1].reason == "verified new owner"
+
+
 def test_list_mappings_filters_active_and_unlinked_mappings():
     session = build_session()
     service = IdentityMappingService(session)

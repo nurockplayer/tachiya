@@ -239,6 +239,53 @@ def test_unlink_identity_mapping(monkeypatch):
     assert response.json()["unlinked"] is True
 
 
+def test_create_identity_mapping_relinks_unlinked_mapping(monkeypatch):
+    session = build_session()
+    client = build_client(session)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
+    create_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-1",
+            "provider": "tachigo",
+            "external_subject": "tachigo-user-1",
+        },
+    )
+    client.delete(
+        f"/identity-mappings/{create_response.json()['id']}",
+        headers=headers,
+        params={"actor": "ops-user-1", "reason": "user requested unlink"},
+    )
+
+    relink_response = client.post(
+        "/identity-mappings",
+        headers=headers,
+        json={
+            "saleor_customer_id": "saleor-user-2",
+            "provider": "Tachigo",
+            "external_subject": "tachigo-user-1",
+            "actor": "ops-user-2",
+            "reason": "verified new owner",
+        },
+    )
+
+    events_response = client.get("/identity-mappings/audit-events", headers=headers)
+    assert relink_response.status_code == 200
+    assert relink_response.json()["id"] == create_response.json()["id"]
+    assert relink_response.json()["saleor_customer_id"] == "saleor-user-2"
+    assert relink_response.json()["provider"] == "tachigo"
+    assert relink_response.json()["unlinked_at"] is None
+    assert events_response.json()["events"][0] == {
+        "action": "identity.relinked",
+        "actor": "ops-user-2",
+        "source": "tachigo:tachigo-user-1",
+        "target": "saleor:saleor-user-2",
+        "reason": "verified new owner",
+    }
+
+
 def test_identity_mapping_rejects_missing_internal_secret(monkeypatch):
     session = build_session()
     client = build_client(session)
