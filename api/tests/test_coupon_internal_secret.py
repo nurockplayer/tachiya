@@ -119,11 +119,32 @@ def test_redeem_accepts_matching_internal_secret(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json()["voucher_code"].startswith("DEMO-")
+    assert response.json()["voucher_code"].startswith("TACHIYA-")
     assert response.json()["redemption_token"]
     assert fake_db.records[0].redemption_token == response.json()["redemption_token"]
     assert fake_db.records[0].saleor_voucher_id == "saleor-voucher-1"
     assert fake_db.commits == 1
+
+
+def test_redeem_uses_configured_voucher_code_prefix(monkeypatch):
+    fake_db = FakeDB()
+    client = build_client(fake_db)
+    monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
+    monkeypatch.setenv("TACHIYA_VOUCHER_CODE_PREFIX", " live-drop ")
+
+    def fake_create_voucher(coupon_id: str, code: str):
+        return {"code": code, "voucher_id": "saleor-voucher-1"}
+
+    monkeypatch.setattr(coupons, "create_voucher", fake_create_voucher)
+
+    response = client.post(
+        "/coupons/redeem",
+        headers={"X-Tachiya-Internal-Secret": "shared-secret"},
+        json={"coupon_id": "tachiya-95", "tcg_cost": 18},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["voucher_code"].startswith("LIVE-DROP-")
 
 
 def test_redeem_rejects_mismatched_tcg_cost_before_saleor(monkeypatch):
