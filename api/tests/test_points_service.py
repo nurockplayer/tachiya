@@ -92,7 +92,9 @@ def test_credit_idempotency_allows_same_reference_for_different_users():
 def test_credit_rejects_idempotency_key_conflict():
     session = build_session()
     service = PointsService(session)
-    asyncio.run(service.credit("user-1", 120, "tachigo:redemption-1", source_type="tachigo"))
+    asyncio.run(
+        service.credit("user-1", 120, "tachigo:redemption-1", source_type="tachigo")
+    )
 
     with pytest.raises(ValueError, match="idempotency key conflict"):
         asyncio.run(
@@ -195,7 +197,10 @@ def test_get_balance_excludes_expired_unspent_credits():
     )
     session.commit()
 
-    assert asyncio.run(service.get_balance("user-1", at=datetime(2026, 6, 1, 0, 0, 0))) == 40
+    assert (
+        asyncio.run(service.get_balance("user-1", at=datetime(2026, 6, 1, 0, 0, 0)))
+        == 40
+    )
 
 
 def test_get_balance_does_not_double_expire_spent_credits():
@@ -235,7 +240,10 @@ def test_get_balance_does_not_double_expire_spent_credits():
     )
     session.commit()
 
-    assert asyncio.run(service.get_balance("user-1", at=datetime(2026, 1, 11, 0, 0, 0))) == 50
+    assert (
+        asyncio.run(service.get_balance("user-1", at=datetime(2026, 1, 11, 0, 0, 0)))
+        == 50
+    )
 
 
 def test_debit_rejects_expired_credit_balance():
@@ -252,7 +260,9 @@ def test_debit_rejects_expired_credit_balance():
     )
 
     with pytest.raises(ValueError, match="insufficient balance"):
-        asyncio.run(service.debit(user_id="user-1", amount=1, reference_id="checkout-1"))
+        asyncio.run(
+            service.debit(user_id="user-1", amount=1, reference_id="checkout-1")
+        )
 
     assert session.query(PointsLedger).count() == 1
 
@@ -437,7 +447,9 @@ def test_list_admin_entries_filters_and_returns_newest_first():
         limit=10,
     )
     user_entries = service.list_admin_entries(user_id=" user-1 ", limit=10)
-    reference_entries = service.list_admin_entries(reference_id=" checkout-1 ", limit=10)
+    reference_entries = service.list_admin_entries(
+        reference_id=" checkout-1 ", limit=10
+    )
 
     assert [entry.id for entry in tachigo_credits] == [
         "newer-tachigo-entry",
@@ -557,7 +569,9 @@ def test_debit_rejects_insufficient_balance():
     asyncio.run(service.credit(user_id="user-1", amount=30, reference_id="order-1"))
 
     with pytest.raises(ValueError, match="insufficient balance"):
-        asyncio.run(service.debit(user_id="user-1", amount=31, reference_id="checkout-1"))
+        asyncio.run(
+            service.debit(user_id="user-1", amount=31, reference_id="checkout-1")
+        )
 
     assert asyncio.run(service.get_balance("user-1")) == 30
 

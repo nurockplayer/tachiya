@@ -286,7 +286,10 @@ def test_list_identity_mappings(monkeypatch):
         },
     ]
     assert tachigo_history_response.status_code == 200
-    assert tachigo_history_response.json()["mappings"][0]["id"] == tachigo_response.json()["id"]
+    assert (
+        tachigo_history_response.json()["mappings"][0]["id"]
+        == tachigo_response.json()["id"]
+    )
     assert tachigo_history_response.json()["mappings"][0]["unlinked_at"] is not None
 
 

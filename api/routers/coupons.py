@@ -195,9 +195,13 @@ def redeem_coupon(
             status="failed",
             reason=f"coupon persistence failed: {exc}",
         )
-        raise HTTPException(status_code=500, detail="coupon persistence failed") from exc
+        raise HTTPException(
+            status_code=500, detail="coupon persistence failed"
+        ) from exc
 
-    return RedeemResponse(voucher_code=result["code"], redemption_token=redemption_token)
+    return RedeemResponse(
+        voucher_code=result["code"], redemption_token=redemption_token
+    )
 
 
 @router.get(
@@ -215,8 +219,12 @@ def list_admin_coupons(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    normalized_coupon_id = _normalize_optional_filter(coupon_id, "coupon_id is required")
-    normalized_voucher_code = _normalize_optional_filter(voucher_code, "voucher_code is required")
+    normalized_coupon_id = _normalize_optional_filter(
+        coupon_id, "coupon_id is required"
+    )
+    normalized_voucher_code = _normalize_optional_filter(
+        voucher_code, "voucher_code is required"
+    )
     normalized_redemption_token = _normalize_optional_filter(
         redemption_token,
         "redemption_token is required",
@@ -281,7 +289,9 @@ def list_redemption_audit_events(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    normalized_coupon_id = _normalize_optional_filter(coupon_id, "coupon_id is required")
+    normalized_coupon_id = _normalize_optional_filter(
+        coupon_id, "coupon_id is required"
+    )
     normalized_status = _normalize_optional_filter(status, "status is required")
     normalized_idempotency_key = _normalize_optional_filter(
         idempotency_key,
@@ -302,7 +312,9 @@ def list_redemption_audit_events(
 
     query = db.query(CouponRedemptionAuditEvent)
     if normalized_coupon_id is not None:
-        query = query.filter(CouponRedemptionAuditEvent.coupon_id == normalized_coupon_id)
+        query = query.filter(
+            CouponRedemptionAuditEvent.coupon_id == normalized_coupon_id
+        )
     if normalized_status is not None:
         query = query.filter(CouponRedemptionAuditEvent.status == normalized_status)
     if normalized_idempotency_key is not None:
@@ -314,14 +326,22 @@ def list_redemption_audit_events(
             CouponRedemptionAuditEvent.redemption_token == normalized_redemption_token,
         )
     if normalized_created_from is not None:
-        query = query.filter(CouponRedemptionAuditEvent.created_at >= normalized_created_from)
+        query = query.filter(
+            CouponRedemptionAuditEvent.created_at >= normalized_created_from
+        )
     if normalized_created_to is not None:
-        query = query.filter(CouponRedemptionAuditEvent.created_at <= normalized_created_to)
+        query = query.filter(
+            CouponRedemptionAuditEvent.created_at <= normalized_created_to
+        )
 
-    events = query.order_by(
-        CouponRedemptionAuditEvent.created_at.desc(),
-        CouponRedemptionAuditEvent.id.desc(),
-    ).limit(limit).all()
+    events = (
+        query.order_by(
+            CouponRedemptionAuditEvent.created_at.desc(),
+            CouponRedemptionAuditEvent.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
     return RedemptionAuditEventsResponse(
         events=[
             RedemptionAuditEventResponse(

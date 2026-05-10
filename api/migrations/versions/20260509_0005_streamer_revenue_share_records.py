@@ -29,7 +29,9 @@ def upgrade() -> None:
         sa.Column("status", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["streamer_profile_id"], ["tachiya_streamer_profiles.id"]),
+        sa.ForeignKeyConstraint(
+            ["streamer_profile_id"], ["tachiya_streamer_profiles.id"]
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "order_id",

@@ -592,7 +592,9 @@ def test_order_reward_webhook_rejects_non_positive_reward_points(monkeypatch):
 
 
 @pytest.mark.parametrize("reward_points", [True, "120"])
-def test_order_reward_webhook_rejects_non_strict_reward_points(monkeypatch, reward_points):
+def test_order_reward_webhook_rejects_non_strict_reward_points(
+    monkeypatch, reward_points
+):
     session = build_session()
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")

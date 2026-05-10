@@ -147,7 +147,9 @@ def upgrade() -> None:
         "tachiya_points_ledger",
         ["source_type"],
     )
-    op.create_index("ix_tachiya_points_ledger_user_id", "tachiya_points_ledger", ["user_id"])
+    op.create_index(
+        "ix_tachiya_points_ledger_user_id", "tachiya_points_ledger", ["user_id"]
+    )
 
     op.create_table(
         "tachiya_referral_relationships",
@@ -182,7 +184,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("order_id"),
     )
-    op.create_index("ix_tachiya_referral_rewards_order_id", "tachiya_referral_rewards", ["order_id"])
+    op.create_index(
+        "ix_tachiya_referral_rewards_order_id", "tachiya_referral_rewards", ["order_id"]
+    )
     op.create_index(
         "ix_tachiya_referral_rewards_referee_id",
         "tachiya_referral_rewards",
@@ -204,7 +208,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("event_id"),
     )
-    op.create_index("ix_tachiya_webhook_events_event_id", "tachiya_webhook_events", ["event_id"])
+    op.create_index(
+        "ix_tachiya_webhook_events_event_id", "tachiya_webhook_events", ["event_id"]
+    )
     op.create_index(
         "ix_tachiya_webhook_events_event_type",
         "tachiya_webhook_events",
@@ -213,13 +219,23 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_tachiya_webhook_events_event_type", table_name="tachiya_webhook_events")
-    op.drop_index("ix_tachiya_webhook_events_event_id", table_name="tachiya_webhook_events")
+    op.drop_index(
+        "ix_tachiya_webhook_events_event_type", table_name="tachiya_webhook_events"
+    )
+    op.drop_index(
+        "ix_tachiya_webhook_events_event_id", table_name="tachiya_webhook_events"
+    )
     op.drop_table("tachiya_webhook_events")
 
-    op.drop_index("ix_tachiya_referral_rewards_referrer_id", table_name="tachiya_referral_rewards")
-    op.drop_index("ix_tachiya_referral_rewards_referee_id", table_name="tachiya_referral_rewards")
-    op.drop_index("ix_tachiya_referral_rewards_order_id", table_name="tachiya_referral_rewards")
+    op.drop_index(
+        "ix_tachiya_referral_rewards_referrer_id", table_name="tachiya_referral_rewards"
+    )
+    op.drop_index(
+        "ix_tachiya_referral_rewards_referee_id", table_name="tachiya_referral_rewards"
+    )
+    op.drop_index(
+        "ix_tachiya_referral_rewards_order_id", table_name="tachiya_referral_rewards"
+    )
     op.drop_table("tachiya_referral_rewards")
 
     op.drop_index(
@@ -232,16 +248,24 @@ def downgrade() -> None:
     )
     op.drop_table("tachiya_referral_relationships")
 
-    op.drop_index("ix_tachiya_points_ledger_user_id", table_name="tachiya_points_ledger")
-    op.drop_index("ix_tachiya_points_ledger_source_type", table_name="tachiya_points_ledger")
-    op.drop_index("ix_tachiya_points_ledger_reference_id", table_name="tachiya_points_ledger")
+    op.drop_index(
+        "ix_tachiya_points_ledger_user_id", table_name="tachiya_points_ledger"
+    )
+    op.drop_index(
+        "ix_tachiya_points_ledger_source_type", table_name="tachiya_points_ledger"
+    )
+    op.drop_index(
+        "ix_tachiya_points_ledger_reference_id", table_name="tachiya_points_ledger"
+    )
     op.drop_table("tachiya_points_ledger")
 
     op.drop_index(
         "ix_tachiya_identity_mappings_saleor_customer_id",
         table_name="tachiya_identity_mappings",
     )
-    op.drop_index("ix_tachiya_identity_mappings_provider", table_name="tachiya_identity_mappings")
+    op.drop_index(
+        "ix_tachiya_identity_mappings_provider", table_name="tachiya_identity_mappings"
+    )
     op.drop_index(
         "ix_tachiya_identity_mappings_external_subject",
         table_name="tachiya_identity_mappings",
@@ -270,7 +294,11 @@ def downgrade() -> None:
     )
     op.drop_table("tachiya_identity_audit_events")
 
-    op.drop_index("ix_tachiya_demo_coupons_created_at", table_name="tachiya_demo_coupons")
+    op.drop_index(
+        "ix_tachiya_demo_coupons_created_at", table_name="tachiya_demo_coupons"
+    )
     op.drop_index("ix_tachiya_demo_coupons_status", table_name="tachiya_demo_coupons")
-    op.drop_index("ix_tachiya_demo_coupons_coupon_id", table_name="tachiya_demo_coupons")
+    op.drop_index(
+        "ix_tachiya_demo_coupons_coupon_id", table_name="tachiya_demo_coupons"
+    )
     op.drop_table("tachiya_demo_coupons")

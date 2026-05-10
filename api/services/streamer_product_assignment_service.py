@@ -52,14 +52,18 @@ class StreamerProductAssignmentService:
         self.db.refresh(assignment)
         return assignment
 
-    def get_by_product_id(self, saleor_product_id: str) -> StreamerProductAssignment | None:
+    def get_by_product_id(
+        self, saleor_product_id: str
+    ) -> StreamerProductAssignment | None:
         normalized_product_id = self._validate_required(
             saleor_product_id,
             "saleor_product_id is required",
         )
         return (
             self.db.query(StreamerProductAssignment)
-            .filter(StreamerProductAssignment.saleor_product_id == normalized_product_id)
+            .filter(
+                StreamerProductAssignment.saleor_product_id == normalized_product_id
+            )
             .one_or_none()
         )
 
@@ -90,7 +94,9 @@ class StreamerProductAssignmentService:
             streamer_slug,
             "streamer_slug is required",
         )
-        normalized_source = self._normalize_optional_filter(source, "source is required")
+        normalized_source = self._normalize_optional_filter(
+            source, "source is required"
+        )
         normalized_created_from = self._normalize_optional_datetime(created_from)
         normalized_created_to = self._normalize_optional_datetime(created_to)
         if (
@@ -103,14 +109,19 @@ class StreamerProductAssignmentService:
         query = self.db.query(StreamerProductAssignment)
         if normalized_streamer_slug is not None:
             query = query.filter(
-                StreamerProductAssignment.streamer_slug == normalized_streamer_slug.lower(),
+                StreamerProductAssignment.streamer_slug
+                == normalized_streamer_slug.lower(),
             )
         if normalized_source is not None:
             query = query.filter(StreamerProductAssignment.source == normalized_source)
         if normalized_created_from is not None:
-            query = query.filter(StreamerProductAssignment.created_at >= normalized_created_from)
+            query = query.filter(
+                StreamerProductAssignment.created_at >= normalized_created_from
+            )
         if normalized_created_to is not None:
-            query = query.filter(StreamerProductAssignment.created_at <= normalized_created_to)
+            query = query.filter(
+                StreamerProductAssignment.created_at <= normalized_created_to
+            )
 
         return (
             query.order_by(
@@ -121,7 +132,9 @@ class StreamerProductAssignmentService:
             .all()
         )
 
-    def remove_product(self, saleor_product_id: str) -> StreamerProductAssignment | None:
+    def remove_product(
+        self, saleor_product_id: str
+    ) -> StreamerProductAssignment | None:
         assignment = self.get_by_product_id(saleor_product_id)
         if assignment is None:
             return None
@@ -156,6 +169,10 @@ class StreamerProductAssignmentService:
 
     @staticmethod
     def _validate_read_limit(limit: int) -> int:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 100
+        ):
             raise ValueError("limit must be between 1 and 100")
         return limit

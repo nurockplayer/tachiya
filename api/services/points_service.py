@@ -34,7 +34,9 @@ class PointsService:
         expires_at: datetime | None = None,
     ) -> PointsLedger:
         normalized_user_id = self._validate_required(user_id, "user_id is required")
-        normalized_reference_id = self._validate_required(reference_id, "reference_id is required")
+        normalized_reference_id = self._validate_required(
+            reference_id, "reference_id is required"
+        )
         self._validate_positive_amount(amount)
         normalized_source_type = self._validate_source_type(source_type)
         existing_entry = self._find_idempotent_entry(
@@ -69,7 +71,9 @@ class PointsService:
         expires_at: datetime | None = None,
     ) -> PointsLedger:
         normalized_user_id = self._validate_required(user_id, "user_id is required")
-        normalized_reference_id = self._validate_required(reference_id, "reference_id is required")
+        normalized_reference_id = self._validate_required(
+            reference_id, "reference_id is required"
+        )
         self._validate_positive_amount(amount)
         normalized_source_type = self._validate_source_type(source_type)
         existing_entry = self._find_idempotent_entry(
@@ -101,7 +105,9 @@ class PointsService:
     async def get_balance(self, user_id: str, *, at: datetime | None = None) -> int:
         normalized_user_id = self._validate_required(user_id, "user_id is required")
         effective_at = self._normalize_datetime(at or datetime.now(UTC))
-        buckets, debit_deficit = self._build_credit_buckets(normalized_user_id, at=effective_at)
+        buckets, debit_deficit = self._build_credit_buckets(
+            normalized_user_id, at=effective_at
+        )
 
         active_balance = sum(
             bucket.amount
@@ -164,16 +170,14 @@ class PointsService:
         limit: int = 20,
     ) -> list[PointsLedger]:
         normalized_limit = self._validate_read_limit(limit)
-        normalized_user_id = self._normalize_optional_filter(user_id, "user_id is required")
+        normalized_user_id = self._normalize_optional_filter(
+            user_id, "user_id is required"
+        )
         normalized_entry_type = (
-            self._validate_entry_type(entry_type)
-            if entry_type is not None
-            else None
+            self._validate_entry_type(entry_type) if entry_type is not None else None
         )
         normalized_source_type = (
-            self._validate_source_type(source_type)
-            if source_type is not None
-            else None
+            self._validate_source_type(source_type) if source_type is not None else None
         )
         normalized_reference_id = self._normalize_optional_filter(
             reference_id,
@@ -317,7 +321,11 @@ class PointsService:
 
     @staticmethod
     def _validate_read_limit(limit: int) -> int:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 100
+        ):
             raise ValueError("limit must be between 1 and 100")
         return limit
 

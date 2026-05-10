@@ -14,7 +14,9 @@ def test_alembic_upgrade_head_builds_expected_schema(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", database_url)
 
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
+    config.set_main_option(
+        "script_location", str(Path(__file__).resolve().parents[1] / "migrations")
+    )
 
     command.upgrade(config, "head")
 
@@ -33,7 +35,9 @@ def test_alembic_upgrade_head_builds_expected_schema(tmp_path, monkeypatch):
         "tachiya_webhook_events",
     }.issubset(set(inspector.get_table_names()))
 
-    points_indexes = {index["name"] for index in inspector.get_indexes("tachiya_points_ledger")}
+    points_indexes = {
+        index["name"] for index in inspector.get_indexes("tachiya_points_ledger")
+    }
     points_unique_constraints = {
         constraint["name"]
         for constraint in inspector.get_unique_constraints("tachiya_points_ledger")

@@ -84,8 +84,12 @@ def test_process_referral_reward_is_idempotent_for_same_order():
     add_relationship(session)
     service = ReferralService(session, reward_rate=0.05)
 
-    first_reward = asyncio.run(service.process_referral_reward("order-1", "referee-1", 1200))
-    second_reward = asyncio.run(service.process_referral_reward("order-1", "referee-1", 1200))
+    first_reward = asyncio.run(
+        service.process_referral_reward("order-1", "referee-1", 1200)
+    )
+    second_reward = asyncio.run(
+        service.process_referral_reward("order-1", "referee-1", 1200)
+    )
 
     assert first_reward is not None
     assert second_reward is not None
@@ -100,8 +104,12 @@ def test_process_referral_reward_skips_after_referee_first_purchase():
     add_relationship(session)
     service = ReferralService(session, reward_rate=0.05)
 
-    first_reward = asyncio.run(service.process_referral_reward("order-1", "referee-1", 1200))
-    second_reward = asyncio.run(service.process_referral_reward("order-2", "referee-1", 9999))
+    first_reward = asyncio.run(
+        service.process_referral_reward("order-1", "referee-1", 1200)
+    )
+    second_reward = asyncio.run(
+        service.process_referral_reward("order-2", "referee-1", 9999)
+    )
 
     assert first_reward is not None
     assert second_reward is None
@@ -137,7 +145,9 @@ def test_referral_reward_referee_id_is_unique():
         session.commit()
 
 
-def test_process_referral_reward_rolls_back_ledger_when_reward_commit_fails(monkeypatch):
+def test_process_referral_reward_rolls_back_ledger_when_reward_commit_fails(
+    monkeypatch,
+):
     session = build_session()
     add_relationship(session)
     service = ReferralService(session, reward_rate=0.05)
@@ -185,7 +195,9 @@ def test_process_referral_reward_normalizes_identifiers():
         ("order-1", " ", "referee_id is required"),
     ],
 )
-def test_process_referral_reward_rejects_blank_identifiers(order_id, referee_id, message):
+def test_process_referral_reward_rejects_blank_identifiers(
+    order_id, referee_id, message
+):
     session = build_session()
     add_relationship(session)
     service = ReferralService(session, reward_rate=0.05)
@@ -204,12 +216,16 @@ def test_process_referral_reward_rejects_blank_identifiers(order_id, referee_id,
 
 
 @pytest.mark.parametrize("order_total_amount", [0, -1, True, 1200.5, "1200"])
-def test_process_referral_reward_rejects_non_positive_integer_amount(order_total_amount):
+def test_process_referral_reward_rejects_non_positive_integer_amount(
+    order_total_amount,
+):
     session = build_session()
     add_relationship(session)
     service = ReferralService(session, reward_rate=0.05)
 
-    with pytest.raises(ValueError, match="order_total_amount must be a positive integer"):
+    with pytest.raises(
+        ValueError, match="order_total_amount must be a positive integer"
+    ):
         asyncio.run(
             service.process_referral_reward(
                 order_id="order-1",
@@ -222,7 +238,9 @@ def test_process_referral_reward_rejects_non_positive_integer_amount(order_total
     assert session.query(PointsLedger).count() == 0
 
 
-@pytest.mark.parametrize("reward_rate", [0, -0.01, 1.01, True, "0.05", math.nan, math.inf])
+@pytest.mark.parametrize(
+    "reward_rate", [0, -0.01, 1.01, True, "0.05", math.nan, math.inf]
+)
 def test_referral_service_rejects_invalid_reward_rate(reward_rate):
     session = build_session()
 

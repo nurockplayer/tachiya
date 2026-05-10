@@ -134,7 +134,9 @@ class RevenueShareService:
                 streamer_slug=share.streamer_slug,
             )
             if existing_record is not None:
-                records.append(self._ensure_record_matches(existing_record, streamer, share))
+                records.append(
+                    self._ensure_record_matches(existing_record, streamer, share)
+                )
                 continue
 
             record = StreamerRevenueShareRecord(
@@ -173,15 +175,15 @@ class RevenueShareService:
     ) -> list[StreamerRevenueShareRecord]:
         normalized_limit = self._validate_read_limit(limit)
         normalized_status = (
-            self._validate_record_status_filter(status)
-            if status is not None
-            else None
+            self._validate_record_status_filter(status) if status is not None else None
         )
         normalized_streamer_slug = self._normalize_optional_filter(
             streamer_slug,
             "streamer_slug is required",
         )
-        normalized_order_id = self._normalize_optional_filter(order_id, "order_id is required")
+        normalized_order_id = self._normalize_optional_filter(
+            order_id, "order_id is required"
+        )
         normalized_created_from, normalized_created_to = self._normalize_created_range(
             created_from,
             created_to,
@@ -191,13 +193,22 @@ class RevenueShareService:
         if normalized_status is not None:
             query = query.filter(StreamerRevenueShareRecord.status == normalized_status)
         if normalized_streamer_slug is not None:
-            query = query.filter(StreamerRevenueShareRecord.streamer_slug == normalized_streamer_slug.lower())
+            query = query.filter(
+                StreamerRevenueShareRecord.streamer_slug
+                == normalized_streamer_slug.lower()
+            )
         if normalized_order_id is not None:
-            query = query.filter(StreamerRevenueShareRecord.order_id == normalized_order_id)
+            query = query.filter(
+                StreamerRevenueShareRecord.order_id == normalized_order_id
+            )
         if normalized_created_from is not None:
-            query = query.filter(StreamerRevenueShareRecord.created_at >= normalized_created_from)
+            query = query.filter(
+                StreamerRevenueShareRecord.created_at >= normalized_created_from
+            )
         if normalized_created_to is not None:
-            query = query.filter(StreamerRevenueShareRecord.created_at <= normalized_created_to)
+            query = query.filter(
+                StreamerRevenueShareRecord.created_at <= normalized_created_to
+            )
 
         return (
             query.order_by(
@@ -218,15 +229,15 @@ class RevenueShareService:
         created_to: datetime | None = None,
     ) -> list[RevenueShareRecordSummary]:
         normalized_status = (
-            self._validate_record_status_filter(status)
-            if status is not None
-            else None
+            self._validate_record_status_filter(status) if status is not None else None
         )
         normalized_streamer_slug = self._normalize_optional_filter(
             streamer_slug,
             "streamer_slug is required",
         )
-        normalized_order_id = self._normalize_optional_filter(order_id, "order_id is required")
+        normalized_order_id = self._normalize_optional_filter(
+            order_id, "order_id is required"
+        )
         normalized_created_from, normalized_created_to = self._normalize_created_range(
             created_from,
             created_to,
@@ -242,14 +253,21 @@ class RevenueShareService:
             query = query.filter(StreamerRevenueShareRecord.status == normalized_status)
         if normalized_streamer_slug is not None:
             query = query.filter(
-                StreamerRevenueShareRecord.streamer_slug == normalized_streamer_slug.lower(),
+                StreamerRevenueShareRecord.streamer_slug
+                == normalized_streamer_slug.lower(),
             )
         if normalized_order_id is not None:
-            query = query.filter(StreamerRevenueShareRecord.order_id == normalized_order_id)
+            query = query.filter(
+                StreamerRevenueShareRecord.order_id == normalized_order_id
+            )
         if normalized_created_from is not None:
-            query = query.filter(StreamerRevenueShareRecord.created_at >= normalized_created_from)
+            query = query.filter(
+                StreamerRevenueShareRecord.created_at >= normalized_created_from
+            )
         if normalized_created_to is not None:
-            query = query.filter(StreamerRevenueShareRecord.created_at <= normalized_created_to)
+            query = query.filter(
+                StreamerRevenueShareRecord.created_at <= normalized_created_to
+            )
 
         rows = (
             query.group_by(StreamerRevenueShareRecord.status)
@@ -272,7 +290,9 @@ class RevenueShareService:
         record_id: str,
         status: str,
     ) -> StreamerRevenueShareRecord:
-        normalized_record_id = self._validate_required(record_id, "record_id is required")
+        normalized_record_id = self._validate_required(
+            record_id, "record_id is required"
+        )
         normalized_status = self._validate_record_status(status)
         record = self.db.get(StreamerRevenueShareRecord, normalized_record_id)
         if record is None:
@@ -287,7 +307,9 @@ class RevenueShareService:
         self.db.refresh(record)
         return record
 
-    def _get_assignment(self, saleor_product_id: str) -> StreamerProductAssignment | None:
+    def _get_assignment(
+        self, saleor_product_id: str
+    ) -> StreamerProductAssignment | None:
         return (
             self.db.query(StreamerProductAssignment)
             .filter(StreamerProductAssignment.saleor_product_id == saleor_product_id)
@@ -357,7 +379,11 @@ class RevenueShareService:
 
     @staticmethod
     def _validate_read_limit(limit: int) -> int:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 100
+        ):
             raise ValueError("limit must be between 1 and 100")
         return limit
 

@@ -45,7 +45,9 @@ async def verify_webhook_signature(
     try:
         timestamp = int(x_tachiya_webhook_timestamp)
     except ValueError as exc:
-        raise HTTPException(status_code=401, detail="invalid webhook signature") from exc
+        raise HTTPException(
+            status_code=401, detail="invalid webhook signature"
+        ) from exc
 
     tolerance_seconds = _get_webhook_tolerance_seconds()
     if abs(int(time.time()) - timestamp) > tolerance_seconds:

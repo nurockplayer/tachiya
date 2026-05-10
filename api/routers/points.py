@@ -6,7 +6,11 @@ from pydantic import BaseModel, Field, StrictInt, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
-from security import VerifiedWebhookRequest, verify_internal_secret, verify_webhook_signature
+from security import (
+    VerifiedWebhookRequest,
+    verify_internal_secret,
+    verify_webhook_signature,
+)
 from services.points_service import PointsService
 from services.webhook_event_service import WebhookEventReplayError, WebhookEventService
 
@@ -146,7 +150,9 @@ async def order_rewarded_webhook(
     db: Session = Depends(get_db),
 ):
     _reject_replayed_webhook_event(db, webhook)
-    normalized_order_id = _normalize_required_query(req.order_id, "order_id is required")
+    normalized_order_id = _normalize_required_query(
+        req.order_id, "order_id is required"
+    )
     service = PointsService(db)
     try:
         entry = await service.credit(
@@ -291,7 +297,9 @@ def _reject_replayed_webhook_event(
     try:
         WebhookEventService(db).reject_replayed_event(webhook)
     except WebhookEventReplayError as exc:
-        raise HTTPException(status_code=409, detail="webhook event already processed") from exc
+        raise HTTPException(
+            status_code=409, detail="webhook event already processed"
+        ) from exc
 
 
 def _record_webhook_event(

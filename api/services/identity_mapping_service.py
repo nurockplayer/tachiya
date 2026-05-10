@@ -91,7 +91,9 @@ class IdentityMappingService:
         self._record_audit_event(
             action="identity.linked",
             actor=actor,
-            source=self._identity_source(normalized_provider, normalized_external_subject),
+            source=self._identity_source(
+                normalized_provider, normalized_external_subject
+            ),
             target=self._saleor_target(normalized_saleor_customer_id),
             reason=reason,
         )
@@ -103,7 +105,9 @@ class IdentityMappingService:
             .filter(
                 IdentityMapping.provider == self._normalize_provider(provider),
                 IdentityMapping.external_subject
-                == self._normalize_required(external_subject, "external_subject is required"),
+                == self._normalize_required(
+                    external_subject, "external_subject is required"
+                ),
                 IdentityMapping.unlinked_at.is_(None),
             )
             .first()
@@ -126,7 +130,9 @@ class IdentityMappingService:
             self._record_audit_event(
                 action="identity.unlinked",
                 actor=actor,
-                source=self._identity_source(mapping.provider, mapping.external_subject),
+                source=self._identity_source(
+                    mapping.provider, mapping.external_subject
+                ),
                 target=self._saleor_target(mapping.saleor_customer_id),
                 reason=reason,
                 commit=False,
@@ -148,9 +154,7 @@ class IdentityMappingService:
     ) -> list[IdentityMapping]:
         normalized_limit = self._validate_read_limit(limit)
         normalized_provider = (
-            self._normalize_provider(provider)
-            if provider is not None
-            else None
+            self._normalize_provider(provider) if provider is not None else None
         )
         normalized_saleor_customer_id = self._normalize_optional_filter(
             saleor_customer_id,
@@ -177,7 +181,9 @@ class IdentityMappingService:
                 IdentityMapping.saleor_customer_id == normalized_saleor_customer_id,
             )
         if normalized_external_subject is not None:
-            query = query.filter(IdentityMapping.external_subject == normalized_external_subject)
+            query = query.filter(
+                IdentityMapping.external_subject == normalized_external_subject
+            )
         if normalized_created_from is not None:
             query = query.filter(IdentityMapping.created_at >= normalized_created_from)
         if normalized_created_to is not None:
@@ -203,10 +209,16 @@ class IdentityMappingService:
         limit: int = 20,
     ) -> list[IdentityAuditEvent]:
         normalized_limit = self._validate_read_limit(limit)
-        normalized_action = self._normalize_optional_filter(action, "action is required")
+        normalized_action = self._normalize_optional_filter(
+            action, "action is required"
+        )
         normalized_actor = self._normalize_optional_filter(actor, "actor is required")
-        normalized_source = self._normalize_optional_filter(source, "source is required")
-        normalized_target = self._normalize_optional_filter(target, "target is required")
+        normalized_source = self._normalize_optional_filter(
+            source, "source is required"
+        )
+        normalized_target = self._normalize_optional_filter(
+            target, "target is required"
+        )
         normalized_created_from = self._normalize_optional_datetime(created_from)
         normalized_created_to = self._normalize_optional_datetime(created_to)
         if (
@@ -226,12 +238,16 @@ class IdentityMappingService:
         if normalized_target is not None:
             query = query.filter(IdentityAuditEvent.target == normalized_target)
         if normalized_created_from is not None:
-            query = query.filter(IdentityAuditEvent.created_at >= normalized_created_from)
+            query = query.filter(
+                IdentityAuditEvent.created_at >= normalized_created_from
+            )
         if normalized_created_to is not None:
             query = query.filter(IdentityAuditEvent.created_at <= normalized_created_to)
 
         return (
-            query.order_by(IdentityAuditEvent.created_at.desc(), IdentityAuditEvent.id.desc())
+            query.order_by(
+                IdentityAuditEvent.created_at.desc(), IdentityAuditEvent.id.desc()
+            )
             .limit(normalized_limit)
             .all()
         )
@@ -269,7 +285,9 @@ class IdentityMappingService:
 
     @staticmethod
     def _normalize_provider(provider: str) -> str:
-        return IdentityMappingService._normalize_required(provider, "provider is required").lower()
+        return IdentityMappingService._normalize_required(
+            provider, "provider is required"
+        ).lower()
 
     @staticmethod
     def _normalize_required(value: str, message: str) -> str:
@@ -304,6 +322,10 @@ class IdentityMappingService:
 
     @staticmethod
     def _validate_read_limit(limit: int) -> int:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 100
+        ):
             raise ValueError("limit must be between 1 and 100")
         return limit

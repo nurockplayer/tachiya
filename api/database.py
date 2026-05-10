@@ -3,7 +3,9 @@ import os
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://saleor:saleor@localhost:5432/saleor")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://saleor:saleor@localhost:5432/saleor"
+)
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -131,7 +133,9 @@ def _ensure_column(
     columns = {column["name"] for column in inspector.get_columns(table_name)}
     if column_name not in columns:
         with bind.begin() as conn:
-            conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}"))
+            conn.execute(
+                text(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+            )
         inspector = inspect(bind)
 
     if index_name is None:
@@ -158,7 +162,8 @@ def _ensure_index(
 ):
     indexes = {index["name"] for index in inspector.get_indexes(table_name)}
     unique_constraints = {
-        constraint["name"] for constraint in inspector.get_unique_constraints(table_name)
+        constraint["name"]
+        for constraint in inspector.get_unique_constraints(table_name)
     }
     if index_name in indexes or index_name in unique_constraints:
         return

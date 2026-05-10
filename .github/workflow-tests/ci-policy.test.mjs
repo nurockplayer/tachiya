@@ -50,6 +50,7 @@ test("API CI keeps lint, timeout, and compile-scope hardening", () => {
   assert.match(workflow, /api-lint:/);
   assert.match(workflow, /name: API lint/);
   assert.match(workflow, /uv run --group dev ruff check \./);
+  assert.match(workflow, /uv run --group dev ruff format --check config\.py database\.py main\.py security\.py migrations models routers services tests/);
   assert.match(workflow, /timeout-minutes: 5/);
   assert.match(workflow, /timeout-minutes: 10/);
   assert.match(workflow, /timeout-minutes: 20/);
