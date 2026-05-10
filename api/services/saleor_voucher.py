@@ -6,7 +6,9 @@ import requests
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from _saleor_common import execute_graphql, get_admin_token  # noqa: E402
 
-SALEOR_URL = os.getenv("SALEOR_GRAPHQL_URL", os.getenv("SALEOR_URL", "http://localhost:8000/graphql/"))
+SALEOR_URL = os.getenv(
+    "SALEOR_GRAPHQL_URL", os.getenv("SALEOR_URL", "http://localhost:8000/graphql/")
+)
 ADMIN_EMAIL = os.getenv("SALEOR_ADMIN_EMAIL", "admin@example.com")
 ADMIN_PASSWORD = os.getenv("SALEOR_ADMIN_PASSWORD", "admin")
 
@@ -71,6 +73,7 @@ mutation VoucherChannelListingUpdate($id: ID!, $input: VoucherChannelListingInpu
 
 def _get_session_and_token():
     import _saleor_common as sc
+
     sc.ENDPOINT = SALEOR_URL
     sc.ADMIN_EMAIL = ADMIN_EMAIL
     sc.ADMIN_PASSWORD = ADMIN_PASSWORD

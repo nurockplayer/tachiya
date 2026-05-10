@@ -49,7 +49,9 @@ def test_create_profile_treats_blank_collection_as_unset():
 
 def test_get_by_slug_normalizes_lookup():
     session = build_session()
-    StreamerService(session).create_profile(slug="streamer-one", display_name="Streamer One")
+    StreamerService(session).create_profile(
+        slug="streamer-one", display_name="Streamer One"
+    )
 
     profile = StreamerService(session).get_by_slug(" Streamer-One ")
 
@@ -100,14 +102,20 @@ def test_update_profile_rejects_missing_profile():
     session = build_session()
 
     with pytest.raises(ValueError, match="streamer profile not found"):
-        StreamerService(session).update_profile("missing-streamer", display_name="Missing")
+        StreamerService(session).update_profile(
+            "missing-streamer", display_name="Missing"
+        )
 
 
 def test_update_profile_rejects_duplicate_saleor_collection_id():
     session = build_session()
     service = StreamerService(session)
-    service.create_profile(slug="streamer-one", display_name="One", saleor_collection_id="collection-1")
-    service.create_profile(slug="streamer-two", display_name="Two", saleor_collection_id="collection-2")
+    service.create_profile(
+        slug="streamer-one", display_name="One", saleor_collection_id="collection-1"
+    )
+    service.create_profile(
+        slug="streamer-two", display_name="Two", saleor_collection_id="collection-2"
+    )
 
     with pytest.raises(ValueError, match="streamer profile already exists"):
         service.update_profile("streamer-two", saleor_collection_id="collection-1")

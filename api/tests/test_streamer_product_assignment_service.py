@@ -10,7 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
 from models.streamer import StreamerProductAssignment
-from services.streamer_product_assignment_service import StreamerProductAssignmentService
+from services.streamer_product_assignment_service import (
+    StreamerProductAssignmentService,
+)
 from services.streamer_service import StreamerService
 
 
@@ -101,7 +103,9 @@ def test_list_product_ids_for_streamer_catalog():
     service = StreamerProductAssignmentService(session)
     service.assign_product(saleor_product_id="product-2", streamer_slug="streamer-one")
     service.assign_product(saleor_product_id="product-1", streamer_slug="streamer-one")
-    service.assign_product(saleor_product_id="other-product", streamer_slug="streamer-two")
+    service.assign_product(
+        saleor_product_id="other-product", streamer_slug="streamer-two"
+    )
 
     product_ids = service.list_product_ids_for_streamer(" Streamer-One ")
 
@@ -227,7 +231,9 @@ def test_remove_product_assignment():
 def test_remove_product_assignment_returns_none_for_missing_product():
     session = build_session()
 
-    removed_assignment = StreamerProductAssignmentService(session).remove_product("missing-product")
+    removed_assignment = StreamerProductAssignmentService(session).remove_product(
+        "missing-product"
+    )
 
     assert removed_assignment is None
 

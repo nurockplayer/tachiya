@@ -87,7 +87,10 @@ def test_ready_returns_503_when_internal_secret_is_missing(monkeypatch):
     response = main.ready()
 
     assert response.status_code == 503
-    assert response.body == b'{"status":"unavailable","checks":{"database":"ok","internal_secret":"error"}}'
+    assert (
+        response.body
+        == b'{"status":"unavailable","checks":{"database":"ok","internal_secret":"error"}}'
+    )
 
 
 def test_ready_returns_503_when_database_check_fails(monkeypatch):
@@ -100,7 +103,10 @@ def test_ready_returns_503_when_database_check_fails(monkeypatch):
     response = main.ready()
 
     assert response.status_code == 503
-    assert response.body == b'{"status":"unavailable","checks":{"database":"error","internal_secret":"ok"}}'
+    assert (
+        response.body
+        == b'{"status":"unavailable","checks":{"database":"error","internal_secret":"ok"}}'
+    )
 
 
 def test_ready_endpoint_returns_503_when_database_check_fails(monkeypatch):

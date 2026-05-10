@@ -73,7 +73,9 @@ async def get_user_points(
             cumulative_total=_required_int(payload["cumulative_total"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
-        raise TachigoUpstreamError("tachigo upstream returned invalid points payload") from exc
+        raise TachigoUpstreamError(
+            "tachigo upstream returned invalid points payload"
+        ) from exc
 
 
 async def get_identity_points(
@@ -114,7 +116,9 @@ async def get_identity_points(
 
     payload = _json_payload(response)
     try:
-        response_provider = str(payload.get("provider", requested_provider)).strip().lower()
+        response_provider = (
+            str(payload.get("provider", requested_provider)).strip().lower()
+        )
         response_external_subject = str(
             payload.get("external_subject", requested_external_subject),
         ).strip()
@@ -131,7 +135,9 @@ async def get_identity_points(
             cumulative_total=_required_int(payload["cumulative_total"]),
         )
     except (KeyError, TypeError, ValueError) as exc:
-        raise TachigoUpstreamError("tachigo upstream returned invalid points payload") from exc
+        raise TachigoUpstreamError(
+            "tachigo upstream returned invalid points payload"
+        ) from exc
 
 
 def _internal_headers() -> dict[str, str]:

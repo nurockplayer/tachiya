@@ -11,7 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from database import Base
 from models.streamer import StreamerProfile, StreamerRevenueShareRecord
 from services.revenue_share_service import RevenueShareLine, RevenueShareService
-from services.streamer_product_assignment_service import StreamerProductAssignmentService
+from services.streamer_product_assignment_service import (
+    StreamerProductAssignmentService,
+)
 from services.streamer_service import StreamerService
 
 
@@ -61,7 +63,9 @@ def test_preview_order_share_calculates_streamer_share():
 
 def test_preview_order_share_aggregates_same_streamer_lines():
     session = build_session()
-    create_streamer_with_assignment(session, saleor_product_id="product-1", commission_bps=1000)
+    create_streamer_with_assignment(
+        session, saleor_product_id="product-1", commission_bps=1000
+    )
     StreamerProductAssignmentService(session).assign_product(
         saleor_product_id="product-2",
         streamer_slug="streamer-one",
@@ -105,16 +109,30 @@ def test_preview_order_share_tracks_unassigned_and_inactive_products():
 @pytest.mark.parametrize(
     ("order_id", "line", "message"),
     [
-        (" ", RevenueShareLine(saleor_product_id="product-1", gross_amount=1200), "order_id is required"),
-        ("order-1", RevenueShareLine(saleor_product_id=" ", gross_amount=1200), "saleor_product_id is required"),
-        ("order-1", RevenueShareLine(saleor_product_id="product-1", gross_amount=0), "gross_amount must be positive"),
+        (
+            " ",
+            RevenueShareLine(saleor_product_id="product-1", gross_amount=1200),
+            "order_id is required",
+        ),
+        (
+            "order-1",
+            RevenueShareLine(saleor_product_id=" ", gross_amount=1200),
+            "saleor_product_id is required",
+        ),
+        (
+            "order-1",
+            RevenueShareLine(saleor_product_id="product-1", gross_amount=0),
+            "gross_amount must be positive",
+        ),
     ],
 )
 def test_preview_order_share_rejects_invalid_input(order_id, line, message):
     session = build_session()
 
     with pytest.raises(ValueError, match=message):
-        RevenueShareService(session).preview_order_share(order_id=order_id, lines=[line])
+        RevenueShareService(session).preview_order_share(
+            order_id=order_id, lines=[line]
+        )
 
 
 def test_record_order_share_persists_pending_records():
@@ -225,8 +243,12 @@ def test_record_order_share_rejects_conflict_without_partial_new_records():
 
 def test_list_records_filters_and_sorts_payout_queue():
     session = build_session()
-    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
-    create_streamer_with_assignment(session, slug="streamer-two", saleor_product_id="product-2")
+    create_streamer_with_assignment(
+        session, slug="streamer-one", saleor_product_id="product-1"
+    )
+    create_streamer_with_assignment(
+        session, slug="streamer-two", saleor_product_id="product-2"
+    )
     service = RevenueShareService(session)
     paid_result = service.record_order_share(
         order_id="order-1",
@@ -252,7 +274,9 @@ def test_list_records_filters_and_sorts_payout_queue():
 
 def test_list_records_filters_created_range_inclusively():
     session = build_session()
-    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
+    create_streamer_with_assignment(
+        session, slug="streamer-one", saleor_product_id="product-1"
+    )
     service = RevenueShareService(session)
     before = service.record_order_share(
         order_id="order-before",
@@ -345,8 +369,12 @@ def test_list_records_rejects_invalid_status_filter():
 
 def test_summarize_records_groups_totals_by_status_and_filters():
     session = build_session()
-    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
-    create_streamer_with_assignment(session, slug="streamer-two", saleor_product_id="product-2")
+    create_streamer_with_assignment(
+        session, slug="streamer-one", saleor_product_id="product-1"
+    )
+    create_streamer_with_assignment(
+        session, slug="streamer-two", saleor_product_id="product-2"
+    )
     service = RevenueShareService(session)
     paid_result = service.record_order_share(
         order_id="order-1",
@@ -368,32 +396,54 @@ def test_summarize_records_groups_totals_by_status_and_filters():
     order_summaries = service.summarize_records(order_id=" order-2 ")
 
     assert [
-        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        (
+            summary.status,
+            summary.record_count,
+            summary.gross_amount,
+            summary.share_amount,
+        )
         for summary in summaries
     ] == [
         ("paid", 1, 1200, 120),
         ("pending", 2, 2700, 270),
     ]
     assert [
-        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        (
+            summary.status,
+            summary.record_count,
+            summary.gross_amount,
+            summary.share_amount,
+        )
         for summary in streamer_summaries
     ] == [
         ("paid", 1, 1200, 120),
         ("pending", 1, 300, 30),
     ]
     assert [
-        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        (
+            summary.status,
+            summary.record_count,
+            summary.gross_amount,
+            summary.share_amount,
+        )
         for summary in paid_summaries
     ] == [("paid", 1, 1200, 120)]
     assert [
-        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        (
+            summary.status,
+            summary.record_count,
+            summary.gross_amount,
+            summary.share_amount,
+        )
         for summary in order_summaries
     ] == [("pending", 1, 2400, 240)]
 
 
 def test_summarize_records_filters_created_range():
     session = build_session()
-    create_streamer_with_assignment(session, slug="streamer-one", saleor_product_id="product-1")
+    create_streamer_with_assignment(
+        session, slug="streamer-one", saleor_product_id="product-1"
+    )
     service = RevenueShareService(session)
     before = service.record_order_share(
         order_id="order-before",
@@ -418,7 +468,12 @@ def test_summarize_records_filters_created_range():
     )
 
     assert [
-        (summary.status, summary.record_count, summary.gross_amount, summary.share_amount)
+        (
+            summary.status,
+            summary.record_count,
+            summary.gross_amount,
+            summary.share_amount,
+        )
         for summary in summaries
     ] == [("pending", 1, 200, 20)]
 
@@ -449,7 +504,9 @@ def test_update_record_status_marks_pending_record_paid():
         lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
     )
 
-    record = service.update_record_status(record_id=result.records[0].id, status=" Paid ")
+    record = service.update_record_status(
+        record_id=result.records[0].id, status=" Paid "
+    )
 
     assert record.status == "paid"
     assert session.query(StreamerRevenueShareRecord).one().status == "paid"
@@ -463,9 +520,13 @@ def test_update_record_status_is_idempotent_for_same_terminal_status():
         order_id="order-1",
         lines=[RevenueShareLine(saleor_product_id="product-1", gross_amount=1200)],
     )
-    first_record = service.update_record_status(record_id=result.records[0].id, status="paid")
+    first_record = service.update_record_status(
+        record_id=result.records[0].id, status="paid"
+    )
 
-    second_record = service.update_record_status(record_id=result.records[0].id, status="paid")
+    second_record = service.update_record_status(
+        record_id=result.records[0].id, status="paid"
+    )
 
     assert second_record.id == first_record.id
     assert second_record.status == "paid"
@@ -503,4 +564,6 @@ def test_update_record_status_rejects_missing_record():
     session = build_session()
 
     with pytest.raises(ValueError, match="revenue share record not found"):
-        RevenueShareService(session).update_record_status(record_id="missing-record", status="paid")
+        RevenueShareService(session).update_record_status(
+            record_id="missing-record", status="paid"
+        )

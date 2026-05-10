@@ -20,7 +20,9 @@ class ReferralService:
         order_total_amount: int,
     ) -> ReferralReward | None:
         normalized_order_id = self._validate_required(order_id, "order_id is required")
-        normalized_referee_id = self._validate_required(referee_id, "referee_id is required")
+        normalized_referee_id = self._validate_required(
+            referee_id, "referee_id is required"
+        )
         normalized_order_total_amount = self._validate_positive_integer(
             order_total_amount,
             "order_total_amount must be a positive integer",

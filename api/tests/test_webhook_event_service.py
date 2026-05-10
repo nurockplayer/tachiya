@@ -28,7 +28,9 @@ def test_record_event_persists_verified_webhook_event():
         occurred_at=datetime(2026, 1, 1, 0, 0, 0),
     )
 
-    WebhookEventService(session).record_event(webhook, event_type="points.order_rewarded")
+    WebhookEventService(session).record_event(
+        webhook, event_type="points.order_rewarded"
+    )
 
     event = session.query(WebhookEvent).one()
     assert event.event_id == "evt-1"
@@ -43,7 +45,9 @@ def test_record_event_normalizes_identifiers():
         occurred_at=datetime(2026, 1, 1, 0, 0, 0),
     )
 
-    WebhookEventService(session).record_event(webhook, event_type=" points.order_rewarded ")
+    WebhookEventService(session).record_event(
+        webhook, event_type=" points.order_rewarded "
+    )
 
     event = session.query(WebhookEvent).one()
     assert event.event_id == "evt-1"
@@ -67,7 +71,9 @@ def test_reject_replayed_event_raises_for_existing_event_id():
     service = WebhookEventService(session)
     service.record_event(webhook, event_type="points.order_rewarded")
 
-    with pytest.raises(WebhookEventReplayError, match="webhook event already processed"):
+    with pytest.raises(
+        WebhookEventReplayError, match="webhook event already processed"
+    ):
         service.reject_replayed_event(webhook)
 
 
@@ -90,7 +96,9 @@ def test_record_event_rejects_blank_event_id():
     )
 
     with pytest.raises(ValueError, match="webhook event_id is required"):
-        WebhookEventService(session).record_event(webhook, event_type="points.order_rewarded")
+        WebhookEventService(session).record_event(
+            webhook, event_type="points.order_rewarded"
+        )
 
     assert session.query(WebhookEvent).count() == 0
 
@@ -117,7 +125,9 @@ def test_record_event_raises_for_unique_conflict():
     service = WebhookEventService(session)
     service.record_event(webhook, event_type="points.order_rewarded")
 
-    with pytest.raises(WebhookEventReplayError, match="webhook event already processed"):
+    with pytest.raises(
+        WebhookEventReplayError, match="webhook event already processed"
+    ):
         service.record_event(webhook, event_type="points.order_rewarded")
 
 

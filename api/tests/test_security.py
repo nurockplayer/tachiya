@@ -101,7 +101,9 @@ def test_internal_secret_trims_configured_secret(monkeypatch):
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", " shared-secret ")
     client = build_client()
 
-    response = client.get("/internal", headers={"X-Tachiya-Internal-Secret": "shared-secret"})
+    response = client.get(
+        "/internal", headers={"X-Tachiya-Internal-Secret": "shared-secret"}
+    )
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}

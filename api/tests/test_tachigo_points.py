@@ -143,7 +143,9 @@ async def test_get_user_points_rejects_upstream_email_mismatch(monkeypatch):
             ),
         ),
     ) as client:
-        with pytest.raises(TachigoUpstreamError, match="tachigo upstream email mismatch"):
+        with pytest.raises(
+            TachigoUpstreamError, match="tachigo upstream email mismatch"
+        ):
             await get_user_points("demo@tachigo.io", settings, client=client)
 
 
@@ -239,7 +241,9 @@ async def test_get_user_points_fails_closed_without_internal_secret(monkeypatch)
     monkeypatch.delenv("TACHIYA_INTERNAL_SHARED_SECRET", raising=False)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(TachigoUpstreamError, match="tachigo internal secret is not configured"):
+        with pytest.raises(
+            TachigoUpstreamError, match="tachigo internal secret is not configured"
+        ):
             await get_user_points("demo@tachigo.io", settings, client=client)
 
     assert requests == []
@@ -264,7 +268,9 @@ async def test_get_user_points_fails_closed_with_blank_internal_secret(monkeypat
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "   ")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(TachigoUpstreamError, match="tachigo internal secret is not configured"):
+        with pytest.raises(
+            TachigoUpstreamError, match="tachigo internal secret is not configured"
+        ):
             await get_user_points("demo@tachigo.io", settings, client=client)
 
     assert requests == []
@@ -290,7 +296,9 @@ async def test_get_identity_points_calls_tachigo_identity_api(monkeypatch):
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        result = await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+        result = await get_identity_points(
+            "tachigo", "tachigo-user-1", settings, client=client
+        )
 
     assert result == TachigoIdentityPoints(
         provider="tachigo",
@@ -323,15 +331,23 @@ async def test_get_identity_points_calls_tachigo_identity_api(monkeypatch):
         },
     ],
 )
-async def test_get_identity_points_rejects_upstream_identity_mismatch(monkeypatch, payload):
+async def test_get_identity_points_rejects_upstream_identity_mismatch(
+    monkeypatch, payload
+):
     settings = Settings(tachigo_api_url="http://tachigo.local")
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
     async with httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json=payload)),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(200, json=payload)
+        ),
     ) as client:
-        with pytest.raises(TachigoUpstreamError, match="tachigo upstream identity mismatch"):
-            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+        with pytest.raises(
+            TachigoUpstreamError, match="tachigo upstream identity mismatch"
+        ):
+            await get_identity_points(
+                "tachigo", "tachigo-user-1", settings, client=client
+            )
 
 
 @pytest.mark.anyio
@@ -356,7 +372,9 @@ async def test_get_identity_points_rejects_boolean_balances(monkeypatch):
             TachigoUpstreamError,
             match="tachigo upstream returned invalid points payload",
         ):
-            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+            await get_identity_points(
+                "tachigo", "tachigo-user-1", settings, client=client
+            )
 
 
 @pytest.mark.anyio
@@ -381,7 +399,9 @@ async def test_get_identity_points_rejects_negative_balances(monkeypatch):
             TachigoUpstreamError,
             match="tachigo upstream returned invalid points payload",
         ):
-            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+            await get_identity_points(
+                "tachigo", "tachigo-user-1", settings, client=client
+            )
 
 
 @pytest.mark.anyio
@@ -404,8 +424,12 @@ async def test_get_identity_points_fails_closed_without_internal_secret(monkeypa
     monkeypatch.delenv("TACHIYA_INTERNAL_SHARED_SECRET", raising=False)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(TachigoUpstreamError, match="tachigo internal secret is not configured"):
-            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+        with pytest.raises(
+            TachigoUpstreamError, match="tachigo internal secret is not configured"
+        ):
+            await get_identity_points(
+                "tachigo", "tachigo-user-1", settings, client=client
+            )
 
     assert requests == []
 
@@ -435,7 +459,9 @@ async def test_get_identity_points_rejects_blank_inputs_before_upstream(
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(TachigoUpstreamError, match=message):
-            await get_identity_points(provider, external_subject, settings, client=client)
+            await get_identity_points(
+                provider, external_subject, settings, client=client
+            )
 
     assert requests == []
 
@@ -446,7 +472,9 @@ async def test_get_user_points_raises_for_upstream_error(monkeypatch):
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
     async with httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _request: httpx.Response(502, text="bad gateway")),
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(502, text="bad gateway")
+        ),
     ) as client:
         with pytest.raises(TachigoUpstreamError, match="tachigo upstream returned 502"):
             await get_user_points("demo@tachigo.io", settings, client=client)
@@ -483,7 +511,9 @@ async def test_get_identity_points_raises_for_invalid_json_payload(monkeypatch):
             TachigoUpstreamError,
             match="tachigo upstream returned invalid points payload",
         ):
-            await get_identity_points("tachigo", "tachigo-user-1", settings, client=client)
+            await get_identity_points(
+                "tachigo", "tachigo-user-1", settings, client=client
+            )
 
 
 def build_session():
@@ -584,11 +614,15 @@ def test_tachigo_points_endpoint_maps_upstream_error(monkeypatch):
 
 def test_tachigo_identity_points_endpoint_returns_points(monkeypatch):
     session = build_session()
-    IdentityMappingService(session).link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    IdentityMappingService(session).link_identity(
+        "saleor-user-1", "tachigo", "tachigo-user-1"
+    )
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
-    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+    async def fake_get_identity_points(
+        provider: str, external_subject: str, settings: Settings
+    ):
         assert provider == "tachigo"
         assert external_subject == "tachigo-user-1"
         assert settings.tachigo_api_url
@@ -620,11 +654,15 @@ def test_tachigo_identity_points_query_endpoint_returns_points_for_special_subje
     monkeypatch,
 ):
     session = build_session()
-    IdentityMappingService(session).link_identity("saleor-user-1", "wallet", "eip155:1/0xabc")
+    IdentityMappingService(session).link_identity(
+        "saleor-user-1", "wallet", "eip155:1/0xabc"
+    )
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
-    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+    async def fake_get_identity_points(
+        provider: str, external_subject: str, settings: Settings
+    ):
         assert provider == "wallet"
         assert external_subject == "eip155:1/0xabc"
         assert settings.tachigo_api_url
@@ -653,13 +691,19 @@ def test_tachigo_identity_points_query_endpoint_returns_points_for_special_subje
     }
 
 
-def test_tachigo_identity_points_endpoint_rejects_upstream_identity_mismatch(monkeypatch):
+def test_tachigo_identity_points_endpoint_rejects_upstream_identity_mismatch(
+    monkeypatch,
+):
     session = build_session()
-    IdentityMappingService(session).link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    IdentityMappingService(session).link_identity(
+        "saleor-user-1", "tachigo", "tachigo-user-1"
+    )
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
-    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+    async def fake_get_identity_points(
+        provider: str, external_subject: str, settings: Settings
+    ):
         return TachigoIdentityPoints(
             provider="wallet",
             external_subject=external_subject,
@@ -684,7 +728,9 @@ def test_tachigo_identity_points_query_endpoint_rejects_blank_filters(monkeypatc
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
-    async def fail_get_identity_points(provider: str, external_subject: str, settings: Settings):
+    async def fail_get_identity_points(
+        provider: str, external_subject: str, settings: Settings
+    ):
         raise AssertionError("upstream should not be called")
 
     monkeypatch.setattr(tachigo, "get_identity_points", fail_get_identity_points)
@@ -715,11 +761,15 @@ def test_tachigo_identity_points_endpoint_returns_404_for_missing_mapping(monkey
 
 def test_tachigo_identity_points_endpoint_maps_upstream_error(monkeypatch):
     session = build_session()
-    IdentityMappingService(session).link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    IdentityMappingService(session).link_identity(
+        "saleor-user-1", "tachigo", "tachigo-user-1"
+    )
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
 
-    async def fake_get_identity_points(provider: str, external_subject: str, settings: Settings):
+    async def fake_get_identity_points(
+        provider: str, external_subject: str, settings: Settings
+    ):
         raise TachigoUpstreamError("tachigo upstream returned 502")
 
     monkeypatch.setattr(tachigo, "get_identity_points", fake_get_identity_points)

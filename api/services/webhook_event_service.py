@@ -19,7 +19,9 @@ class WebhookEventService:
         if webhook is None:
             return
 
-        event_id = self._validate_required(webhook.event_id, "webhook event_id is required")
+        event_id = self._validate_required(
+            webhook.event_id, "webhook event_id is required"
+        )
         existing_event = (
             self.db.query(WebhookEvent)
             .filter(WebhookEvent.event_id == event_id)
@@ -37,7 +39,9 @@ class WebhookEventService:
         if webhook is None:
             return
 
-        event_id = self._validate_required(webhook.event_id, "webhook event_id is required")
+        event_id = self._validate_required(
+            webhook.event_id, "webhook event_id is required"
+        )
         normalized_event_type = self._validate_required(
             event_type,
             "webhook event_type is required",
@@ -116,6 +120,10 @@ class WebhookEventService:
 
     @staticmethod
     def _validate_read_limit(limit: int) -> int:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 100
+        ):
             raise ValueError("limit must be between 1 and 100")
         return limit

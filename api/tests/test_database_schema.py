@@ -35,8 +35,12 @@ def test_ensure_coupon_extension_columns_adds_missing_columns():
 
     ensure_coupon_extension_columns(engine)
 
-    columns = {column["name"] for column in inspect(engine).get_columns("tachiya_demo_coupons")}
-    indexes = {index["name"] for index in inspect(engine).get_indexes("tachiya_demo_coupons")}
+    columns = {
+        column["name"] for column in inspect(engine).get_columns("tachiya_demo_coupons")
+    }
+    indexes = {
+        index["name"] for index in inspect(engine).get_indexes("tachiya_demo_coupons")
+    }
     assert "idempotency_key" in columns
     assert "redemption_token" in columns
     assert "ix_tachiya_demo_coupons_coupon_id" in indexes
@@ -118,10 +122,15 @@ def test_ensure_points_ledger_extension_columns_backfills_missing_columns():
 
     ensure_points_ledger_extension_columns(engine)
 
-    columns = {column["name"] for column in inspect(engine).get_columns("tachiya_points_ledger")}
+    columns = {
+        column["name"]
+        for column in inspect(engine).get_columns("tachiya_points_ledger")
+    }
     assert "source_type" in columns
     assert "expires_at" in columns
-    indexes = {index["name"] for index in inspect(engine).get_indexes("tachiya_points_ledger")}
+    indexes = {
+        index["name"] for index in inspect(engine).get_indexes("tachiya_points_ledger")
+    }
     assert "ix_tachiya_points_ledger_entry_type" in indexes
     assert "ix_tachiya_points_ledger_source_type" in indexes
     assert "ix_tachiya_points_ledger_created_at" in indexes
@@ -184,8 +193,7 @@ def test_metadata_includes_streamer_profiles_table():
 
     inspector = inspect(engine)
     columns = {
-        column["name"]
-        for column in inspector.get_columns("tachiya_streamer_profiles")
+        column["name"] for column in inspector.get_columns("tachiya_streamer_profiles")
     }
     indexes = {
         index["name"]: index
@@ -239,7 +247,10 @@ def test_metadata_includes_streamer_product_assignments_table():
     assert "ix_tachiya_streamer_product_assignments_streamer_profile_id" in indexes
     assert "ix_tachiya_streamer_product_assignments_streamer_slug" in indexes
     assert "ix_tachiya_streamer_product_assignments_created_at" in indexes
-    assert indexes["ix_tachiya_streamer_product_assignments_saleor_product_id"]["unique"] == 1
+    assert (
+        indexes["ix_tachiya_streamer_product_assignments_saleor_product_id"]["unique"]
+        == 1
+    )
     assert foreign_keys[0]["referred_table"] == "tachiya_streamer_profiles"
 
 
@@ -283,8 +294,7 @@ def test_metadata_includes_streamer_revenue_share_records_table():
     assert "ix_tachiya_streamer_revenue_share_records_streamer_profile_id" in indexes
     assert "ix_tachiya_streamer_revenue_share_records_streamer_slug" in indexes
     assert "ix_tachiya_streamer_revenue_share_records_created_at" in indexes
-    assert (
-        unique_constraints["uq_tachiya_streamer_revenue_share_order_streamer"]["column_names"]
-        == ["order_id", "streamer_slug"]
-    )
+    assert unique_constraints["uq_tachiya_streamer_revenue_share_order_streamer"][
+        "column_names"
+    ] == ["order_id", "streamer_slug"]
     assert foreign_keys[0]["referred_table"] == "tachiya_streamer_profiles"

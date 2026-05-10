@@ -5,7 +5,11 @@ from pydantic import BaseModel, Field, StrictInt, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
-from security import VerifiedWebhookRequest, verify_internal_secret, verify_webhook_signature
+from security import (
+    VerifiedWebhookRequest,
+    verify_internal_secret,
+    verify_webhook_signature,
+)
 from services.referral_service import ReferralService
 from services.webhook_event_service import WebhookEventReplayError, WebhookEventService
 
@@ -66,7 +70,9 @@ def _reject_replayed_webhook_event(
     try:
         WebhookEventService(db).reject_replayed_event(webhook)
     except WebhookEventReplayError as exc:
-        raise HTTPException(status_code=409, detail="webhook event already processed") from exc
+        raise HTTPException(
+            status_code=409, detail="webhook event already processed"
+        ) from exc
 
 
 def _record_webhook_event(

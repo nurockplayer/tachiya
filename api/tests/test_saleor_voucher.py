@@ -20,8 +20,12 @@ def fail_session_and_token():
         ("missing-coupon", "unknown coupon_id: missing-coupon"),
     ],
 )
-def test_create_voucher_rejects_invalid_coupon_id_before_saleor_call(monkeypatch, coupon_id, message):
-    monkeypatch.setattr(saleor_voucher, "_get_session_and_token", fail_session_and_token)
+def test_create_voucher_rejects_invalid_coupon_id_before_saleor_call(
+    monkeypatch, coupon_id, message
+):
+    monkeypatch.setattr(
+        saleor_voucher, "_get_session_and_token", fail_session_and_token
+    )
 
     with pytest.raises(ValueError, match=message):
         saleor_voucher.create_voucher(coupon_id, "TACHIYA-ABC123")
@@ -29,7 +33,9 @@ def test_create_voucher_rejects_invalid_coupon_id_before_saleor_call(monkeypatch
 
 @pytest.mark.parametrize("code", [" ", None])
 def test_create_voucher_rejects_blank_code_before_saleor_call(monkeypatch, code):
-    monkeypatch.setattr(saleor_voucher, "_get_session_and_token", fail_session_and_token)
+    monkeypatch.setattr(
+        saleor_voucher, "_get_session_and_token", fail_session_and_token
+    )
 
     with pytest.raises(ValueError, match="voucher code is required"):
         saleor_voucher.create_voucher("tachiya-95", code)
@@ -61,7 +67,9 @@ def test_create_voucher_normalizes_inputs(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(saleor_voucher, "_get_session_and_token", fake_session_and_token)
+    monkeypatch.setattr(
+        saleor_voucher, "_get_session_and_token", fake_session_and_token
+    )
     monkeypatch.setattr(saleor_voucher, "execute_graphql", fake_execute_graphql)
 
     result = saleor_voucher.create_voucher(" tachiya-95 ", " TACHIYA-ABC123 ")
@@ -94,7 +102,9 @@ def test_create_voucher_rejects_malformed_create_response(monkeypatch, voucher_p
             },
         }
 
-    monkeypatch.setattr(saleor_voucher, "_get_session_and_token", fake_session_and_token)
+    monkeypatch.setattr(
+        saleor_voucher, "_get_session_and_token", fake_session_and_token
+    )
     monkeypatch.setattr(saleor_voucher, "execute_graphql", fake_execute_graphql)
 
     with pytest.raises(RuntimeError, match="voucherCreate missing voucher"):
@@ -139,10 +149,14 @@ def test_create_voucher_rejects_malformed_channel_listing_response(
             },
         }
 
-    monkeypatch.setattr(saleor_voucher, "_get_session_and_token", fake_session_and_token)
+    monkeypatch.setattr(
+        saleor_voucher, "_get_session_and_token", fake_session_and_token
+    )
     monkeypatch.setattr(saleor_voucher, "execute_graphql", fake_execute_graphql)
 
-    with pytest.raises(RuntimeError, match="voucherChannelListingUpdate missing voucher"):
+    with pytest.raises(
+        RuntimeError, match="voucherChannelListingUpdate missing voucher"
+    ):
         saleor_voucher.create_voucher("tachiya-95", "TACHIYA-ABC123")
 
     assert len(calls) == 2

@@ -91,7 +91,9 @@ def test_link_identity_rejects_second_active_mapping_for_same_provider():
     service = IdentityMappingService(session)
     service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
 
-    with pytest.raises(ValueError, match="saleor customer already has active provider mapping"):
+    with pytest.raises(
+        ValueError, match="saleor customer already has active provider mapping"
+    ):
         service.link_identity("saleor-user-1", "tachigo", "tachigo-user-2")
 
 
@@ -111,10 +113,17 @@ def test_unlink_identity_records_audit_event():
     service = IdentityMappingService(session)
     mapping = service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
 
-    service.unlink_identity(mapping.id, actor="ops-user-1", reason="user requested unlink")
+    service.unlink_identity(
+        mapping.id, actor="ops-user-1", reason="user requested unlink"
+    )
 
-    events = session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
-    assert [event.action for event in events] == ["identity.linked", "identity.unlinked"]
+    events = (
+        session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    )
+    assert [event.action for event in events] == [
+        "identity.linked",
+        "identity.unlinked",
+    ]
     assert events[-1].actor == "ops-user-1"
     assert events[-1].source == "tachigo:tachigo-user-1"
     assert events[-1].target == "saleor:saleor-user-1"
@@ -128,7 +137,9 @@ def test_unlink_identity_stores_blank_audit_reason_as_none():
 
     service.unlink_identity(mapping.id, actor="ops-user-1", reason="   ")
 
-    events = session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    events = (
+        session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    )
     assert events[-1].action == "identity.unlinked"
     assert events[-1].reason is None
 
@@ -137,7 +148,9 @@ def test_link_identity_relinks_unlinked_external_subject_with_audit_event():
     session = build_session()
     service = IdentityMappingService(session)
     mapping = service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
-    service.unlink_identity(mapping.id, actor="ops-user-1", reason="user requested unlink")
+    service.unlink_identity(
+        mapping.id, actor="ops-user-1", reason="user requested unlink"
+    )
 
     relinked = service.link_identity(
         "saleor-user-2",
@@ -147,7 +160,9 @@ def test_link_identity_relinks_unlinked_external_subject_with_audit_event():
         reason="verified new owner",
     )
 
-    events = session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    events = (
+        session.query(IdentityAuditEvent).order_by(IdentityAuditEvent.created_at).all()
+    )
     assert relinked.id == mapping.id
     assert relinked.saleor_customer_id == "saleor-user-2"
     assert relinked.unlinked_at is None
@@ -166,7 +181,9 @@ def test_link_identity_relinks_unlinked_external_subject_with_audit_event():
 def test_list_mappings_filters_active_and_unlinked_mappings():
     session = build_session()
     service = IdentityMappingService(session)
-    tachigo_mapping = service.link_identity("saleor-user-1", "tachigo", "tachigo-user-1")
+    tachigo_mapping = service.link_identity(
+        "saleor-user-1", "tachigo", "tachigo-user-1"
+    )
     twitch_mapping = service.link_identity("saleor-user-2", "twitch", "twitch-user-1")
     service.unlink_identity(tachigo_mapping.id)
 

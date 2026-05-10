@@ -6,9 +6,15 @@ from pydantic import BaseModel, Field, StrictInt, StringConstraints
 from sqlalchemy.orm import Session
 
 from database import get_db
-from security import VerifiedWebhookRequest, verify_internal_secret, verify_webhook_signature
+from security import (
+    VerifiedWebhookRequest,
+    verify_internal_secret,
+    verify_webhook_signature,
+)
 from services.revenue_share_service import RevenueShareLine, RevenueShareService
-from services.streamer_product_assignment_service import StreamerProductAssignmentService
+from services.streamer_product_assignment_service import (
+    StreamerProductAssignmentService,
+)
 from services.streamer_service import StreamerService
 from services.webhook_event_service import WebhookEventReplayError, WebhookEventService
 
@@ -306,7 +312,9 @@ def list_streamer_revenue_share_records(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return RevenueShareRecordListResponse(
-        records=[_revenue_share_record_list_item_response(record) for record in records],
+        records=[
+            _revenue_share_record_list_item_response(record) for record in records
+        ],
     )
 
 
@@ -498,9 +506,13 @@ def get_streamer_product_assignment(
         saleor_product_id,
         "saleor_product_id is required",
     )
-    assignment = StreamerProductAssignmentService(db).get_by_product_id(normalized_product_id)
+    assignment = StreamerProductAssignmentService(db).get_by_product_id(
+        normalized_product_id
+    )
     if assignment is None:
-        raise HTTPException(status_code=404, detail="streamer product assignment not found")
+        raise HTTPException(
+            status_code=404, detail="streamer product assignment not found"
+        )
 
     return _streamer_product_assignment_response(assignment)
 
@@ -518,9 +530,13 @@ def delete_streamer_product_assignment(
         saleor_product_id,
         "saleor_product_id is required",
     )
-    assignment = StreamerProductAssignmentService(db).remove_product(normalized_product_id)
+    assignment = StreamerProductAssignmentService(db).remove_product(
+        normalized_product_id
+    )
     if assignment is None:
-        raise HTTPException(status_code=404, detail="streamer product assignment not found")
+        raise HTTPException(
+            status_code=404, detail="streamer product assignment not found"
+        )
 
     return _streamer_product_assignment_response(assignment)
 
@@ -539,7 +555,9 @@ def get_streamer_catalog(
     if profile is None or not profile.active:
         raise HTTPException(status_code=404, detail="streamer catalog not found")
 
-    saleor_product_ids = StreamerProductAssignmentService(db).list_product_ids_for_streamer(
+    saleor_product_ids = StreamerProductAssignmentService(
+        db
+    ).list_product_ids_for_streamer(
         profile.slug,
     )
     return StreamerCatalogResponse(
@@ -566,8 +584,7 @@ def update_streamer_profile(
         raise HTTPException(status_code=422, detail="at least one field is required")
 
     update_kwargs = {
-        field_name: getattr(req, field_name)
-        for field_name in req.model_fields_set
+        field_name: getattr(req, field_name) for field_name in req.model_fields_set
     }
     normalized_slug = _normalize_path_param(slug, "slug is required")
     try:
@@ -618,7 +635,9 @@ def _streamer_profile_response(profile) -> StreamerProfileResponse:
     )
 
 
-def _streamer_product_assignment_response(assignment) -> StreamerProductAssignmentResponse:
+def _streamer_product_assignment_response(
+    assignment,
+) -> StreamerProductAssignmentResponse:
     return StreamerProductAssignmentResponse(
         id=assignment.id,
         saleor_product_id=assignment.saleor_product_id,
@@ -651,7 +670,9 @@ def _revenue_share_record_response(result) -> RevenueShareRecordResponse:
     )
 
 
-def _revenue_share_record_list_item_response(record) -> StreamerRevenueShareRecordListItemResponse:
+def _revenue_share_record_list_item_response(
+    record,
+) -> StreamerRevenueShareRecordListItemResponse:
     return StreamerRevenueShareRecordListItemResponse(
         id=record.id,
         order_id=record.order_id,
@@ -673,7 +694,9 @@ def _reject_replayed_webhook_event(
     try:
         WebhookEventService(db).reject_replayed_event(webhook)
     except WebhookEventReplayError as exc:
-        raise HTTPException(status_code=409, detail="webhook event already processed") from exc
+        raise HTTPException(
+            status_code=409, detail="webhook event already processed"
+        ) from exc
 
 
 def _record_webhook_event(

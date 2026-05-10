@@ -15,7 +15,11 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from database import Base
-from models.streamer import StreamerProductAssignment, StreamerProfile, StreamerRevenueShareRecord
+from models.streamer import (
+    StreamerProductAssignment,
+    StreamerProfile,
+    StreamerRevenueShareRecord,
+)
 from models.webhook_event import WebhookEvent
 from routers import streamers
 
@@ -196,7 +200,11 @@ def test_update_streamer_profile(monkeypatch):
     create_response = client.post(
         "/streamers",
         headers=headers,
-        json={"slug": "streamer-one", "display_name": "One", "saleor_collection_id": "collection-1"},
+        json={
+            "slug": "streamer-one",
+            "display_name": "One",
+            "saleor_collection_id": "collection-1",
+        },
     )
 
     response = client.patch(
@@ -258,12 +266,20 @@ def test_list_streamer_profiles(monkeypatch):
     client.post(
         "/streamers",
         headers=headers,
-        json={"slug": "zeta", "display_name": "Zeta", "saleor_collection_id": "collection-z"},
+        json={
+            "slug": "zeta",
+            "display_name": "Zeta",
+            "saleor_collection_id": "collection-z",
+        },
     )
     client.post(
         "/streamers",
         headers=headers,
-        json={"slug": "alpha", "display_name": "Alpha", "saleor_collection_id": "collection-a"},
+        json={
+            "slug": "alpha",
+            "display_name": "Alpha",
+            "saleor_collection_id": "collection-a",
+        },
     )
     client.post(
         "/streamers",
@@ -369,8 +385,14 @@ def test_list_streamer_profiles_for_admin_filters_slug_and_created_range(monkeyp
         ("streamer-one", "One"),
         ("streamer-after", "After"),
     ]:
-        client.post("/streamers", headers=headers, json={"slug": slug, "display_name": display_name})
-    profiles = {profile.slug: profile for profile in session.query(StreamerProfile).all()}
+        client.post(
+            "/streamers",
+            headers=headers,
+            json={"slug": slug, "display_name": display_name},
+        )
+    profiles = {
+        profile.slug: profile for profile in session.query(StreamerProfile).all()
+    }
     profiles["streamer-before"].created_at = datetime(2026, 1, 1, 23, 59, 59)
     profiles["streamer-one"].created_at = datetime(2026, 1, 2, 12, 0, 0)
     profiles["streamer-after"].created_at = datetime(2026, 1, 3, 0, 0, 1)
@@ -388,7 +410,9 @@ def test_list_streamer_profiles_for_admin_filters_slug_and_created_range(monkeyp
     )
 
     assert response.status_code == 200
-    assert [profile["slug"] for profile in response.json()["profiles"]] == ["streamer-one"]
+    assert [profile["slug"] for profile in response.json()["profiles"]] == [
+        "streamer-one"
+    ]
 
 
 def test_list_streamer_profiles_for_admin_rejects_invalid_filters(monkeypatch):
@@ -433,12 +457,16 @@ def test_create_and_get_streamer_product_assignment(monkeypatch):
             "source": " saleor-metadata ",
         },
     )
-    get_response = client.get("/streamers/product-assignments/product-1", headers=headers)
+    get_response = client.get(
+        "/streamers/product-assignments/product-1", headers=headers
+    )
 
     assert streamer_response.status_code == 200
     assert assign_response.status_code == 200
     assert assign_response.json()["saleor_product_id"] == "product-1"
-    assert assign_response.json()["streamer_profile_id"] == streamer_response.json()["id"]
+    assert (
+        assign_response.json()["streamer_profile_id"] == streamer_response.json()["id"]
+    )
     assert assign_response.json()["streamer_slug"] == "streamer-one"
     assert assign_response.json()["source"] == "saleor-metadata"
     assert get_response.status_code == 200
@@ -450,7 +478,11 @@ def test_streamer_product_assignment_updates_existing_product(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     second_streamer_response = client.post(
         "/streamers",
         headers=headers,
@@ -474,8 +506,14 @@ def test_streamer_product_assignment_updates_existing_product(monkeypatch):
 
     assert first_assignment_response.status_code == 200
     assert updated_assignment_response.status_code == 200
-    assert updated_assignment_response.json()["id"] == first_assignment_response.json()["id"]
-    assert updated_assignment_response.json()["streamer_profile_id"] == second_streamer_response.json()["id"]
+    assert (
+        updated_assignment_response.json()["id"]
+        == first_assignment_response.json()["id"]
+    )
+    assert (
+        updated_assignment_response.json()["streamer_profile_id"]
+        == second_streamer_response.json()["id"]
+    )
     assert updated_assignment_response.json()["streamer_slug"] == "streamer-two"
     assert updated_assignment_response.json()["source"] == "manual-correction"
 
@@ -500,8 +538,16 @@ def test_list_streamer_product_assignments(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
-    client.post("/streamers", headers=headers, json={"slug": "streamer-two", "display_name": "Two"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-two", "display_name": "Two"},
+    )
     first_assignment_response = client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -532,7 +578,9 @@ def test_list_streamer_product_assignments(monkeypatch):
             {
                 "id": first_assignment_response.json()["id"],
                 "saleor_product_id": "product-1",
-                "streamer_profile_id": first_assignment_response.json()["streamer_profile_id"],
+                "streamer_profile_id": first_assignment_response.json()[
+                    "streamer_profile_id"
+                ],
                 "streamer_slug": "streamer-one",
                 "source": "saleor-metadata",
                 "created_at": first_assignment_response.json()["created_at"],
@@ -547,8 +595,17 @@ def test_list_streamer_product_assignments_filters_created_range(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
-    for product_id in ["product-before", "product-start", "product-end", "product-after"]:
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
+    for product_id in [
+        "product-before",
+        "product-start",
+        "product-end",
+        "product-after",
+    ]:
         client.post(
             "/streamers/product-assignments",
             headers=headers,
@@ -580,7 +637,9 @@ def test_list_streamer_product_assignments_filters_created_range(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert [assignment["saleor_product_id"] for assignment in response.json()["assignments"]] == [
+    assert [
+        assignment["saleor_product_id"] for assignment in response.json()["assignments"]
+    ] == [
         "product-end",
         "product-start",
     ]
@@ -637,15 +696,23 @@ def test_delete_streamer_product_assignment(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     assign_response = client.post(
         "/streamers/product-assignments",
         headers=headers,
         json={"saleor_product_id": "product-1", "streamer_slug": "streamer-one"},
     )
 
-    delete_response = client.delete("/streamers/product-assignments/product-1", headers=headers)
-    get_response = client.get("/streamers/product-assignments/product-1", headers=headers)
+    delete_response = client.delete(
+        "/streamers/product-assignments/product-1", headers=headers
+    )
+    get_response = client.get(
+        "/streamers/product-assignments/product-1", headers=headers
+    )
     preview_response = client.post(
         "/streamers/revenue-shares/preview",
         headers=headers,
@@ -677,12 +744,18 @@ def test_delete_streamer_product_assignment_returns_404(monkeypatch):
     assert response.json()["detail"] == "streamer product assignment not found"
 
 
-def test_streamer_product_assignment_path_endpoints_reject_blank_product_id(monkeypatch):
+def test_streamer_product_assignment_path_endpoints_reject_blank_product_id(
+    monkeypatch,
+):
     session = build_session()
     client = build_client(session, raise_server_exceptions=False)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -690,7 +763,9 @@ def test_streamer_product_assignment_path_endpoints_reject_blank_product_id(monk
     )
 
     get_response = client.get("/streamers/product-assignments/%20", headers=headers)
-    delete_response = client.delete("/streamers/product-assignments/%20", headers=headers)
+    delete_response = client.delete(
+        "/streamers/product-assignments/%20", headers=headers
+    )
 
     assert get_response.status_code == 422
     assert get_response.json()["detail"] == "saleor_product_id is required"
@@ -831,14 +906,19 @@ def test_revenue_share_endpoints_reject_non_strict_gross_amount(monkeypatch):
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
 
-    for endpoint in ["/streamers/revenue-shares/preview", "/streamers/revenue-shares/record"]:
+    for endpoint in [
+        "/streamers/revenue-shares/preview",
+        "/streamers/revenue-shares/record",
+    ]:
         for gross_amount in [True, "1200"]:
             response = client.post(
                 endpoint,
                 headers=headers,
                 json={
                     "order_id": "order-1",
-                    "lines": [{"saleor_product_id": "product-1", "gross_amount": gross_amount}],
+                    "lines": [
+                        {"saleor_product_id": "product-1", "gross_amount": gross_amount}
+                    ],
                 },
             )
 
@@ -876,7 +956,10 @@ def test_record_streamer_revenue_shares(monkeypatch):
     assert response.status_code == 200
     assert response.json()["order_id"] == "saleor-order-1"
     assert response.json()["unassigned_product_ids"] == ["missing-product"]
-    assert response.json()["records"][0]["streamer_profile_id"] == streamer_response.json()["id"]
+    assert (
+        response.json()["records"][0]["streamer_profile_id"]
+        == streamer_response.json()["id"]
+    )
     assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
     assert response.json()["records"][0]["gross_amount"] == 1200
     assert response.json()["records"][0]["commission_bps"] == 1250
@@ -979,7 +1062,10 @@ def test_revenue_share_order_completed_webhook_records_shares(monkeypatch):
     assert response.status_code == 200
     assert response.json()["order_id"] == "saleor-order-1"
     assert response.json()["unassigned_product_ids"] == ["missing-product"]
-    assert response.json()["records"][0]["streamer_profile_id"] == streamer_response.json()["id"]
+    assert (
+        response.json()["records"][0]["streamer_profile_id"]
+        == streamer_response.json()["id"]
+    )
     assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
     assert response.json()["records"][0]["share_amount"] == 150
     event = session.query(WebhookEvent).one()
@@ -1015,7 +1101,11 @@ def test_revenue_share_order_completed_webhook_rejects_replayed_event(monkeypatc
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -1041,7 +1131,11 @@ def test_revenue_share_order_completed_webhook_rejects_record_conflict(monkeypat
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -1103,7 +1197,10 @@ def test_list_revenue_share_records(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["records"][0]["order_id"] == "order-1"
-    assert response.json()["records"][0]["streamer_profile_id"] == streamer_response.json()["id"]
+    assert (
+        response.json()["records"][0]["streamer_profile_id"]
+        == streamer_response.json()["id"]
+    )
     assert response.json()["records"][0]["streamer_slug"] == "streamer-one"
     assert response.json()["records"][0]["share_amount"] == 150
     assert response.json()["records"][0]["status"] == "pending"
@@ -1116,7 +1213,11 @@ def test_list_revenue_share_records_filters_created_range(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -1175,7 +1276,10 @@ def test_list_revenue_share_records_rejects_invalid_query(monkeypatch):
 
     assert invalid_limit_response.status_code == 422
     assert invalid_status_response.status_code == 422
-    assert invalid_status_response.json()["detail"] == "status must be pending, paid, or void"
+    assert (
+        invalid_status_response.json()["detail"]
+        == "status must be pending, paid, or void"
+    )
 
 
 def test_list_revenue_share_records_rejects_invalid_created_range(monkeypatch):
@@ -1201,8 +1305,16 @@ def test_summarize_revenue_share_records(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
-    client.post("/streamers", headers=headers, json={"slug": "streamer-two", "display_name": "Two"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-two", "display_name": "Two"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -1244,14 +1356,29 @@ def test_summarize_revenue_share_records(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "summaries": [
-            {"status": "paid", "record_count": 1, "gross_amount": 1200, "share_amount": 120},
-            {"status": "pending", "record_count": 1, "gross_amount": 2400, "share_amount": 240},
+            {
+                "status": "paid",
+                "record_count": 1,
+                "gross_amount": 1200,
+                "share_amount": 120,
+            },
+            {
+                "status": "pending",
+                "record_count": 1,
+                "gross_amount": 2400,
+                "share_amount": 240,
+            },
         ],
     }
     assert filtered_response.status_code == 200
     assert filtered_response.json() == {
         "summaries": [
-            {"status": "pending", "record_count": 1, "gross_amount": 2400, "share_amount": 240},
+            {
+                "status": "pending",
+                "record_count": 1,
+                "gross_amount": 2400,
+                "share_amount": 240,
+            },
         ],
     }
 
@@ -1261,7 +1388,11 @@ def test_summarize_revenue_share_records_filters_created_range(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,
@@ -1297,7 +1428,12 @@ def test_summarize_revenue_share_records_filters_created_range(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "summaries": [
-            {"status": "pending", "record_count": 1, "gross_amount": 1200, "share_amount": 120},
+            {
+                "status": "pending",
+                "record_count": 1,
+                "gross_amount": 1200,
+                "share_amount": 120,
+            },
         ],
     }
 
@@ -1339,7 +1475,11 @@ def test_update_revenue_share_record_status(monkeypatch):
     client = build_client(session)
     monkeypatch.setenv("TACHIYA_INTERNAL_SHARED_SECRET", "shared-secret")
     headers = {"X-Tachiya-Internal-Secret": "shared-secret"}
-    client.post("/streamers", headers=headers, json={"slug": "streamer-one", "display_name": "One"})
+    client.post(
+        "/streamers",
+        headers=headers,
+        json={"slug": "streamer-one", "display_name": "One"},
+    )
     client.post(
         "/streamers/product-assignments",
         headers=headers,

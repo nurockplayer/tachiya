@@ -64,7 +64,9 @@ class StreamerService:
                 "display_name is required",
             )
         if saleor_collection_id is not _UNSET:
-            profile.saleor_collection_id = self._normalize_optional(saleor_collection_id)
+            profile.saleor_collection_id = self._normalize_optional(
+                saleor_collection_id
+            )
         if commission_bps is not _UNSET and commission_bps is not None:
             self._validate_commission_bps(commission_bps)
             profile.commission_bps = commission_bps
@@ -128,7 +130,9 @@ class StreamerService:
             query = query.filter(StreamerProfile.created_at <= normalized_created_to)
 
         return (
-            query.order_by(StreamerProfile.display_name.asc(), StreamerProfile.slug.asc())
+            query.order_by(
+                StreamerProfile.display_name.asc(), StreamerProfile.slug.asc()
+            )
             .limit(normalized_limit)
             .all()
         )
@@ -175,6 +179,10 @@ class StreamerService:
 
     @staticmethod
     def _validate_read_limit(limit: int) -> int:
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= 100
+        ):
             raise ValueError("limit must be between 1 and 100")
         return limit

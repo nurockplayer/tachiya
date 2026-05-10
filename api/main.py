@@ -7,7 +7,15 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from config import get_settings, is_internal_shared_secret_configured
 from database import check_database_ready, create_tables
-from routers import coupons, identity_mappings, points, referrals, streamers, tachigo, webhooks
+from routers import (
+    coupons,
+    identity_mappings,
+    points,
+    referrals,
+    streamers,
+    tachigo,
+    webhooks,
+)
 
 
 @asynccontextmanager
