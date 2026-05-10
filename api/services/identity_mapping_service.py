@@ -146,6 +146,7 @@ class IdentityMappingService:
         include_unlinked: bool = False,
         limit: int = 20,
     ) -> list[IdentityMapping]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_provider = (
             self._normalize_provider(provider)
             if provider is not None
@@ -186,7 +187,7 @@ class IdentityMappingService:
 
         return (
             query.order_by(IdentityMapping.created_at.desc(), IdentityMapping.id.asc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -201,6 +202,7 @@ class IdentityMappingService:
         created_to: datetime | None = None,
         limit: int = 20,
     ) -> list[IdentityAuditEvent]:
+        normalized_limit = self._validate_read_limit(limit)
         normalized_action = self._normalize_optional_filter(action, "action is required")
         normalized_actor = self._normalize_optional_filter(actor, "actor is required")
         normalized_source = self._normalize_optional_filter(source, "source is required")
@@ -230,7 +232,7 @@ class IdentityMappingService:
 
         return (
             query.order_by(IdentityAuditEvent.created_at.desc(), IdentityAuditEvent.id.desc())
-            .limit(limit)
+            .limit(normalized_limit)
             .all()
         )
 
@@ -299,3 +301,9 @@ class IdentityMappingService:
         if value.tzinfo is None:
             return value
         return value.astimezone(UTC).replace(tzinfo=None)
+
+    @staticmethod
+    def _validate_read_limit(limit: int) -> int:
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        return limit
