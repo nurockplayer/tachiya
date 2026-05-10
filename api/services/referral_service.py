@@ -1,3 +1,4 @@
+import math
 import uuid
 
 from sqlalchemy.exc import IntegrityError
@@ -10,7 +11,7 @@ from models.referral import ReferralRelationship, ReferralReward
 class ReferralService:
     def __init__(self, db: Session, reward_rate: float = 0.05):
         self.db = db
-        self.reward_rate = reward_rate
+        self.reward_rate = self._validate_reward_rate(reward_rate)
 
     async def process_referral_reward(
         self,
@@ -106,3 +107,14 @@ class ReferralService:
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise ValueError(message)
         return value
+
+    @staticmethod
+    def _validate_reward_rate(value: float) -> float:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int | float)
+            or not math.isfinite(value)
+            or not 0 < value <= 1
+        ):
+            raise ValueError("reward_rate must be between 0 and 1")
+        return float(value)
