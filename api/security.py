@@ -50,7 +50,7 @@ async def verify_webhook_signature(
         raise HTTPException(status_code=401, detail="stale webhook timestamp")
 
     body = await request.body()
-    signed_payload = f"{timestamp}.".encode() + body
+    signed_payload = f"{timestamp}.{x_tachiya_webhook_event_id}.".encode() + body
     expected_signature = hmac.new(
         secret.encode(),
         signed_payload,

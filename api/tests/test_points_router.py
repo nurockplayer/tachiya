@@ -364,7 +364,7 @@ def signed_order_reward_request(
 ):
     body = json.dumps(payload, separators=(",", ":")).encode()
     timestamp = timestamp or int(time.time())
-    signed_payload = f"{timestamp}.".encode() + body
+    signed_payload = f"{timestamp}.{event_id}.".encode() + body
     signature = hmac.new(secret.encode(), signed_payload, hashlib.sha256).hexdigest()
     return client.post(
         "/points/webhooks/order-rewarded",
