@@ -29,6 +29,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /hasDelegationExecutionLog/);
   assert.match(workflow, /hasWorkerProfileMention/);
   assert.match(workflow, /hasTrivialExceptionReason/);
+  assert.ok(workflow.includes("Self-review\\s*\\/\\s*exception reason"));
+  assert.match(workflow, /Scope checks bypassed by scope-exception label; autonomous delegation gate still enforced\./);
+  assert.doesNotMatch(workflow, /Scope police bypassed by scope-exception label\.'\)\n\s+return/);
   assert.match(workflow, /Autonomous PRs must include a `Delegation Execution Log` section\./);
   assert.match(workflow, /Autonomous PRs must name at least one worker profile or give an explicit trivial\/self-only exception reason\./);
   assert.match(workflow, /scope-exception/);

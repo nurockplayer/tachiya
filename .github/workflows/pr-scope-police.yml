@@ -30,10 +30,6 @@ jobs:
             const bypassLabels = new Set(['scope-exception'])
             const rawLabels = (pr.labels || []).map((label) => label.name)
             const bypassed = rawLabels.some((label) => bypassLabels.has(label))
-            if (bypassed) {
-              core.notice('Scope police bypassed by scope-exception label.')
-              return
-            }
 
             const owner = context.repo.owner
             const repo = context.repo.repo
@@ -80,7 +76,7 @@ jobs:
               new RegExp(`\\b${profile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(bodyForAutonomousGate),
             )
             const trivialExceptionMatch = bodyForAutonomousGate.match(
-              /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason)\s*[：:]\s*(.+)/i,
+              /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
             )
             const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim()
             const hasTrivialExceptionReason =
@@ -125,25 +121,29 @@ jobs:
             const failures = []
             const warnings = []
 
-            if (!titlePrefix) {
+            if (bypassed) {
+              core.notice('Scope checks bypassed by scope-exception label; autonomous delegation gate still enforced.')
+            }
+
+            if (!bypassed && !titlePrefix) {
               failures.push(`PR title must start with one of: ${allowedPrefixes.join(', ')}. Current title: "${title}".`)
             }
 
-            if (!/#\d+/.test(body)) {
+            if (!bypassed && !/#\d+/.test(body)) {
               failures.push('PR body must reference at least one issue or PR number such as `#123`.')
             }
 
-            if (!hasSourceOfTruth) {
+            if (!bypassed && !hasSourceOfTruth) {
               failures.push('PR body must include a `Source of truth` line.')
             }
 
-            if (!dependsOnRaw) {
+            if (!bypassed && !dependsOnRaw) {
               failures.push('PR body must include a `Depends on PR` line with `none` or `#123`.')
-            } else if (!dependsOnNone && !dependsOnPrMatch) {
+            } else if (!bypassed && !dependsOnNone && !dependsOnPrMatch) {
               failures.push('`Depends on PR` must be `none` or a single PR number such as `#123`.')
             }
 
-            if (!hasExplicitNonGoals) {
+            if (!bypassed && !hasExplicitNonGoals) {
               failures.push('PR body must include a `本 PR 明確不做` section.')
             }
 
@@ -159,25 +159,25 @@ jobs:
               }
             }
 
-            if (filenames.length > hardMaxChangedFiles) {
+            if (!bypassed && filenames.length > hardMaxChangedFiles) {
               failures.push(`PR changes ${filenames.length} files, which exceeds the hard limit of ${hardMaxChangedFiles}.`)
             }
 
-            if (diffLines > hardMaxDiffLines) {
+            if (!bypassed && diffLines > hardMaxDiffLines) {
               failures.push(`PR diff size is ${diffLines} lines (+/-), which exceeds the hard limit of ${hardMaxDiffLines}.`)
-            } else if (diffLines > warningDiffLines) {
+            } else if (!bypassed && diffLines > warningDiffLines) {
               warnings.push(`PR diff size is ${diffLines} lines (+/-), which exceeds the soft limit of ${warningDiffLines}.`)
             }
 
-            if (productSurfaces.length > 1) {
+            if (!bypassed && productSurfaces.length > 1) {
               failures.push(`PR touches multiple product surfaces (${productSurfaces.join(', ')}). Split API and dashboard work.`)
             }
 
-            if (titlePrefix === '[backend]' && touches.dashboard) {
+            if (!bypassed && titlePrefix === '[backend]' && touches.dashboard) {
               failures.push('[backend] PR must not change dashboard surfaces.')
             }
 
-            if (titlePrefix === '[frontend]' && touches.api) {
+            if (!bypassed && titlePrefix === '[frontend]' && touches.api) {
               failures.push('[frontend] PR must not change API/backend surfaces.')
             }
 

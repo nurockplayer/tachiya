@@ -14,6 +14,7 @@
 - merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback；`chatgpt-codex-connector` 無 finding 時可用第一則 PR comment 的 reaction 作為已看過證據，若有 actionable finding，必須修正或留下不採用佐證 comment 並 resolve。
 - 不得只用 CodeRabbit success status 判定 review 完成，因為 skipped review 也可能回報 success。
 - 只有單檔、單用途、沒有共享狀態、沒有跨檔驗證擴散風險的 trivial/self-only 任務，才可以不派 worker；這種例外必須在 issue plan 與 PR log 明確寫出 reason。
+- `scope-exception` 只 bypass 一般 scope / size / product-surface gate，不會 bypass autonomous delegation gate。
 
 ## Start-of-work Delegation Gate
 
