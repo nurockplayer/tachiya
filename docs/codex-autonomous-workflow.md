@@ -133,6 +133,18 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 - issue close 的最終 scope 判斷。
 - review finding 是否採納、是否需要補修、是否可用替代證據 closeout 的最終判斷。
 
+## Commit / push 分工
+
+實際 git write 目前由 controller 擁有：建立或切換 branch、產生 commit、push branch、force-with-lease、以及任何會改動 `.git`、credential、remote tracking 或目前 branch 狀態的操作，都不得預設交給 worker。
+
+`ops_spark` 預設負責 git write 前後的例行證據工作：
+
+- pre-commit checklist：確認 working tree scope、預期驗證命令、commit message 是否含 `refs #...` 或 PR closeout 所需 reference。
+- post-push readback：讀回 commit SHA、push branch、remote branch、PR head SHA、CI/check 狀態、review/readback 狀態。
+- PR log/evidence 整理：把 controller-owned git write 的原因、ops_spark checklist、post-push readback 與剩餘 blocker 寫進 PR log 或 closeout evidence。
+
+如果 controller 因工具故障、權限不足、trivial/self-only exception，或任務切片太小而自行完成 pre-commit checklist / post-push readback，PR Delegation Execution Log 必須寫明原因，並列出等價證據：commit SHA、push branch、PR head SHA、CI/check readback 與讀回時間點。
+
 ## Automated Review Gate
 
 任何 autonomous PR merge 前，總控必須完成 fresh review readback：

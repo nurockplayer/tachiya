@@ -183,7 +183,8 @@ make logs   # 查看 logs
 | 操作 | 誰執行 | 原因 |
 |---|---|---|
 | `git status` / `git log` / `git diff` | Codex | 需要即時看輸出來做決策 |
-| `git commit` / `git push` / `git checkout -b` | Codex | `codex:rescue` subagent 在 sandbox 內無 `.git` 寫入權限 |
+| 實際 git branch / commit / push write（如 `git checkout -b`、`git commit`、`git push`） | Codex controller | 涉及 `.git`、credential、目前 branch 狀態與 guarded write 風險，現階段由 controller 擁有 |
+| pre-commit checklist / post-push readback | `ops_spark` | 例行驗證與證據讀回預設交給 `ops_spark`，包含 commit SHA、push branch、PR head SHA、CI/check 狀態 |
 | 檔案搜尋——定向（知道找什麼） | Codex（用 Glob / Grep 工具） | 規劃階段，需要結果判斷下一步 |
 | 檔案搜尋——探索性（不確定在哪） | Codex（透過 `/explore-with-codex`） | 大範圍搜尋交給 Codex，只拿摘要回來 |
 | 複雜 bash 腳本、批次操作 | Codex | 純執行，只需確認最終結果 |

@@ -15,13 +15,13 @@ Depends on PR: <!-- `none` 或 `#123` -->
 - Actual worker profile(s):
   - <!-- 例：controller / docs_worker / ops_spark；routine readback / CI status / PR comment 整理 / review closeout evidence 預設要列出 ops_spark -->
 - Task:
-  - <!-- 每個 worker 實際負責的切片；請把 GitHub readback、CI status、PR body/comment cleanup、review closeout evidence 拆成獨立 ops slice -->
+  - <!-- 每個 worker 實際負責的切片；請把 GitHub readback、CI status、PR body/comment cleanup、review closeout evidence、pre-commit checklist、post-push readback 拆成獨立 ops_spark slice -->
 - Model strength:
   - <!-- 例：controller = high；docs_worker = medium -->
 - Trivial/self-only exception reason:
   - <!-- 若無例外請填 n/a -->
 - Evidence / verification:
-  - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；PR head/check/review/thread readback 摘要 -->
+  - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；commit SHA；push branch；PR head SHA；CI/check/review/thread readback 摘要；若 git write 由 controller 執行，記錄原因與 ops_spark checklist/readback -->
 - Review conversation closeout:
   - <!-- autonomous: 填「已完成 closeout」，並補註 comment/resolve/thread URL/readback 驗證；非 autonomous human PR 填 n/a -->
 

@@ -86,7 +86,6 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     "Task",
     "Model strength",
     "Trivial/self-only exception reason",
-    "Evidence / verification",
   ];
   const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
     extractDelegationFieldBody(label)
@@ -104,6 +103,12 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     "review closeout",
     "review conversation closeout",
     "closeout evidence",
+    "commit",
+    "push",
+    "pre-commit",
+    "post-push",
+    "head sha",
+    "branch",
     "pr body",
     "pr comment",
     "issue comment",
@@ -198,7 +203,13 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs must include a `Delegation Execution Log` section\./);
   assert.match(workflow, /Autonomous PRs must name at least one worker profile or give an explicit trivial\/self-only exception reason\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
-  assert.match(workflow, /Autonomous PRs with routine readback\/comment\/closeout work should delegate that slice to `ops_spark`/);
+  assert.match(workflow, /Autonomous PRs with routine readback\/comment\/closeout or commit-push checklist work should delegate that slice to `ops_spark`/);
+  assert.match(workflow, /'commit'/);
+  assert.match(workflow, /'push'/);
+  assert.match(workflow, /'pre-commit'/);
+  assert.match(workflow, /'post-push'/);
+  assert.match(workflow, /'head sha'/);
+  assert.match(workflow, /'branch'/);
   assert.match(workflow, /scope-exception/);
 });
 
@@ -252,6 +263,27 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
 - Review conversation closeout:
   - Not applicable - human-authored PR
 ## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const humanEvidenceOnlyWithPlaceholderDelegation = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - n/a
+- Actual worker profile(s):
+  - n/a
+- Task:
+  - n/a
+- Model strength:
+  - n/a
+- Trivial/self-only exception reason:
+  - n/a
+- Evidence / verification:
+  - pnpm test
+  - node --test .github/workflow-tests/ci-policy.test.mjs
+- Review conversation closeout:
+  - n/a
+## Validation
+- pnpm test
 - node --test .github/workflow-tests/ci-policy.test.mjs
 `;
   const placeholderVariants = [
@@ -375,6 +407,17 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
+  });
+  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: humanEvidenceOnlyWithPlaceholderDelegation, labels: [] }), {
+    autonomousDetected: false,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: false,
+    hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasRoutineOpsDelegationWarning: false,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: false,
   });
   for (const placeholderVariant of placeholderVariants) {
     assert.deepEqual(
@@ -516,6 +559,43 @@ test("Autonomous PR routine ops work warns when ops_spark is missing", () => {
   - one-line metadata-only readback in the same PR after worker outage
 - Review conversation closeout:
   - discussion_r123 resolved, PR comment evidence added
+`;
+
+  assert.equal(evaluateAutonomousCloseoutGate({ body: withoutOpsSpark, labels: ["codex"] }).hasRoutineOpsDelegationWarning, true);
+  assert.equal(evaluateAutonomousCloseoutGate({ body: withOpsSpark, labels: ["codex"] }).hasRoutineOpsDelegationWarning, false);
+  assert.equal(evaluateAutonomousCloseoutGate({ body: withException, labels: ["codex"] }).hasRoutineOpsDelegationWarning, false);
+});
+
+test("Autonomous PR commit-push checklist work warns when ops_spark is missing", () => {
+  const withoutOpsSpark = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+- Task:
+  - commit/push checklist with pre-commit validation, post-push readback, branch and PR head SHA verification
+- Review conversation closeout:
+  - no automated review threads were open
+`;
+  const withOpsSpark = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+  - ops_spark
+- Task:
+  - ops_spark: pre-commit checklist and post-push readback for branch and PR head SHA
+- Review conversation closeout:
+  - no automated review threads were open
+`;
+  const withException = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+- Task:
+  - commit/push checklist with pre-commit validation, post-push readback, branch and PR head SHA verification
+- Trivial/self-only exception reason:
+  - controller ran the checklist directly because this was a single docs-only follow-up and ops_spark was unavailable
+- Review conversation closeout:
+  - no automated review threads were open
 `;
 
   assert.equal(evaluateAutonomousCloseoutGate({ body: withoutOpsSpark, labels: ["codex"] }).hasRoutineOpsDelegationWarning, true);
