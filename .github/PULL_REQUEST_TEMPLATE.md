@@ -14,9 +14,8 @@ Depends on PR: <!-- `none` 或 `#123` -->
   - <!-- 例：#345 的 Issue Delegation Plan -->
 - Actual worker profile(s):
   - <!-- 例：controller / docs_worker / ops_spark；routine readback / CI status / PR comment 整理 / review closeout evidence 預設要列出 ops_spark -->
-- Spawn directive format:
-  - 需填入的格式：`profile=<profile> model=<model> reasoning=<low|medium|high|xhigh> controller_fallback=<not_allowed|allowed> fallback_reason=<reason if allowed>`
-  - 例：spawn 指令格式（不要直接複製這一行）：profile=ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed
+- Spawn directive:
+  - <!-- autonomous PR 請填一行，欄位包含 profile=、model=、reasoning=、controller_fallback=；非 autonomous human PR 可填 n/a。 -->
 - Task:
   - <!-- 每個 worker 實際負責的切片；請把 GitHub readback、CI status、PR body/comment cleanup、review closeout evidence、pre-commit checklist、post-push readback 拆成獨立 ops_spark slice -->
 - Model strength:

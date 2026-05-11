@@ -62,7 +62,7 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     return match?.[1] ?? "";
   };
   const extractSpawnDirectives = () => {
-    const spawnFieldPattern = /(?:^|\n)\s*-\s*(?:Spawn directive|spawn)\s*[：:]\s*([^\n]+)/gi;
+    const spawnFieldPattern = /(?:^|\n)[^\S\n]*-[^\S\n]*(?:Spawn directive|spawn)[^\S\n]*[：:][^\S\n]*([^\n]+)/gi;
     const spawnValuePattern = (key, line) => {
       const pattern = new RegExp(`${key}\\s*[=:]\\s*([^\\s]+)`, "i");
       const match = line.match(pattern);
