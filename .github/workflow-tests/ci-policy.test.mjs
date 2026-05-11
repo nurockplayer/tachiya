@@ -13,11 +13,28 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   const autonomousLabels = new Set(["codex", "codex-automation", "auto-ready"]);
   const hasAutonomousLabel = normalizedLabels.some((label) => autonomousLabels.has(label));
   const hasDelegationExecutionLog = /(?:^|\n)\s*(?:#{1,6}\s*)?Delegation Execution Log\b/i.test(bodyForAutonomousGate);
-  const autonomousDetected = hasAutonomousLabel || hasDelegationExecutionLog;
-
   const extractSectionBody = (label) => {
     const pattern = new RegExp(
       `(?:^|\\n)\\s*(?:-\\s*)?(?:#{1,6}\\s*)?${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*##\\s|\\n*$)`,
+      "i",
+    );
+    const match = bodyForAutonomousGate.match(pattern);
+    return match?.[1] ?? "";
+  };
+  const extractDelegationFieldBody = (label) => {
+    const delegatedLabels = [
+      "Source issue delegation plan",
+      "Actual worker profile(s)",
+      "Task",
+      "Model strength",
+      "Trivial/self-only exception reason",
+      "Evidence / verification",
+      "Review conversation closeout",
+    ];
+    const pattern = new RegExp(
+      `(?:^|\\n)\\s*-\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:${delegatedLabels
+        .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|")})\\s*[：:]|\\n\\s*##\\s|\\n*$)`,
       "i",
     );
     const match = bodyForAutonomousGate.match(pattern);
@@ -30,8 +47,51 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, "")
       .replace(/[.,。:：;；!?！？]+$/g, "")
       .trim();
+  const normalizePlaceholderValue = (value) => value.trim().replace(/[.,。:：;；!?！？]+$/g, "").toLowerCase();
 
-  const isPlaceholderLine = (line) => /^(?:n\/a|none|無|不適用)(?:$|[\s:：.,，。;；!?！？-].*)/i.test(line);
+  const placeholderValues = new Set([
+    "n/a",
+    "none",
+    "無",
+    "不適用",
+    "na",
+    "n.a",
+    "tbd",
+    "todo",
+    "pending",
+    "-",
+    "—",
+    "待定",
+    "尚未",
+    "略",
+    "略過",
+    "待補",
+  ]);
+  const isPlaceholderLine = (line) => placeholderValues.has(normalizePlaceholderValue(line));
+  const trivialExceptionMatch = bodyForAutonomousGate.match(
+    /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
+  );
+  const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim();
+  const hasTrivialExceptionReason =
+    Boolean(trivialExceptionReason) &&
+    !placeholderValues.has(normalizePlaceholderValue(normalizeLine(trivialExceptionReason)));
+  const delegationExecutionLogLabels = [
+    "Source issue delegation plan",
+    "Actual worker profile(s)",
+    "Task",
+    "Model strength",
+    "Trivial/self-only exception reason",
+    "Evidence / verification",
+    "Review conversation closeout",
+  ];
+  const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
+    extractDelegationFieldBody(label)
+      .split("\n")
+      .map(normalizeLine)
+      .filter(Boolean)
+      .some((line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
+  );
+  const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog;
   const reviewConversationCloseoutLines = extractSectionBody("Review conversation closeout")
     .split("\n")
     .map(normalizeLine)
@@ -44,6 +104,8 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   return {
     autonomousDetected,
     hasDelegationExecutionLog,
+    hasMeaningfulDelegationExecutionLog,
+    hasTrivialExceptionReason,
     hasReviewConversationCloseout,
     hasMeaningfulReviewConversationCloseout,
   };
@@ -70,11 +132,29 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
 
   assert.match(workflow, /const autonomousLabels = new Set\(\['codex', 'codex-automation', 'auto-ready'\]\)/);
   assert.match(workflow, /const bodyForAutonomousGate = body\.replace\(\/<!--\[\\s\\S\]\*\?-->\//);
+  assert.match(workflow, /const extractDelegationFieldBody = \(label\) =>/);
   assert.match(workflow, /hasDelegationExecutionLog/);
+  assert.match(workflow, /hasMeaningfulDelegationExecutionLog/);
   assert.match(workflow, /hasWorkerProfileMention/);
   assert.match(workflow, /hasTrivialExceptionReason/);
-  assert.match(workflow, /Review conversation closeout/);
+  assert.match(workflow, /const normalizePlaceholderValue = \(value\) =>/);
+  assert.match(workflow, /- Review conversation closeout present: \$\{hasReviewConversationCloseout \? 'yes' : 'no'\}/);
+  assert.match(workflow, /- Review conversation closeout meaningful: \$\{hasMeaningfulReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /hasMeaningfulReviewConversationCloseout/);
+  assert.match(workflow, /const placeholderValues = new Set\(\[/);
+  assert.match(workflow, /placeholderValues\.has\(normalizePlaceholderValue\(normalizeSectionLine\(trivialExceptionReason\)\)\)/);
+  assert.match(workflow, /'na'/);
+  assert.match(workflow, /'n\.a'/);
+  assert.match(workflow, /'tbd'/);
+  assert.match(workflow, /'todo'/);
+  assert.match(workflow, /'pending'/);
+  assert.match(workflow, /'-'/);
+  assert.match(workflow, /'—'/);
+  assert.match(workflow, /'待定'/);
+  assert.match(workflow, /'尚未'/);
+  assert.match(workflow, /'略'/);
+  assert.match(workflow, /'略過'/);
+  assert.match(workflow, /'待補'/);
   assert.ok(workflow.includes("Self-review\\s*\\/\\s*exception reason"));
   assert.match(workflow, /Scope checks bypassed by scope-exception label; autonomous delegation gate still enforced\./);
   assert.doesNotMatch(workflow, /Scope police bypassed by scope-exception label\.'\)\n\s+return/);
@@ -98,6 +178,39 @@ test("PR scope police keeps Tachiya title, body, and size gates", () => {
 });
 
 test("Autonomous PR closeout gate treats template bullets as meaningful only when filled", () => {
+  const templateOnlyHumanCloseout = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - n/a
+- Actual worker profile(s):
+  - n/a
+- Task:
+  - n/a
+- Model strength:
+  - n/a
+- Trivial/self-only exception reason:
+  - n/a
+- Evidence / verification:
+  - n/a
+- Review conversation closeout:
+  - n/a
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const placeholderVariants = [
+    "na",
+    "n.a.",
+    "tbd",
+    "todo",
+    "pending",
+    "-",
+    "—",
+    "待定",
+    "尚未",
+    "略",
+    "略過",
+    "待補",
+  ];
   const autonomousMissingCloseout = `
 ## Delegation Execution Log
 - Actual worker profile(s):
@@ -115,6 +228,19 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
   - controller
 - Task:
   - review policy gate
+- Review conversation closeout:
+  - 已完成 closeout；已回覆 CodeRabbit 與 reviewer thread，並確認 resolve 紀錄可讀回
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const autonomousPlaceholderExceptionReason = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+- Task:
+  - review policy gate
+- Trivial/self-only exception reason:
+  - tbd
 - Review conversation closeout:
   - 已完成 closeout；已回覆 CodeRabbit 與 reviewer thread，並確認 resolve 紀錄可讀回
 ## Validation
@@ -141,18 +267,91 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
   assert.deepEqual(evaluateAutonomousCloseoutGate({ body: autonomousMissingCloseout, labels: ["codex"] }), {
     autonomousDetected: true,
     hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasTrivialExceptionReason: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
   });
   assert.deepEqual(evaluateAutonomousCloseoutGate({ body: autonomousFilledCloseout, labels: ["auto-ready"] }), {
     autonomousDetected: true,
     hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasTrivialExceptionReason: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
   });
+  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: autonomousPlaceholderExceptionReason, labels: ["codex"] }), {
+    autonomousDetected: true,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasTrivialExceptionReason: false,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: true,
+  });
+  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: templateOnlyHumanCloseout, labels: [] }), {
+    autonomousDetected: false,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: false,
+    hasTrivialExceptionReason: false,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: false,
+  });
+  for (const placeholderVariant of placeholderVariants) {
+    assert.deepEqual(
+      evaluateAutonomousCloseoutGate({
+        body: `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - ${placeholderVariant}
+- Task:
+  - ${placeholderVariant}
+- Review conversation closeout:
+  - ${placeholderVariant}
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`,
+        labels: [],
+      }),
+      {
+        autonomousDetected: false,
+        hasDelegationExecutionLog: true,
+        hasMeaningfulDelegationExecutionLog: false,
+        hasTrivialExceptionReason: false,
+        hasReviewConversationCloseout: true,
+        hasMeaningfulReviewConversationCloseout: false,
+      },
+      `placeholder variant ${placeholderVariant} should stay non-meaningful`,
+    );
+  }
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({
+      body: `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - pending reviewer reply, evidence attached in thread
+- Task:
+  - review policy gate
+- Review conversation closeout:
+  - follow-up evidence remains pending on the thread
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`,
+        labels: [],
+      }),
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    },
+  );
   assert.deepEqual(evaluateAutonomousCloseoutGate({ body: humanMissingCloseout, labels: [] }), {
     autonomousDetected: false,
     hasDelegationExecutionLog: false,
+    hasMeaningfulDelegationExecutionLog: false,
+    hasTrivialExceptionReason: false,
     hasReviewConversationCloseout: false,
     hasMeaningfulReviewConversationCloseout: false,
   });
@@ -164,6 +363,8 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     {
       autonomousDetected: true,
       hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: false,
     },
@@ -182,6 +383,8 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     {
       autonomousDetected: true,
       hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: false,
     },

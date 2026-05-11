@@ -65,18 +65,75 @@ jobs:
               const match = bodyForAutonomousGate.match(pattern)
               return match?.[1] ?? ''
             }
+            const extractDelegationFieldBody = (label) => {
+              const delegatedLabels = [
+                'Source issue delegation plan',
+                'Actual worker profile(s)',
+                'Task',
+                'Model strength',
+                'Trivial/self-only exception reason',
+                'Evidence / verification',
+                'Review conversation closeout',
+              ]
+              const pattern = new RegExp(
+                `(?:^|\\n)\\s*-\\s*${escapeRegExp(label)}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:${delegatedLabels
+                  .map((value) => escapeRegExp(value))
+                  .join('|')})\\s*[：:]|\\n\\s*##\\s|\\n*$)`,
+                'i',
+              )
+              const match = bodyForAutonomousGate.match(pattern)
+              return match?.[1] ?? ''
+            }
             const normalizeSectionLine = (line) =>
               line
                 .replace(/^\s*[-*]\s*/, '')
                 .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
                 .replace(/[.,。:：;；!?！？]+$/g, '')
                 .trim()
-            const isPlaceholderCloseoutLine = (line) =>
-              /^(?:n\/a|none|無|不適用)(?:$|[\s:：.,，。;；!?！？-].*)/i.test(line)
+            const normalizePlaceholderValue = (value) =>
+              value
+                .trim()
+                .replace(/[.,。:：;；!?！？]+$/g, '')
+                .toLowerCase()
+            const placeholderValues = new Set([
+              'n/a',
+              'none',
+              '無',
+              '不適用',
+              'na',
+              'n.a',
+              'tbd',
+              'todo',
+              'pending',
+              '-',
+              '—',
+              '待定',
+              '尚未',
+              '略',
+              '略過',
+              '待補',
+            ])
+            const isPlaceholderCloseoutLine = (line) => placeholderValues.has(normalizePlaceholderValue(line))
             const normalizedLabels = (pr.labels || []).map((label) => (label.name || '').toLowerCase())
             const hasAutonomousLabel = normalizedLabels.some((label) => autonomousLabels.has(label))
             const hasDelegationExecutionLog = /(?:^|\n)\s*(?:#{1,6}\s*)?Delegation Execution Log\b/i.test(bodyForAutonomousGate)
-            const autonomousDetected = hasAutonomousLabel || hasDelegationExecutionLog
+            const delegationExecutionLogLabels = [
+              'Source issue delegation plan',
+              'Actual worker profile(s)',
+              'Task',
+              'Model strength',
+              'Trivial/self-only exception reason',
+              'Evidence / verification',
+              'Review conversation closeout',
+            ]
+            const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
+              extractDelegationFieldBody(label)
+                .split('\n')
+                .map(normalizeSectionLine)
+                .filter(Boolean)
+                .some((line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
+            )
+            const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog
             const reviewConversationCloseoutBody = extractSectionBody('Review conversation closeout')
             const reviewConversationCloseoutLines = reviewConversationCloseoutBody
               .split('\n')
@@ -107,7 +164,7 @@ jobs:
             const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim()
             const hasTrivialExceptionReason =
               Boolean(trivialExceptionReason) &&
-              !/^(?:n\/a|none|無|不適用)$/i.test(trivialExceptionReason)
+              !placeholderValues.has(normalizePlaceholderValue(normalizeSectionLine(trivialExceptionReason)))
 
             const allowedPrefixes = ['[backend]', '[frontend]', '[discussion]']
             const titlePrefix = allowedPrefixes.find((prefix) => title.startsWith(prefix))
@@ -244,8 +301,9 @@ jobs:
             summaryLines.push(`- Workflow touched: ${touches.workflow ? 'yes' : 'no'}`)
             summaryLines.push(`- Autonomous label hit: ${hasAutonomousLabel ? 'yes' : 'no'}`)
             summaryLines.push(`- Delegation log present: ${hasDelegationExecutionLog ? 'yes' : 'no'}`)
-            summaryLines.push(`- Review closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
-            summaryLines.push(`- Review closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
+            summaryLines.push(`- Delegation log meaningful: ${hasMeaningfulDelegationExecutionLog ? 'yes' : 'no'}`)
+            summaryLines.push(`- Review conversation closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
+            summaryLines.push(`- Review conversation closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')
 
             const commentBody = summaryLines.join('\n')
