@@ -70,3 +70,22 @@ test("cross-repo contract gate owns Storefront drift checks without duplicating 
   assert.doesNotMatch(workflow, /pnpm install/);
   assert.doesNotMatch(workflow, /pnpm (run )?build/);
 });
+
+test("PostgreSQL migration gate stays path-filtered and secret-free", () => {
+  const workflow = readWorkflow("postgres-migration-gate.yml");
+
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /schedule:/);
+  assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /push:/);
+  assert.match(workflow, /api\/migrations\/\*\*/);
+  assert.match(workflow, /api\/models\/\*\*/);
+  assert.match(workflow, /services:\s+postgres:/);
+  assert.match(workflow, /image: postgres:16/);
+  assert.match(workflow, /timeout-minutes: 10/);
+  assert.match(workflow, /working-directory: api/);
+  assert.match(workflow, /DATABASE_URL: postgresql:\/\/tachiya:tachiya@localhost:5432\/tachiya/);
+  assert.match(workflow, /uv run --group dev alembic upgrade head/);
+  assert.doesNotMatch(workflow, /secrets\./);
+  assert.doesNotMatch(workflow, /production/i);
+});
