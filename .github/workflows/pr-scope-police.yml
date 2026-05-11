@@ -158,13 +158,43 @@ jobs:
             const hasWorkerProfileMention = workerProfileNames.some((profile) =>
               new RegExp(`\\b${profile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(bodyForAutonomousGate),
             )
+            const hasOpsSparkMention = bodyForAutonomousGate.toLowerCase().includes('ops_spark')
             const trivialExceptionMatch = bodyForAutonomousGate.match(
               /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
             )
             const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim()
+            const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody('Trivial/self-only exception reason')
+              .split('\n')
+              .map(normalizeSectionLine)
+              .filter(Boolean)
+              .some((line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line))
             const hasTrivialExceptionReason =
-              Boolean(trivialExceptionReason) &&
-              !placeholderValues.has(normalizePlaceholderValue(normalizeSectionLine(trivialExceptionReason)))
+              hasMeaningfulTrivialExceptionField ||
+              (Boolean(trivialExceptionReason) &&
+                !placeholderValues.has(normalizePlaceholderValue(normalizeSectionLine(trivialExceptionReason))))
+            const routineOpsKeywords = [
+              'readback',
+              'ci status',
+              'check status',
+              'review closeout',
+              'review conversation closeout',
+              'closeout evidence',
+              'pr body',
+              'pr comment',
+              'issue comment',
+              'thread',
+              'resolve',
+              'resolved',
+              '讀回',
+              '狀態讀回',
+              '留言',
+              '證據',
+              '收斂',
+              '關閉對話',
+            ]
+            const hasRoutineOpsWork = routineOpsKeywords.some((keyword) =>
+              bodyForAutonomousGate.toLowerCase().includes(keyword.toLowerCase()),
+            )
 
             const allowedPrefixes = ['[backend]', '[frontend]', '[discussion]']
             const titlePrefix = allowedPrefixes.find((prefix) => title.startsWith(prefix))
@@ -244,6 +274,12 @@ jobs:
               if (!hasMeaningfulReviewConversationCloseout) {
                 failures.push('Autonomous PRs must include a meaningful `Review conversation closeout` field.')
               }
+
+              if (hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason) {
+                warnings.push(
+                  'Autonomous PRs with routine readback/comment/closeout work should delegate that slice to `ops_spark` or document a trivial/self-only exception.',
+                )
+              }
             }
 
             if (!bypassed && filenames.length > hardMaxChangedFiles) {
@@ -302,6 +338,7 @@ jobs:
             summaryLines.push(`- Autonomous label hit: ${hasAutonomousLabel ? 'yes' : 'no'}`)
             summaryLines.push(`- Delegation log present: ${hasDelegationExecutionLog ? 'yes' : 'no'}`)
             summaryLines.push(`- Delegation log meaningful: ${hasMeaningfulDelegationExecutionLog ? 'yes' : 'no'}`)
+            summaryLines.push(`- Routine ops delegation hint: ${hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason ? 'missing ops_spark' : 'ok'}`)
             summaryLines.push(`- Review conversation closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push(`- Review conversation closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')

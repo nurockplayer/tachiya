@@ -7,6 +7,7 @@
 - autonomous work 必須先過 Start-of-work Delegation Gate，然後才可以讀專案資料、開始計劃、建立 issue、或撰寫 PR body。
 - 總控 agent 負責架構、計劃、scope、最終 review、guarded merge、closeout。
 - worker/subagent 負責可切分的探索、實作、文件、測試、GitHub readback、CI log 分析。
+- 資訊來回、GitHub PR/issue readback、CI/check 狀態讀回、PR body/comment 整理、review closeout evidence 蒐集與 resolve 狀態確認，預設交給 `ops_spark` 或同級低強度 worker。
 - 能用較快模型完成的工作優先交給 Spark / low-cost worker；高風險決策保留給總控或高推理 worker。
 - 每個實作任務都必須先有 GitHub issue，並以 PR 合併到 `develop`。
 - 不直接 push 到 `develop`、`main`、`master`。
@@ -91,6 +92,8 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 | GitHub issue/label/PR body/check readback | `ops_spark` |
 | GitHub issue creation with known scope/body | `ops_spark` drafts and creates, controller reviews scope before implementation |
 | CI log 初步分析、routine terminal 檢查 | `ops_spark` |
+| 資訊來回、PR body/comment 整理、review closeout evidence 蒐集 | `ops_spark` |
+| review thread resolve 狀態讀回、comment URL / discussion URL 彙整 | `ops_spark` |
 | 大範圍找檔案、讀 code pattern | `repo_scout` |
 | 文件、計劃、issue/PR 草稿 | `docs_worker` |
 | 單檔或小範圍 test 補強 | `test_worker` |
@@ -107,10 +110,19 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 - 依總控核准的 scope 建 issue、查 issue、補 issue comment。
 - 驗證 issue label / state / URL readback。
 - 建 PR、更新 PR body。
+- 整理 PR body、PR comment、issue comment、review closeout evidence。
 - 查 labels、milestones、review state、CI checks。
 - 抓 failed check logs 並整理摘要。
 - 讀回 latest head SHA、merge state、status rollup。
 - 準備 closeout evidence。
+- 確認 review thread 是否 resolved，並彙整 comment URL、discussion URL、thread id、head SHA、讀回時間點。
+
+`ops_spark` 回報必須包含可被總控核對的證據摘要，不只寫「已確認」。至少列出：
+
+- 讀回來源與指令摘要。
+- PR head SHA 或 issue/comment URL。
+- CI/check、review、thread/comment 的目前狀態。
+- 缺權限、rate limit、工具限制或需要總控判斷的 blocker。
 
 總控保留：
 
@@ -119,19 +131,20 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 - `gh pr merge --match-head-commit`。
 - conflict / failed check / stale review 的決策。
 - issue close 的最終 scope 判斷。
+- review finding 是否採納、是否需要補修、是否可用替代證據 closeout 的最終判斷。
 
 ## Automated Review Gate
 
 任何 autonomous PR merge 前，總控必須完成 fresh review readback：
 
-1. 確認最新 PR head SHA、base branch、mergeability 與 CI/check 狀態。
-2. 確認 CodeRabbit 已產生實際 review；若 CodeRabbit 明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。
-3. 確認 `chatgpt-codex-connector` 已留下 review/comment，或在第一則 PR comment 左下角留下 reaction。只有兩者都沒有時，才手動 comment `@codex review`。
+1. 先指派 `ops_spark` 讀回最新 PR head SHA、base branch、mergeability 與 CI/check 狀態；總控審核讀回結果。
+2. 先指派 `ops_spark` 確認 CodeRabbit 是否已產生實際 review；若 CodeRabbit 明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。
+3. 先指派 `ops_spark` 確認 `chatgpt-codex-connector` 已留下 review/comment，或在第一則 PR comment 左下角留下 reaction。只有兩者都沒有時，才手動 comment `@codex review`。
 4. 針對每個 actionable automated review finding，merge 前只能選一條路：
    - 修正、push、重跑相關驗證；
    - 留下技術佐證 comment 說明為何不採用。
-5. GitHub 允許時，將已處理的 review thread/comment resolve。
-6. 若 push 過新 commit，merge 前重新讀回 head SHA。
+5. GitHub 允許時，將已處理的 review thread/comment resolve；routine comment/resolve/readback 由 `ops_spark` 執行或整理，總控負責判斷處置是否足夠。
+6. 若 push 過新 commit，merge 前由 `ops_spark` 重新讀回 head SHA 與 automated review 狀態。
 
 CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".*"]`，讓 PR target branch 不限 default branch 都能觸發 auto review。
 
@@ -139,15 +152,16 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 
 每個 autonomous PR 都要把 automated review conversation 收斂到可追溯狀態，無論是修正還是不採用：
 
-1. 對每一則 actionable finding，總控需先列出處置：
+1. 對每一則 actionable finding，總控需先列出處置；`ops_spark` 負責蒐集 thread/comment/readback 證據：
    - `fix`：推上修正 commit，補上「已修正」comment（可含驗證證據），並在可見 thread 上 resolve。
    - `not adopted`：保留不採用理由 comment，並在可見 thread 上 resolve。
 2. 如果沒有權限/工具不允許 resolve thread，必須在 PR comment 補一則替代紀錄，包含 thread URL、處置原因與剩餘風險或後續追蹤狀態。
-3. 新增 commit 後，回到 PR 做 fresh readback，重確認：
+3. 新增 commit 後，指派 `ops_spark` 回到 PR 做 fresh readback，重確認：
    - review/auto-review 狀態
    - 每則 finding 的處置紀錄仍保留完整
    - head SHA 與最新 conversation 狀態一致
 4. PR closeout 前，review conversation 要求不得是「僅有文字變更描述」，最少要有 comment 或 resolve 證據可被 reviewer/readback 看到。
+5. 總控不得把「留證據並 resolve」這類資訊搬運工作預設留給自己做；只有工具故障、權限不足、或任務小到符合 trivial/self-only exception 時才可自行處理，且必須在 PR log 寫明原因。
 
 ## PR Scope Police Contract
 
@@ -165,16 +179,16 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 ## Standard Autonomous Loop
 
 1. 評估現況與產品級缺口。
-2. 總控決定 issue scope；`ops_spark` 可負責建立或更新 GitHub issue，並讀回 URL、state、labels。
+2. 總控決定 issue scope；`ops_spark` 負責建立或更新 GitHub issue，並讀回 URL、state、labels。
 3. 從 `develop` 切 scoped branch。
 4. 依任務類型指派 worker。
 5. worker 回報變更與驗證；總控審查 diff。
 6. 總控或 worker 補必要修正。
 7. 跑 relevant validation；高風險改動需 full validation。
-8. 開 PR 到 `develop`，PR body 包含 Source of truth、Depends on PR、non-goals、validation。
-9. 等 CI/checks/review 狀態 fresh readback。
+8. `ops_spark` 可依總控核准內容開 PR 到 `develop` 或更新 PR body；PR body 包含 Source of truth、Depends on PR、non-goals、validation。
+9. `ops_spark` 做 CI/checks/review 狀態 fresh readback，總控判斷是否需要補修或等待。
 10. 總控用 guarded merge 合併。
-11. 補 issue evidence comment，確認 issue state / labels / closeout。
+11. `ops_spark` 補 issue evidence comment，確認 issue state / labels / closeout；總控審核 closeout scope。
 12. 更新本機 `develop`，回報 merge commit、驗證與剩餘風險。
 
 ## Validation Policy

@@ -13,17 +13,17 @@ Depends on PR: <!-- `none` 或 `#123` -->
 - Source issue delegation plan:
   - <!-- 例：#345 的 Issue Delegation Plan -->
 - Actual worker profile(s):
-  - <!-- 例：controller / docs_worker / ops_spark -->
+  - <!-- 例：controller / docs_worker / ops_spark；routine readback / CI status / PR comment 整理 / review closeout evidence 預設要列出 ops_spark -->
 - Task:
-  - <!-- 每個 worker 實際負責的切片 -->
+  - <!-- 每個 worker 實際負責的切片；請把 GitHub readback、CI status、PR body/comment cleanup、review closeout evidence 拆成獨立 ops slice -->
 - Model strength:
   - <!-- 例：controller = high；docs_worker = medium -->
 - Trivial/self-only exception reason:
   - <!-- 若無例外請填 n/a -->
 - Evidence / verification:
-  - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs -->
+  - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；PR head/check/review/thread readback 摘要 -->
 - Review conversation closeout:
-  - <!-- autonomous: 填「已完成 closeout」，並補註 comment/resolve 驗證；非 autonomous human PR 填 n/a -->
+  - <!-- autonomous: 填「已完成 closeout」，並補註 comment/resolve/thread URL/readback 驗證；非 autonomous human PR 填 n/a -->
 
 ## Validation
 - [ ] 本地測試過

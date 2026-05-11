@@ -72,9 +72,14 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
   );
   const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim();
+  const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody("Trivial/self-only exception reason")
+    .split("\n")
+    .map(normalizeLine)
+    .filter(Boolean)
+    .some((line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line));
   const hasTrivialExceptionReason =
-    Boolean(trivialExceptionReason) &&
-    !placeholderValues.has(normalizePlaceholderValue(normalizeLine(trivialExceptionReason)));
+    hasMeaningfulTrivialExceptionField ||
+    (Boolean(trivialExceptionReason) && !placeholderValues.has(normalizePlaceholderValue(normalizeLine(trivialExceptionReason))));
   const delegationExecutionLogLabels = [
     "Source issue delegation plan",
     "Actual worker profile(s)",
@@ -92,6 +97,31 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       .some((line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
   );
   const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog;
+  const hasOpsSparkMention = bodyForAutonomousGate.toLowerCase().includes("ops_spark");
+  const routineOpsKeywords = [
+    "readback",
+    "ci status",
+    "check status",
+    "review closeout",
+    "review conversation closeout",
+    "closeout evidence",
+    "pr body",
+    "pr comment",
+    "issue comment",
+    "thread",
+    "resolve",
+    "resolved",
+    "讀回",
+    "狀態讀回",
+    "留言",
+    "證據",
+    "收斂",
+    "關閉對話",
+  ];
+  const hasRoutineOpsWork = routineOpsKeywords.some((keyword) =>
+    bodyForAutonomousGate.toLowerCase().includes(keyword.toLowerCase()),
+  );
+  const hasRoutineOpsDelegationWarning = autonomousDetected && hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason;
   const reviewConversationCloseoutLines = extractSectionBody("Review conversation closeout")
     .split("\n")
     .map(normalizeLine)
@@ -106,6 +136,9 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     hasDelegationExecutionLog,
     hasMeaningfulDelegationExecutionLog,
     hasTrivialExceptionReason,
+    hasOpsSparkMention,
+    hasRoutineOpsWork,
+    hasRoutineOpsDelegationWarning,
     hasReviewConversationCloseout,
     hasMeaningfulReviewConversationCloseout,
   };
@@ -136,6 +169,11 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /hasDelegationExecutionLog/);
   assert.match(workflow, /hasMeaningfulDelegationExecutionLog/);
   assert.match(workflow, /hasWorkerProfileMention/);
+  assert.match(workflow, /const hasOpsSparkMention = bodyForAutonomousGate\.toLowerCase\(\)\.includes\('ops_spark'\)/);
+  assert.match(workflow, /const routineOpsKeywords = \[/);
+  assert.match(workflow, /hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason/);
+  assert.match(workflow, /const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody\('Trivial\/self-only exception reason'\)/);
+  assert.match(workflow, /Routine ops delegation hint: \$\{hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason \? 'missing ops_spark' : 'ok'\}/);
   assert.match(workflow, /hasTrivialExceptionReason/);
   assert.match(workflow, /const normalizePlaceholderValue = \(value\) =>/);
   assert.match(workflow, /- Review conversation closeout present: \$\{hasReviewConversationCloseout \? 'yes' : 'no'\}/);
@@ -161,6 +199,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs must include a `Delegation Execution Log` section\./);
   assert.match(workflow, /Autonomous PRs must name at least one worker profile or give an explicit trivial\/self-only exception reason\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
+  assert.match(workflow, /Autonomous PRs with routine readback\/comment\/closeout work should delegate that slice to `ops_spark`/);
   assert.match(workflow, /scope-exception/);
 });
 
@@ -269,6 +308,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: true,
     hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasRoutineOpsDelegationWarning: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
   });
@@ -277,6 +319,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: true,
     hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasRoutineOpsDelegationWarning: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
   });
@@ -285,6 +330,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: true,
     hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasRoutineOpsDelegationWarning: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
   });
@@ -293,6 +341,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: false,
     hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
   });
@@ -317,6 +368,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
         hasDelegationExecutionLog: true,
         hasMeaningfulDelegationExecutionLog: false,
         hasTrivialExceptionReason: false,
+        hasOpsSparkMention: false,
+        hasRoutineOpsWork: true,
+        hasRoutineOpsDelegationWarning: false,
         hasReviewConversationCloseout: true,
         hasMeaningfulReviewConversationCloseout: false,
       },
@@ -343,6 +397,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
       hasDelegationExecutionLog: true,
       hasMeaningfulDelegationExecutionLog: true,
       hasTrivialExceptionReason: false,
+      hasOpsSparkMention: false,
+      hasRoutineOpsWork: true,
+      hasRoutineOpsDelegationWarning: true,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: true,
     },
@@ -352,6 +409,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasDelegationExecutionLog: false,
     hasMeaningfulDelegationExecutionLog: false,
     hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: false,
+    hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: false,
     hasMeaningfulReviewConversationCloseout: false,
   });
@@ -365,6 +425,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
       hasDelegationExecutionLog: true,
       hasMeaningfulDelegationExecutionLog: true,
       hasTrivialExceptionReason: false,
+      hasOpsSparkMention: false,
+      hasRoutineOpsWork: true,
+      hasRoutineOpsDelegationWarning: true,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: false,
     },
@@ -385,10 +448,50 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
       hasDelegationExecutionLog: true,
       hasMeaningfulDelegationExecutionLog: true,
       hasTrivialExceptionReason: false,
+      hasOpsSparkMention: false,
+      hasRoutineOpsWork: true,
+      hasRoutineOpsDelegationWarning: true,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: false,
     },
   );
+});
+
+test("Autonomous PR routine ops work warns when ops_spark is missing", () => {
+  const withoutOpsSpark = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+- Task:
+  - review closeout evidence readback and PR comment cleanup
+- Review conversation closeout:
+  - discussion_r123 resolved, PR comment evidence added
+`;
+  const withOpsSpark = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+  - ops_spark
+- Task:
+  - ops_spark: review closeout evidence readback and PR comment cleanup
+- Review conversation closeout:
+  - discussion_r123 resolved, PR comment evidence added
+`;
+  const withException = `
+## Delegation Execution Log
+- Actual worker profile(s):
+  - controller
+- Task:
+  - review closeout evidence readback and PR comment cleanup
+- Trivial/self-only exception reason:
+  - one-line metadata-only readback in the same PR after worker outage
+- Review conversation closeout:
+  - discussion_r123 resolved, PR comment evidence added
+`;
+
+  assert.equal(evaluateAutonomousCloseoutGate({ body: withoutOpsSpark, labels: ["codex"] }).hasRoutineOpsDelegationWarning, true);
+  assert.equal(evaluateAutonomousCloseoutGate({ body: withOpsSpark, labels: ["codex"] }).hasRoutineOpsDelegationWarning, false);
+  assert.equal(evaluateAutonomousCloseoutGate({ body: withException, labels: ["codex"] }).hasRoutineOpsDelegationWarning, false);
 });
 
 test("Dependabot auto-merge policy stays narrow", () => {

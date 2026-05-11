@@ -198,6 +198,8 @@ autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/c
 
 可切分的探索、文件、測試、一般實作、GitHub readback、CI log 分析，可以依任務風險委派給 worker/subagent。routine GitHub / terminal / repo 探索優先使用 Spark 或較低推理成本的 worker；schema、migration、ledger、金流、權限模型與 merge decision 必須由總控或高推理 worker 審查。
 
+資訊來回、GitHub PR/issue readback、CI/check 狀態讀回、PR body/comment 整理、review closeout evidence 蒐集與 resolve 狀態確認，預設都是 `ops_spark` 工作。總控不得把這類資料搬運當成自己的預設工作；總控只審核 worker 證據是否足以支持後續修正、等待、merge 或 closeout 決策。
+
 完整 worker profile、路由規則與 GitHub 操作分工見 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)。
 
 ### Automated Review Gate
