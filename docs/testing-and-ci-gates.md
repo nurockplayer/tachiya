@@ -31,7 +31,7 @@
 
 Root repo 目前另有 cross-repo contract gate：
 
-- [`.github/workflows/cross-repo-contract.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/cross-repo-contract.yml)
+- [`.github/workflows/cross-repo-contract.yml`](../.github/workflows/cross-repo-contract.yml)
   - scope: Tachiya API contract docs、Tachiya router surface、Storefront develop consumer helper / tests
   - checks: checkout `nurockplayer/storefront@develop`，執行 `.github/workflow-tests/cross-repo-contract.test.mjs`
 
@@ -146,7 +146,7 @@ Storefront repo 目前已追蹤的核心 workflow：
 ### Storefront repo
 
 - `ci/storefront`
-  在 `nurockplayer/storefront` repo 的 `.github/workflows/pr-ci.yml` 定義 lint、test、e2e、build 與 whitespace check。
+  在 `nurockplayer/storefront` GitHub repo 的 `.github/workflows/pr-ci.yml` 定義 lint、test、e2e、build 與 whitespace check。
 - 其他 repo-local workflow
   例如 license、dependency inventory、type update automation，維持 storefront repo 自己管理。
 

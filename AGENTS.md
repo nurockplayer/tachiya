@@ -123,8 +123,8 @@ tachiya/
 ```
 
 `frontend/` 與 `dashboard/` 不進 Tachiya root repo git。Storefront 實作、測試、CI 與 PR 應在
-`/Users/erickwang/Desktop/storefront` / `nurockplayer/storefront` 處理；Tachiya root repo 只負責 API、
-docker-compose、文件與 cross-repo contract gate。
+`<workspace>/storefront` / `nurockplayer/storefront` 處理；Tachiya root repo 只負責 API、docker-compose、
+文件與 cross-repo contract gate。
 
 ## 開發指令
 
