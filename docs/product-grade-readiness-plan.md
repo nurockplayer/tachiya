@@ -49,6 +49,7 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 
 - [product-decisions.md](product-decisions.md)
 - [internal-api-contracts.md](internal-api-contracts.md)
+- [observability-runbook.md](observability-runbook.md)
 
 這次補寫後，會把最近一波 hardening 的契約、測試基線與 CI 缺口一起落到 repo，避免只存在於 GitHub 討論串。
 
