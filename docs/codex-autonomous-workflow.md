@@ -10,6 +10,8 @@
 - 每個實作任務都必須先有 GitHub issue，並以 PR 合併到 `develop`。
 - 不直接 push 到 `develop`、`main`、`master`。
 - merge 前必須 fresh readback PR head SHA、CI/check 狀態、review/thread 狀態與 issue closeout scope。
+- merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback；`chatgpt-codex-connector` 無 finding 時可用第一則 PR comment 的 reaction 作為已看過證據，若有 actionable finding，必須修正或留下不採用佐證 comment 並 resolve。
+- 不得只用 CodeRabbit success status 判定 review 完成，因為 skipped review 也可能回報 success。
 
 ## 總控責任
 
@@ -74,6 +76,34 @@
 - `gh pr merge --match-head-commit`。
 - conflict / failed check / stale review 的決策。
 - issue close 的最終 scope 判斷。
+
+## Automated Review Gate
+
+任何 autonomous PR merge 前，總控必須完成 fresh review readback：
+
+1. 確認最新 PR head SHA、base branch、mergeability 與 CI/check 狀態。
+2. 確認 CodeRabbit 已產生實際 review；若 CodeRabbit 明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。
+3. 確認 `chatgpt-codex-connector` 已留下 review/comment，或在第一則 PR comment 左下角留下 reaction。只有兩者都沒有時，才手動 comment `@codex review`。
+4. 針對每個 actionable automated review finding，merge 前只能選一條路：
+   - 修正、push、重跑相關驗證；
+   - 留下技術佐證 comment 說明為何不採用。
+5. GitHub 允許時，將已處理的 review thread/comment resolve。
+6. 若 push 過新 commit，merge 前重新讀回 head SHA。
+
+CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".*"]`，讓 PR target branch 不限 default branch 都能觸發 auto review。
+
+## PR Scope Police Contract
+
+開 PR 前必須先符合 `.github/workflows/pr-scope-police.yml` 的固定格式，避免靠 CI 打回才修：
+
+- PR title 必須以 `[backend]`、`[frontend]`、`[discussion]` 其中之一開頭。
+- PR body 必須引用至少一個 issue 或 PR 編號，例如 `#329`。
+- PR body 必須包含一行 `Source of truth: ...`，不能只用 heading。
+- PR body 必須包含一行 `Depends on PR: none` 或 `Depends on PR: #123`，不能只用 heading。
+- PR body 必須包含 `本 PR 明確不做` section。
+- Changed files 不得超過 35；diff lines 不得超過 1000，超過 600 會警告。
+- 同一 PR 不得同時改 API 與 dashboard 產品面；`[backend]` 不得改 dashboard，`[frontend]` 不得改 api。
+- 只有明確 scope review 後才可使用 `scope-exception` label bypass。
 
 ## Standard Autonomous Loop
 
