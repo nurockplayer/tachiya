@@ -35,6 +35,14 @@ Root repo 目前另有 cross-repo contract gate：
   - scope: Tachiya API contract docs、Tachiya router surface、Storefront develop consumer helper / tests
   - checks: checkout `nurockplayer/storefront@develop`，執行 `.github/workflow-tests/cross-repo-contract.test.mjs`
 
+Root repo 也有 PostgreSQL migration gate：
+
+- [`.github/workflows/postgres-migration-gate.yml`](../.github/workflows/postgres-migration-gate.yml)
+  - scope: Alembic config、migration versions、SQLAlchemy models、DB bootstrap code、相關 CI docs
+  - triggers: `workflow_dispatch`、weekly schedule、以及 path-filtered `pull_request` / `push`
+  - checks: 啟動 PostgreSQL 16 service container，設定非 production `DATABASE_URL`，在 `api/` 執行 `uv run --group dev alembic upgrade head`
+  - 不保護：資料回填效能、rollback/downgrade、production secret / network、跨服務 end-to-end smoke
+
 ### Storefront repo
 
 Storefront 目前有明確可執行的本地驗證指令：
@@ -140,6 +148,8 @@ Storefront repo 目前已追蹤的核心 workflow：
 
 - `ci/api`
   跑 backend pytest、lint、compile、image build 與 workflow regression。
+- `PostgreSQL Migration Gate`
+  只在 migration/model/DB/workflow/docs 相關變更、排程或手動觸發時跑 PostgreSQL 16 migration smoke。
 - root repo contract / docs checks
   目前仍由 `ci/api` 的 workflow regression 與 docs sanity 共同承接；尚未拆成獨立 workflow。
 
@@ -155,12 +165,13 @@ Storefront repo 目前已追蹤的核心 workflow：
 - Tachiya API contract docs 與 request schema 的更完整 drift check。
 - Points / referral / revenue share 的 end-to-end smoke test。
 - Storefront 與 Tachiya 間的 runtime-level cross-repo contract smoke。
+- PostgreSQL migration gate 目前只跑 upgrade head，尚未涵蓋 rollback / downgrade 與資料回填效能。
 - release 前的 webhook replay / idempotency smoke checklist。
 
 ## 實作優先序
 
 1. 保持 root repo 正式 workflow 與 docs 同步。
 2. 維持 root repo 與獨立 storefront repo 的 required checks 對齊在同一份 contract matrix。
-3. 最後補 runtime-level cross-repo smoke、PostgreSQL migration gate 與 release checklist。
+3. 最後補 runtime-level cross-repo smoke、migration rollback / data backfill confidence 與 release checklist。
 
 這個順序的原因很直接：沒有穩定的 PR gate，後面的產品級測試再多，也會因為沒有被持續執行而失去保護效果。

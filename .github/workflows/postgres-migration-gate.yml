@@ -1,0 +1,90 @@
+name: PostgreSQL Migration Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 18 * * 0"
+  pull_request:
+    branches:
+      - develop
+      - master
+    paths:
+      - ".github/workflows/postgres-migration-gate.yml"
+      - ".github/workflow-tests/**"
+      - "api/alembic.ini"
+      - "api/database.py"
+      - "api/migrations/**"
+      - "api/models/**"
+      - "api/pyproject.toml"
+      - "api/uv.lock"
+      - "docs/testing-and-ci-gates.md"
+  push:
+    branches:
+      - develop
+      - master
+    paths:
+      - ".github/workflows/postgres-migration-gate.yml"
+      - ".github/workflow-tests/**"
+      - "api/alembic.ini"
+      - "api/database.py"
+      - "api/migrations/**"
+      - "api/models/**"
+      - "api/pyproject.toml"
+      - "api/uv.lock"
+      - "docs/testing-and-ci-gates.md"
+
+concurrency:
+  group: postgres-migration-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-migrations:
+    name: PostgreSQL migration smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: tachiya
+          POSTGRES_USER: tachiya
+          POSTGRES_PASSWORD: tachiya
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tachiya -d tachiya"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: api
+
+    env:
+      DATABASE_URL: postgresql://tachiya:tachiya@localhost:5432/tachiya
+
+    steps:
+      - name: Checkout tachiya
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install API dependencies
+        run: uv sync --group dev
+
+      - name: Run Alembic upgrade head on PostgreSQL
+        run: uv run --group dev alembic upgrade head
