@@ -260,6 +260,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   for (const pattern of [/Source of truth/, /Depends on PR/, /本 PR 明確不做/, /Delegation Execution Log/, /Spawn directive/, /model=/, /reasoning=/, /controller_fallback=/, /Validation/]) {
     assert.match(prTemplate, pattern);
   }
+  assert.equal(evaluateAutonomousCloseoutGate({ body: prTemplate, labels: [] }).hasSpawnDirective, false);
 
   assert.match(issueTemplate, /Worker profile/);
   assert.match(issueTemplate, /Task/);
