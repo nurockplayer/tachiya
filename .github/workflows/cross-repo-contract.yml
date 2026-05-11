@@ -1,0 +1,63 @@
+name: Cross-repo Contract
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - master
+    paths:
+      - ".github/workflows/cross-repo-contract.yml"
+      - ".github/workflow-tests/cross-repo-contract.test.mjs"
+      - "api/routers/**"
+      - "docs/cross-repo-contracts.md"
+      - "docs/internal-api-contracts.md"
+  push:
+    branches:
+      - develop
+      - master
+    paths:
+      - ".github/workflows/cross-repo-contract.yml"
+      - ".github/workflow-tests/cross-repo-contract.test.mjs"
+      - "api/routers/**"
+      - "docs/cross-repo-contracts.md"
+      - "docs/internal-api-contracts.md"
+  workflow_dispatch:
+
+concurrency:
+  group: cross-repo-contract-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract-sanity:
+    name: Cross-repo contract sanity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout tachiya
+        uses: actions/checkout@v4
+        with:
+          path: tachiya
+
+      - name: Checkout storefront develop
+        uses: actions/checkout@v4
+        with:
+          repository: nurockplayer/storefront
+          ref: develop
+          path: tachiya/.ci/storefront
+          token: ${{ secrets.STOREFRONT_READ_TOKEN || github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run cross-repo contract sanity test
+        working-directory: tachiya
+        env:
+          REQUIRE_STOREFRONT_CONTRACT: "1"
+          STOREFRONT_PATH: .ci/storefront
+        run: node --test .github/workflow-tests/cross-repo-contract.test.mjs
