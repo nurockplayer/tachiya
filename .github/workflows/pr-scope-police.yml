@@ -124,7 +124,6 @@ jobs:
               'Model strength',
               'Trivial/self-only exception reason',
               'Evidence / verification',
-              'Review conversation closeout',
             ]
             const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
               extractDelegationFieldBody(label)

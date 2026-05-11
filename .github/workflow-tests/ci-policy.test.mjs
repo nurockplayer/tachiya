@@ -87,7 +87,6 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     "Model strength",
     "Trivial/self-only exception reason",
     "Evidence / verification",
-    "Review conversation closeout",
   ];
   const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
     extractDelegationFieldBody(label)
@@ -236,6 +235,25 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
 ## Validation
 - node --test .github/workflow-tests/ci-policy.test.mjs
 `;
+  const humanMeaningfulCloseoutOnly = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - n/a
+- Actual worker profile(s):
+  - n/a
+- Task:
+  - n/a
+- Model strength:
+  - n/a
+- Trivial/self-only exception reason:
+  - n/a
+- Evidence / verification:
+  - n/a
+- Review conversation closeout:
+  - Not applicable - human-authored PR
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
   const placeholderVariants = [
     "na",
     "n.a.",
@@ -346,6 +364,17 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
+  });
+  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: humanMeaningfulCloseoutOnly, labels: [] }), {
+    autonomousDetected: false,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: false,
+    hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasRoutineOpsDelegationWarning: false,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: true,
   });
   for (const placeholderVariant of placeholderVariants) {
     assert.deepEqual(
