@@ -58,3 +58,15 @@ test("API CI keeps lint, timeout, and compile-scope hardening", () => {
   assert.doesNotMatch(workflow, /python -m compileall \./);
   assert.doesNotMatch(workflow, /weekly-release-pr\.yml/);
 });
+
+test("cross-repo contract gate owns Storefront drift checks without duplicating Storefront CI", () => {
+  const workflow = readWorkflow("cross-repo-contract.yml");
+
+  assert.match(workflow, /repository: nurockplayer\/storefront/);
+  assert.match(workflow, /ref: develop/);
+  assert.match(workflow, /REQUIRE_STOREFRONT_CONTRACT: "1"/);
+  assert.match(workflow, /node --test \.github\/workflow-tests\/cross-repo-contract\.test\.mjs/);
+  assert.match(workflow, /timeout-minutes: 10/);
+  assert.doesNotMatch(workflow, /pnpm install/);
+  assert.doesNotMatch(workflow, /pnpm (run )?build/);
+});

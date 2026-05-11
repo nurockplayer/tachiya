@@ -74,10 +74,13 @@ uv run alembic upgrade head
 tachiya/
 ├── api/                # Tachiya FastAPI（自訂業務邏輯）
 ├── translations/       # 自訂翻譯（繁體中文 Dashboard）
+├── docs/               # 架構、契約、CI 與營運文件
 ├── docker-compose.yml
 ├── docker-compose.override.yml  # Dev 覆蓋設定
 ├── Makefile
 └── .env.example
 ```
 
-> `frontend/` 和 `dashboard/` 由 `make clone-deps` 自動從上游 clone，不進 git。
+> `frontend/` 和 `dashboard/` 是本機 checkout 目錄，不進 git。Storefront 的正式 repo 是
+> `nurockplayer/storefront`；Tachiya root repo 只保留 API、文件、docker-compose 與跨 repo
+> contract gate，不 duplicated Storefront 的 lint / test / build workflow。

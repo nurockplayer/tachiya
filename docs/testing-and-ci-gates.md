@@ -27,7 +27,13 @@
   - scope: `api/**`、API contract docs、workflow regression、docker compose 相關 root 檔
   - checks: `git diff --check`、`pytest`、`ruff check`、`ruff format --check`、`python -m compileall`、API image build
 
-目前 root repo 明確不再依賴 weekly release workflow，也不把任何本機未追蹤的 workflow 草案算進正式 gate。`frontend/` 在架構上是獨立 git repo，因此 frontend 的 PR CI 由 `nurockplayer/storefront` repo 自己擁有，不在 root repo duplicated 一套。
+目前 root repo 明確不再依賴 weekly release workflow，也不把任何本機未追蹤的 workflow 草案算進正式 gate。`frontend/` 在架構上是本機 checkout 目錄；正式 Storefront repo 是 `nurockplayer/storefront`，因此 frontend 的 PR CI 由 Storefront repo 自己擁有，不在 root repo duplicated 一套。
+
+Root repo 目前另有 cross-repo contract gate：
+
+- [`.github/workflows/cross-repo-contract.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/cross-repo-contract.yml)
+  - scope: Tachiya API contract docs、Tachiya router surface、Storefront develop consumer helper / tests
+  - checks: checkout `nurockplayer/storefront@develop`，執行 `.github/workflow-tests/cross-repo-contract.test.mjs`
 
 ### Storefront repo
 
@@ -37,17 +43,18 @@ Storefront 目前有明確可執行的本地驗證指令：
 - `pnpm run test:run`
 - `SKIP_CODEGEN=1 pnpm run build`
 
-目前已追蹤的 workflow：
+Storefront repo 目前已追蹤的核心 workflow：
 
-- [frontend/.github/workflows/check-licenses.yaml](/Users/erickwang/Desktop/tachiya/frontend/.github/workflows/check-licenses.yaml)
-- [frontend/.github/workflows/lint.yml](/Users/erickwang/Desktop/tachiya/frontend/.github/workflows/lint.yml)
-- [frontend/.github/workflows/update_types.yml](/Users/erickwang/Desktop/tachiya/frontend/.github/workflows/update_types.yml)
+- `ci/storefront`：diff whitespace、lint、unit tests、Playwright browser smoke、build
+- `PR Scope Police`
+- `Dependabot Auto Merge`
+- `Notify PRs needing rebase`
+- dependency / inventory 類 workflow 由 Storefront repo 自己管理
 
 目前缺口：
 
-- Storefront repo 自己的 PR gate 與 root repo 的 API / contract docs 還沒有 cross-repo contract 對照。
-- 沒有把 Tachiya 特有 route hardening 與 API contract drift 做成跨 repo required check。
-- root repo 內仍缺少一個可以驗證「文件宣告的 storefront contract 是否與獨立 storefront repo 現況一致」的自動 gate。
+- Tachiya 特有 route hardening 與 API contract drift 已有 static cross-repo sanity gate，但尚未升級成 mock server / fixture-level runtime contract smoke。
+- Storefront authenticated points balance 仍主要由 unit / component tests 保護，E2E 目前只覆蓋未登入 fallback。
 
 ## 現有測試對應
 
@@ -79,11 +86,15 @@ Storefront 目前有明確可執行的本地驗證指令：
 
 ### Frontend route / runtime contracts
 
-- [frontend/src/app/api/revalidate/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/revalidate/route.test.ts)
-- [frontend/src/app/api/auth/register/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/auth/register/route.test.ts)
-- [frontend/src/app/api/auth/reset-password/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/auth/reset-password/route.test.ts)
-- [frontend/src/app/api/auth/set-password/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/auth/set-password/route.test.ts)
-- [frontend/src/lib/graphql.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/lib/graphql.test.ts)
+- `src/app/api/revalidate/route.test.ts`
+- `src/app/api/auth/register/route.test.ts`
+- `src/app/api/auth/reset-password/route.test.ts`
+- `src/app/api/auth/set-password/route.test.ts`
+- `src/lib/graphql.test.ts`
+- `src/lib/tachiya-points.test.ts`
+- `src/checkout/lib/tachiya-coupons.test.ts`
+- `src/lib/tachiya-streamer-catalog.test.ts`
+- `tests/e2e/storefront-smoke.spec.ts`
 
 保護的內容：
 
@@ -135,21 +146,21 @@ Storefront 目前有明確可執行的本地驗證指令：
 ### Storefront repo
 
 - `ci/storefront`
-  目前在 `frontend/.github/workflows/pr-ci.yml` 定義 lint、test、e2e、build 與 whitespace check。
+  在 `nurockplayer/storefront` repo 的 `.github/workflows/pr-ci.yml` 定義 lint、test、e2e、build 與 whitespace check。
 - 其他 repo-local workflow
   例如 license、dependency inventory、type update automation，維持 storefront repo 自己管理。
 
 ## 還沒補上的 gate
 
-- Tachiya API contract docs 與 request schema 的 drift check。
+- Tachiya API contract docs 與 request schema 的更完整 drift check。
 - Points / referral / revenue share 的 end-to-end smoke test。
-- Storefront 與 Tachiya 間的 cross-repo contract test。
+- Storefront 與 Tachiya 間的 runtime-level cross-repo contract smoke。
 - release 前的 webhook replay / idempotency smoke checklist。
 
 ## 實作優先序
 
-1. 先把 root repo 正式 workflow 納入版控。
-2. 再把 root repo 與獨立 storefront repo 的 required checks 對齊成同一份 contract matrix。
-3. 最後補 cross-repo smoke 與 contract drift check。
+1. 保持 root repo 正式 workflow 與 docs 同步。
+2. 維持 root repo 與獨立 storefront repo 的 required checks 對齊在同一份 contract matrix。
+3. 最後補 runtime-level cross-repo smoke、PostgreSQL migration gate 與 release checklist。
 
 這個順序的原因很直接：沒有穩定的 PR gate，後面的產品級測試再多，也會因為沒有被持續執行而失去保護效果。
