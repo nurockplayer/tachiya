@@ -31,8 +31,10 @@
 Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR。
 
 - 必須列出 worker profile 名稱。
+- 必須列出 `model` 與 `reasoning`。
+- 每個 spawn 都必須顯式記錄 `controller_fallback`，若為 `allowed`，必須補說明原因。
 - 必須列出每個 worker 只負責的 task。
-- 必須列出 model strength，並且明確寫出預期推理強度或 preferred model。
+- 如果是 routine GitHub/readback/comment/closeout/metadata/simple terminal，預設不得使用 controller 的 GPT-5.5（除非有 `controller_fallback=allowed` 並附原因）。
 - 必須列出 evidence / verification，包含要讀回的證據、驗證命令、或回收點。
 - 只有 trivial/self-only exception 才能不填 worker profile；這時仍然必須寫清楚 exception reason。
 - 不得把 issue 當成純描述票；只要是 autonomous work，就必須可從 issue body 讀出分工與驗證。
@@ -40,8 +42,10 @@ Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR�
 建議格式如下，欄位名稱不得省略：
 
 - `Worker profile`
+- `model`
+- `reasoning`
+- `controller_fallback`
 - `Task`
-- `Model strength`
 - `Evidence / verification`
 - `Trivial/self-only exception reason`（只有例外時才可填）
 
@@ -70,38 +74,44 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 
 ## Worker Profiles
 
-| Profile | Preferred model | Reasoning | 用途 |
-|---|---|---|---|
-| `controller` | GPT-5.5 | high / xhigh | 總控、架構、計劃、最終 review、merge decision |
-| `ops_spark` | GPT-5.3-Codex-Spark | low / medium | GitHub issue/PR metadata、CI readback、label/milestone、routine terminal |
-| `repo_scout` | GPT-5.3-Codex-Spark | medium | 快速掃 codebase、找既有 pattern、列測試缺口、產出摘要 |
-| `docs_worker` | GPT-5.3-Codex-Spark | medium | docs、issue body、PR body、驗證摘要、規格草稿 |
-| `test_worker` | GPT-5.4-mini / GPT-5.4 | medium / high | 單元測試、fixture 整理、workflow regression、測試補強 |
-| `backend_worker` | GPT-5.4 | high | FastAPI routers/services、錯誤處理、API tests、CI gates |
-| `frontend_worker` | GPT-5.4 | medium / high | storefront/dashboard UI、component、互動狀態、前端測試 |
-| `schema_worker` | GPT-5.5 | high / xhigh | DB schema、migration、idempotency、ledger、資料一致性 |
-| `integration_worker` | GPT-5.4 | high | 跨 repo contract、Docker、build、API/frontend integration |
-| `review_worker` | GPT-5.4 / GPT-5.5 | high | PR diff review、regression risk、缺測檢查 |
+| 任務場景 | Profile | model | reasoning | controller_fallback |
+|---|---|---|---|---|
+| GitHub issue/label/PR body/check readback、CI log 初步分析、routine terminal | `ops_spark` | `gpt-5.3-codex-spark` | `low` / `medium` | `not_allowed` |
+| 大範圍找檔案、找既有 pattern、測試缺口掃描 | `repo_scout` | `gpt-5.3-codex-spark` | `medium` | `not_allowed` |
+| 文件、規格、issue/PR 草稿、驗證摘要 | `docs_worker` | `gpt-5.3-codex-spark` | `medium` | `not_allowed` |
+| 單檔或小範圍 workflow / unit 測試補強 | `test_worker` | `gpt-5.4-mini` 或 `gpt-5.4` | `medium` / `high` | `not_allowed` |
+| API/FastAPI router、service、CI 相關實作 | `backend_worker` | `gpt-5.4` | `high` | `allowed only with fallback_reason` |
+| storefront/dashboard 前端修補 | `frontend_worker` | `gpt-5.4` | `medium` / `high` | `allowed only with fallback_reason` |
+| 跨 repo contract、Docker、build contract 驗證 | `integration_worker` | `gpt-5.4` | `high` | `allowed only with fallback_reason` |
+| schema / migration / ledger / 資料一致性 | `schema_worker` | `gpt-5.5` | `high` / `xhigh` | `allowed only with fallback_reason` |
+| merge 前風險掃描與最終 review 判斷 | `review_worker` | `gpt-5.5` | `high` | `allowed only with fallback_reason` |
+| controller / merge decision | `controller` | `gpt-5.5` | `high` / `xhigh` | `N/A (no fallback)` |
 
-模型名稱是 preferred profile，不是硬依賴。若當前環境不可用，總控需選擇同級或較保守的替代模型。
+profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `controller_fallback=allowed` 且有 `fallback_reason`，不得使用 controller profile 的 GPT-5.5。
 
 ## Routing Rules
 
-| 場景 | 預設指派 |
-|---|---|
-| GitHub issue/label/PR body/check readback | `ops_spark` |
-| GitHub issue creation with known scope/body | `ops_spark` drafts and creates, controller reviews scope before implementation |
-| CI log 初步分析、routine terminal 檢查 | `ops_spark` |
-| 資訊來回、PR body/comment 整理、review closeout evidence 蒐集 | `ops_spark` |
-| review thread resolve 狀態讀回、comment URL / discussion URL 彙整 | `ops_spark` |
-| 大範圍找檔案、讀 code pattern | `repo_scout` |
-| 文件、計劃、issue/PR 草稿 | `docs_worker` |
-| 單檔或小範圍 test 補強 | `test_worker` |
-| 一般 API router/service 實作 | `backend_worker` |
-| schema、migration、資料一致性、ledger | `schema_worker` |
-| 一般 storefront/dashboard UI | `frontend_worker` |
-| 跨 tachiya / storefront / Docker / contract | `integration_worker` |
-| merge 前風險掃描 | `review_worker`，總控 final decision |
+| 場景 | 指派 profile | required model | reasoning | controller_fallback |
+|---|---|---|---|---|
+| GitHub issue/label/PR body/check readback | `ops_spark` | `gpt-5.3-codex-spark` | low / medium | not_allowed |
+| CI log 初步分析、routine terminal | `ops_spark` | `gpt-5.3-codex-spark` | low / medium | not_allowed |
+| 資訊來回、PR body/comment 整理、review closeout evidence 蒐集 | `ops_spark` | `gpt-5.3-codex-spark` | low / medium | not_allowed |
+| 大範圍找檔案、讀 code pattern | `repo_scout` | `gpt-5.3-codex-spark` | medium | not_allowed |
+| 文件、計劃、issue/PR 草稿 | `docs_worker` | `gpt-5.3-codex-spark` | medium | not_allowed |
+| 單檔或小範圍 test 補強 | `test_worker` | `gpt-5.4-mini` 或 `gpt-5.4` | medium / high | not_allowed |
+| 一般 API router/service 實作 | `backend_worker` | `gpt-5.4` | high | allowed only with fallback_reason |
+| schema、migration、資料一致性、ledger | `schema_worker` | `gpt-5.5` | high / xhigh | allowed only with fallback_reason |
+| 跨 tachiya / storefront / Docker / contract | `integration_worker` | `gpt-5.4` | high | allowed only with fallback_reason |
+| 一般 storefront/dashboard UI | `frontend_worker` | `gpt-5.4` | medium / high | allowed only with fallback_reason |
+| merge 前風險掃描（總控最終決策） | `review_worker` | `gpt-5.4` 或 `gpt-5.5` | high | allowed only with fallback_reason |
+| controller / merge decision | `controller` | `gpt-5.5` | high / xhigh | N/A |
+
+Spawn 指令為硬規則（建議每個 worker 一筆）：
+
+- `spawn: <profile> model=<model> reasoning=<low|medium|high|xhigh> controller_fallback=<not_allowed|allowed> [fallback_reason=<reason>]`
+- `profile` 可用 profile 名稱，不加前綴。
+- `controller_fallback=allowed` 時，必須補 `fallback_reason`。
+- 若無 fallback reason，預設視為 `controller_fallback=not_allowed`，不得將 `ops_spark`、`repo_scout`、`docs_worker` 拉到 controller 高階推理上。
 
 ## GitHub 操作分工
 

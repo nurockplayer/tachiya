@@ -21,12 +21,37 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     const match = bodyForAutonomousGate.match(pattern);
     return match?.[1] ?? "";
   };
+  const extractSpawnDirectives = () => {
+    const spawnFieldPattern = /(?:^|\n)\s*-\s*(?:Spawn directive|spawn)\s*[：:]\s*([^\n]+)/gi;
+    const spawnValuePattern = (key, line) => {
+      const pattern = new RegExp(`${key}\\s*[=:]\\s*([^\\s]+)`, "i");
+      const match = line.match(pattern);
+      return match?.[1]?.trim() ?? "";
+    };
+    const spawnFallbackReasonPattern = (line) => {
+      const pattern = /fallback_reason\s*[=:]\s*(.+)/i;
+      const match = line.match(pattern);
+      return match?.[1]?.trim() ?? "";
+    };
+    const parseSpawn = (line) => {
+      const trimmed = line.trim();
+      const profileMatch = trimmed.match(/^\s*profile\s*[=:]\s*([A-Za-z0-9_]+)\s/i);
+      const profile = profileMatch?.[1] ?? trimmed.split(/\s+/)[0];
+      const model = spawnValuePattern("model", trimmed);
+      const reasoning = spawnValuePattern("reasoning", trimmed);
+      const controllerFallback = spawnValuePattern("controller_fallback", trimmed);
+      const fallbackReason = spawnFallbackReasonPattern(trimmed);
+      return { line: trimmed, profile, model, reasoning, controllerFallback, fallbackReason };
+    };
+    return [...bodyForAutonomousGate.matchAll(spawnFieldPattern)].map((match) => parseSpawn(match[1] || ""));
+  };
   const extractDelegationFieldBody = (label) => {
     const delegatedLabels = [
       "Source issue delegation plan",
       "Actual worker profile(s)",
       "Task",
       "Model strength",
+      "Spawn directive",
       "Trivial/self-only exception reason",
       "Evidence / verification",
       "Review conversation closeout",
@@ -94,6 +119,19 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       .filter(Boolean)
       .some((line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
   );
+  const spawnDirectives = extractSpawnDirectives();
+  const hasSpawnDirective = spawnDirectives.length > 0;
+  const hasSpawnModel = spawnDirectives.some((spawn) => spawn.model && !isPlaceholderLine(spawn.model));
+  const hasSpawnReasoning = spawnDirectives.some((spawn) => spawn.reasoning && !isPlaceholderLine(spawn.reasoning));
+  const hasSpawnControllerFallback = spawnDirectives.some((spawn) =>
+    ["not_allowed", "allowed"].includes(normalizePlaceholderValue(spawn.controllerFallback)),
+  );
+  const hasSpawnAllowedWithoutReason = spawnDirectives.some(
+    (spawn) =>
+      normalizePlaceholderValue(spawn.controllerFallback) === "allowed" &&
+      (!spawn.fallbackReason || isPlaceholderLine(spawn.fallbackReason)),
+  );
+  const hasSpawnDirectiveWithModelReasoning = hasSpawnModel && hasSpawnReasoning && hasSpawnControllerFallback;
   const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog;
   const hasOpsSparkMention = bodyForAutonomousGate.toLowerCase().includes("ops_spark");
   const routineOpsKeywords = [
@@ -142,11 +180,27 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     hasTrivialExceptionReason,
     hasOpsSparkMention,
     hasRoutineOpsWork,
+    hasSpawnDirective,
+    hasSpawnModel,
+    hasSpawnReasoning,
+    hasSpawnControllerFallback,
+    hasSpawnDirectiveWithModelReasoning,
+    hasSpawnAllowedWithoutReason,
     hasRoutineOpsDelegationWarning,
     hasReviewConversationCloseout,
     hasMeaningfulReviewConversationCloseout,
   };
 };
+
+const withSpawnDefaults = (values = {}) => ({
+  hasSpawnDirective: false,
+  hasSpawnModel: false,
+  hasSpawnReasoning: false,
+  hasSpawnControllerFallback: false,
+  hasSpawnDirectiveWithModelReasoning: false,
+  hasSpawnAllowedWithoutReason: false,
+  ...values,
+});
 
 test("Autonomous delegation gate ships root templates and workflow body checks", () => {
   const prTemplate = readRepoFile(".github/PULL_REQUEST_TEMPLATE.md");
@@ -158,6 +212,10 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(prTemplate, /Depends on PR/);
   assert.match(prTemplate, /本 PR 明確不做/);
   assert.match(prTemplate, /Delegation Execution Log/);
+  assert.match(prTemplate, /Spawn directive/);
+  assert.match(prTemplate, /model=/);
+  assert.match(prTemplate, /reasoning=/);
+  assert.match(prTemplate, /controller_fallback=/);
   assert.match(prTemplate, /Validation/);
 
   assert.match(issueTemplate, /Worker profile/);
@@ -178,6 +236,14 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason/);
   assert.match(workflow, /const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody\('Trivial\/self-only exception reason'\)/);
   assert.match(workflow, /Routine ops delegation hint: \$\{hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason \? 'missing ops_spark' : 'ok'\}/);
+  assert.match(workflow, /hasSpawnDirective/);
+  assert.match(workflow, /hasSpawnModel/);
+  assert.match(workflow, /hasSpawnReasoning/);
+  assert.match(workflow, /hasSpawnControllerFallback/);
+  assert.match(workflow, /hasSpawnDirectiveWithModelReasoning/);
+  assert.match(workflow, /hasSpawnAllowedWithoutReason/);
+  assert.match(workflow, /isPlaceholderCloseoutLine\(spawn\.fallbackReason\)/);
+  assert.doesNotMatch(workflow, /isPlaceholderLine\(spawn\.fallbackReason\)/);
   assert.match(workflow, /hasTrivialExceptionReason/);
   assert.match(workflow, /const normalizePlaceholderValue = \(value\) =>/);
   assert.match(workflow, /- Review conversation closeout present: \$\{hasReviewConversationCloseout \? 'yes' : 'no'\}/);
@@ -353,7 +419,9 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
 - node --test .github/workflow-tests/ci-policy.test.mjs
 `;
 
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: autonomousMissingCloseout, labels: ["codex"] }), {
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousMissingCloseout, labels: ["codex"] }),
+    withSpawnDefaults({
     autonomousDetected: true,
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: true,
@@ -363,8 +431,11 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
-  });
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: autonomousFilledCloseout, labels: ["auto-ready"] }), {
+  }),
+  );
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousFilledCloseout, labels: ["auto-ready"] }),
+    withSpawnDefaults({
     autonomousDetected: true,
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: true,
@@ -374,8 +445,11 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
-  });
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: autonomousPlaceholderExceptionReason, labels: ["codex"] }), {
+  }),
+  );
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousPlaceholderExceptionReason, labels: ["codex"] }),
+    withSpawnDefaults({
     autonomousDetected: true,
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: true,
@@ -385,8 +459,11 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
-  });
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: templateOnlyHumanCloseout, labels: [] }), {
+  }),
+  );
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: templateOnlyHumanCloseout, labels: [] }),
+    withSpawnDefaults({
     autonomousDetected: false,
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: false,
@@ -396,8 +473,11 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
-  });
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: humanMeaningfulCloseoutOnly, labels: [] }), {
+  }),
+  );
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: humanMeaningfulCloseoutOnly, labels: [] }),
+    withSpawnDefaults({
     autonomousDetected: false,
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: false,
@@ -407,8 +487,11 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
-  });
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: humanEvidenceOnlyWithPlaceholderDelegation, labels: [] }), {
+  }),
+  );
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: humanEvidenceOnlyWithPlaceholderDelegation, labels: [] }),
+    withSpawnDefaults({
     autonomousDetected: false,
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: false,
@@ -418,7 +501,8 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
-  });
+  }),
+  );
   for (const placeholderVariant of placeholderVariants) {
     assert.deepEqual(
       evaluateAutonomousCloseoutGate({
@@ -435,7 +519,7 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
 `,
         labels: [],
       }),
-      {
+      withSpawnDefaults({
         autonomousDetected: false,
         hasDelegationExecutionLog: true,
         hasMeaningfulDelegationExecutionLog: false,
@@ -445,7 +529,7 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
         hasRoutineOpsDelegationWarning: false,
         hasReviewConversationCloseout: true,
         hasMeaningfulReviewConversationCloseout: false,
-      },
+      }),
       `placeholder variant ${placeholderVariant} should stay non-meaningful`,
     );
   }
@@ -462,21 +546,23 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
 ## Validation
 - node --test .github/workflow-tests/ci-policy.test.mjs
 `,
-        labels: [],
+      labels: [],
       }),
-    {
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: false,
-      hasRoutineOpsWork: true,
-      hasRoutineOpsDelegationWarning: true,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: true,
-    },
+      withSpawnDefaults({
+        autonomousDetected: true,
+        hasDelegationExecutionLog: true,
+        hasMeaningfulDelegationExecutionLog: true,
+        hasTrivialExceptionReason: false,
+        hasOpsSparkMention: false,
+        hasRoutineOpsWork: true,
+        hasRoutineOpsDelegationWarning: true,
+        hasReviewConversationCloseout: true,
+        hasMeaningfulReviewConversationCloseout: true,
+      }),
   );
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body: humanMissingCloseout, labels: [] }), {
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: humanMissingCloseout, labels: [] }),
+    withSpawnDefaults({
     autonomousDetected: false,
     hasDelegationExecutionLog: false,
     hasMeaningfulDelegationExecutionLog: false,
@@ -486,13 +572,14 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: false,
     hasMeaningfulReviewConversationCloseout: false,
-  });
+  }),
+  );
   assert.deepEqual(
     evaluateAutonomousCloseoutGate({
       body: autonomousScopeExceptionMissingCloseout,
       labels: ["codex", "scope-exception"],
     }),
-    {
+    withSpawnDefaults({
       autonomousDetected: true,
       hasDelegationExecutionLog: true,
       hasMeaningfulDelegationExecutionLog: true,
@@ -502,7 +589,7 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
       hasRoutineOpsDelegationWarning: true,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: false,
-    },
+    }),
   );
   assert.deepEqual(
     evaluateAutonomousCloseoutGate({
@@ -515,7 +602,7 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
 `,
       labels: ["codex-automation"],
     }),
-    {
+    withSpawnDefaults({
       autonomousDetected: true,
       hasDelegationExecutionLog: true,
       hasMeaningfulDelegationExecutionLog: true,
@@ -525,7 +612,190 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
       hasRoutineOpsDelegationWarning: true,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: false,
-    },
+    }),
+  );
+});
+
+test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
+  const autonomousMissingModel = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - closeout only
+- Actual worker profile(s):
+  - ops_spark
+- Task:
+  - readback CI status and comment evidence
+- Spawn directive:
+  - spawn: ops_spark controller_fallback=not_allowed
+- Review conversation closeout:
+  - 已完成 closeout 並回補證據鏈
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const autonomousMissingReasoning = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - closeout only
+- Actual worker profile(s):
+  - ops_spark
+- Task:
+  - readback CI status and comment evidence
+- Spawn directive:
+  - spawn: ops_spark model=gpt-5.3-codex-spark controller_fallback=not_allowed
+- Review conversation closeout:
+  - 已完成 closeout 並回補證據鏈
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const autonomousValidSpawn = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - closeout only
+- Actual worker profile(s):
+  - ops_spark
+- Task:
+  - readback CI status and comment evidence
+- Spawn directive:
+  - spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed
+- Review conversation closeout:
+  - 已完成 closeout 並回補證據鏈
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const autonomousMissingFallbackReason = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - closeout only
+- Actual worker profile(s):
+  - backend_worker
+- Task:
+  - review policy gate
+- Spawn directive:
+  - spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=allowed
+- Review conversation closeout:
+  - 已完成 closeout 並回補證據鏈
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+  const autonomousFallbackWithReason = `
+## Delegation Execution Log
+- Source issue delegation plan:
+  - closeout only
+- Actual worker profile(s):
+  - backend_worker
+- Task:
+  - review policy gate
+- Spawn directive:
+  - spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=allowed fallback_reason=high-risk schema drift check
+- Review conversation closeout:
+  - 已完成 closeout 並回補證據鏈
+## Validation
+- node --test .github/workflow-tests/ci-policy.test.mjs
+`;
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousMissingModel, labels: ["codex"] }),
+    withSpawnDefaults({
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: false,
+      hasSpawnReasoning: false,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: false,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    }),
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousMissingReasoning, labels: ["codex"] }),
+    withSpawnDefaults({
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: false,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: false,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    }),
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousValidSpawn, labels: ["codex"] }),
+    withSpawnDefaults({
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    }),
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousMissingFallbackReason, labels: ["codex"] }),
+    withSpawnDefaults({
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: false,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: true,
+      hasRoutineOpsDelegationWarning: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    }),
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutGate({ body: autonomousFallbackWithReason, labels: ["codex"] }),
+    withSpawnDefaults({
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: false,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    }),
   );
 });
 

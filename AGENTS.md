@@ -163,6 +163,7 @@ make logs   # 查看 logs
 - 任何涉及寫程式、改檔案、跑測試的任務，一律透過 `codex:rescue` 派給 Codex 執行
 - Codex 只負責：理解需求、規劃架構、給 Codex 下指令、審查結果
 - 僅在極簡單的單行修改時，Codex 才直接動手
+- 任何 delegation 必須寫清 `profile`、`model`、`reasoning`；ops_spark 類工作必須明確指定 `gpt-5.3-codex-spark`，不得直接繼承 controller 的 `gpt-5.5`，除非 `controller_fallback=allowed` 並有原因。
 
 **建議優先使用的快捷指令：**
 
