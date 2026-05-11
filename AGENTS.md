@@ -163,6 +163,7 @@ make logs   # 查看 logs
 - 任何涉及寫程式、改檔案、跑測試的任務，一律透過 `codex:rescue` 派給 Codex 執行
 - Codex 只負責：理解需求、規劃架構、給 Codex 下指令、審查結果
 - 僅在極簡單的單行修改時，Codex 才直接動手
+- 任何 delegation 必須寫清 `profile`、`model`、`reasoning`；ops_spark 類工作必須明確指定 `gpt-5.3-codex-spark`，不得直接繼承 controller 的 `gpt-5.5`，除非 `controller_fallback=allowed` 並有原因。
 
 **建議優先使用的快捷指令：**
 
@@ -183,7 +184,8 @@ make logs   # 查看 logs
 | 操作 | 誰執行 | 原因 |
 |---|---|---|
 | `git status` / `git log` / `git diff` | Codex | 需要即時看輸出來做決策 |
-| `git commit` / `git push` / `git checkout -b` | Codex | `codex:rescue` subagent 在 sandbox 內無 `.git` 寫入權限 |
+| 實際 git branch / commit / push write（如 `git checkout -b`、`git commit`、`git push`） | Codex controller | 涉及 `.git`、credential、目前 branch 狀態與 guarded write 風險，現階段由 controller 擁有 |
+| pre-commit checklist / post-push readback | `ops_spark` | 例行驗證與證據讀回預設交給 `ops_spark`，包含 commit SHA、push branch、PR head SHA、CI/check 狀態 |
 | 檔案搜尋——定向（知道找什麼） | Codex（用 Glob / Grep 工具） | 規劃階段，需要結果判斷下一步 |
 | 檔案搜尋——探索性（不確定在哪） | Codex（透過 `/explore-with-codex`） | 大範圍搜尋交給 Codex，只拿摘要回來 |
 | 複雜 bash 腳本、批次操作 | Codex | 純執行，只需確認最終結果 |
@@ -198,11 +200,13 @@ autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/c
 
 可切分的探索、文件、測試、一般實作、GitHub readback、CI log 分析，可以依任務風險委派給 worker/subagent。routine GitHub / terminal / repo 探索優先使用 Spark 或較低推理成本的 worker；schema、migration、ledger、金流、權限模型與 merge decision 必須由總控或高推理 worker 審查。
 
+資訊來回、GitHub PR/issue readback、CI/check 狀態讀回、PR body/comment 整理、review closeout evidence 蒐集與 resolve 狀態確認，預設都是 `ops_spark` 工作。總控不得把這類資料搬運當成自己的預設工作；總控只審核 worker 證據是否足以支持後續修正、等待、merge 或 closeout 決策。
+
 完整 worker profile、路由規則與 GitHub 操作分工見 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)。
 
 ### Automated Review Gate
 
-Autonomous PR merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback。`chatgpt-codex-connector` 若沒有問題，通常會在第一則 PR comment 左下角留下 reaction；只有沒有 reaction、也沒有 review/comment 時才手動 comment `@codex review`。CodeRabbit 若明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。若 reviewer 提出 actionable finding，merge 前必須修正並回覆/resolve，或留下不採用的技術佐證 comment 並 resolve。不得只因 CodeRabbit status context 是 success 就視為 review 完成，因為 skip path 也可能回報 success。
+Autonomous PR merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback。`chatgpt-codex-connector` 若沒有問題，通常會在第一則 PR comment 左下角留下 reaction；只有沒有 reaction、也沒有 review/comment 時才手動 comment `@codex review`。CodeRabbit 若明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。若 reviewer 提出 actionable finding，merge 前每一條 finding 都必須有固定處置紀錄：修正並補上 comment/resolve，或留下不採用的技術佐證並 comment/resolve；至少要有一筆可見 comment 或 resolve 紀錄。不得只因 CodeRabbit status context 是 success 就視為 review 完成，因為 skip path 也可能回報 success。
 
 CodeRabbit 由 `.coderabbit.yaml` 設定為對所有 PR target branch 啟用 auto review。
 

@@ -7,6 +7,7 @@
 - autonomous work 必須先過 Start-of-work Delegation Gate，然後才可以讀專案資料、開始計劃、建立 issue、或撰寫 PR body。
 - 總控 agent 負責架構、計劃、scope、最終 review、guarded merge、closeout。
 - worker/subagent 負責可切分的探索、實作、文件、測試、GitHub readback、CI log 分析。
+- 資訊來回、GitHub PR/issue readback、CI/check 狀態讀回、PR body/comment 整理、review closeout evidence 蒐集與 resolve 狀態確認，預設交給 `ops_spark` 或同級低強度 worker。
 - 能用較快模型完成的工作優先交給 Spark / low-cost worker；高風險決策保留給總控或高推理 worker。
 - 每個實作任務都必須先有 GitHub issue，並以 PR 合併到 `develop`。
 - 不直接 push 到 `develop`、`main`、`master`。
@@ -30,8 +31,10 @@
 Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR。
 
 - 必須列出 worker profile 名稱。
+- 必須列出 `model` 與 `reasoning`。
+- 每個 spawn 都必須顯式記錄 `controller_fallback`，若為 `allowed`，必須補說明原因。
 - 必須列出每個 worker 只負責的 task。
-- 必須列出 model strength，並且明確寫出預期推理強度或 preferred model。
+- 如果是 routine GitHub/readback/comment/closeout/metadata/simple terminal，預設不得使用 controller 的 GPT-5.5（除非有 `controller_fallback=allowed` 並附原因）。
 - 必須列出 evidence / verification，包含要讀回的證據、驗證命令、或回收點。
 - 只有 trivial/self-only exception 才能不填 worker profile；這時仍然必須寫清楚 exception reason。
 - 不得把 issue 當成純描述票；只要是 autonomous work，就必須可從 issue body 讀出分工與驗證。
@@ -39,8 +42,10 @@ Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR�
 建議格式如下，欄位名稱不得省略：
 
 - `Worker profile`
+- `model`
+- `reasoning`
+- `controller_fallback`
 - `Task`
-- `Model strength`
 - `Evidence / verification`
 - `Trivial/self-only exception reason`（只有例外時才可填）
 
@@ -69,36 +74,35 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 
 ## Worker Profiles
 
-| Profile | Preferred model | Reasoning | 用途 |
-|---|---|---|---|
-| `controller` | GPT-5.5 | high / xhigh | 總控、架構、計劃、最終 review、merge decision |
-| `ops_spark` | GPT-5.3-Codex-Spark | low / medium | GitHub issue/PR metadata、CI readback、label/milestone、routine terminal |
-| `repo_scout` | GPT-5.3-Codex-Spark | medium | 快速掃 codebase、找既有 pattern、列測試缺口、產出摘要 |
-| `docs_worker` | GPT-5.3-Codex-Spark | medium | docs、issue body、PR body、驗證摘要、規格草稿 |
-| `test_worker` | GPT-5.4-mini / GPT-5.4 | medium / high | 單元測試、fixture 整理、workflow regression、測試補強 |
-| `backend_worker` | GPT-5.4 | high | FastAPI routers/services、錯誤處理、API tests、CI gates |
-| `frontend_worker` | GPT-5.4 | medium / high | storefront/dashboard UI、component、互動狀態、前端測試 |
-| `schema_worker` | GPT-5.5 | high / xhigh | DB schema、migration、idempotency、ledger、資料一致性 |
-| `integration_worker` | GPT-5.4 | high | 跨 repo contract、Docker、build、API/frontend integration |
-| `review_worker` | GPT-5.4 / GPT-5.5 | high | PR diff review、regression risk、缺測檢查 |
+| 任務場景 | Profile | model | reasoning | controller_fallback |
+|---|---|---|---|---|
+| GitHub issue/label/PR body/check readback、CI log 初步分析、routine terminal | `ops_spark` | `gpt-5.3-codex-spark` | `low` / `medium` | `not_allowed` |
+| 大範圍找檔案、找既有 pattern、測試缺口掃描 | `repo_scout` | `gpt-5.3-codex-spark` | `medium` | `not_allowed` |
+| 文件、規格、issue/PR 草稿、驗證摘要 | `docs_worker` | `gpt-5.3-codex-spark` | `medium` | `not_allowed` |
+| 單檔或小範圍 workflow / unit 測試補強 | `test_worker` | `gpt-5.4-mini` 或 `gpt-5.4` | `medium` / `high` | `not_allowed` |
+| API/FastAPI router、service、CI 相關實作 | `backend_worker` | `gpt-5.4` | `high` | `allowed only with fallback_reason` |
+| storefront/dashboard 前端修補 | `frontend_worker` | `gpt-5.4` | `medium` / `high` | `allowed only with fallback_reason` |
+| 跨 repo contract、Docker、build contract 驗證 | `integration_worker` | `gpt-5.4` | `high` | `allowed only with fallback_reason` |
+| schema / migration / ledger / 資料一致性 | `schema_worker` | `gpt-5.5` | `high` / `xhigh` | `allowed only with fallback_reason` |
+| merge 前風險掃描與最終 review 判斷 | `review_worker` | `gpt-5.5` | `high` | `allowed only with fallback_reason` |
+| controller / merge decision | `controller` | `gpt-5.5` | `high` / `xhigh` | `N/A (no fallback)` |
 
-模型名稱是 preferred profile，不是硬依賴。若當前環境不可用，總控需選擇同級或較保守的替代模型。
+profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `controller_fallback=allowed` 且有 `fallback_reason`，不得使用 controller profile 的 GPT-5.5。
 
 ## Routing Rules
 
-| 場景 | 預設指派 |
-|---|---|
-| GitHub issue/label/PR body/check readback | `ops_spark` |
-| GitHub issue creation with known scope/body | `ops_spark` drafts and creates, controller reviews scope before implementation |
-| CI log 初步分析、routine terminal 檢查 | `ops_spark` |
-| 大範圍找檔案、讀 code pattern | `repo_scout` |
-| 文件、計劃、issue/PR 草稿 | `docs_worker` |
-| 單檔或小範圍 test 補強 | `test_worker` |
-| 一般 API router/service 實作 | `backend_worker` |
-| schema、migration、資料一致性、ledger | `schema_worker` |
-| 一般 storefront/dashboard UI | `frontend_worker` |
-| 跨 tachiya / storefront / Docker / contract | `integration_worker` |
-| merge 前風險掃描 | `review_worker`，總控 final decision |
+依 `Worker Profiles` 表格路由，特別注意：
+
+- `ops_spark` / `repo_scout` / `docs_worker` 一律顯式使用 `gpt-5.3-codex-spark`，不得繼承 controller 的 `gpt-5.5`。
+- routine readback、PR body/comment、closeout evidence、CI log、simple terminal 都走 `ops_spark`。
+- schema、migration、ledger、金流、權限模型與 merge decision 才保留 `gpt-5.5` high/xhigh。
+
+Spawn 指令為硬規則（建議每個 worker 一筆）：
+
+- `spawn: <profile> model=<model> reasoning=<low|medium|high|xhigh> controller_fallback=<not_allowed|allowed> [fallback_reason=<reason>]`
+- `profile` 可用 profile 名稱，不加前綴。
+- `controller_fallback=allowed` 時，必須補 `fallback_reason`。
+- 若無 fallback reason，預設視為 `controller_fallback=not_allowed`，不得將 `ops_spark`、`repo_scout`、`docs_worker` 拉到 controller 高階推理上。
 
 ## GitHub 操作分工
 
@@ -107,10 +111,19 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 - 依總控核准的 scope 建 issue、查 issue、補 issue comment。
 - 驗證 issue label / state / URL readback。
 - 建 PR、更新 PR body。
+- 整理 PR body、PR comment、issue comment、review closeout evidence。
 - 查 labels、milestones、review state、CI checks。
 - 抓 failed check logs 並整理摘要。
 - 讀回 latest head SHA、merge state、status rollup。
 - 準備 closeout evidence。
+- 確認 review thread 是否 resolved，並彙整 comment URL、discussion URL、thread id、head SHA、讀回時間點。
+
+`ops_spark` 回報必須包含可被總控核對的證據摘要，不只寫「已確認」。至少列出：
+
+- 讀回來源與指令摘要。
+- PR head SHA 或 issue/comment URL。
+- CI/check、review、thread/comment 的目前狀態。
+- 缺權限、rate limit、工具限制或需要總控判斷的 blocker。
 
 總控保留：
 
@@ -119,21 +132,49 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 - `gh pr merge --match-head-commit`。
 - conflict / failed check / stale review 的決策。
 - issue close 的最終 scope 判斷。
+- review finding 是否採納、是否需要補修、是否可用替代證據 closeout 的最終判斷。
+
+## Commit / push 分工
+
+實際 git write 目前由 controller 擁有：建立或切換 branch、產生 commit、push branch、force-with-lease、以及任何會改動 `.git`、credential、remote tracking 或目前 branch 狀態的操作，都不得預設交給 worker。
+
+`ops_spark` 預設負責 git write 前後的例行證據工作：
+
+- pre-commit checklist：確認 working tree scope、預期驗證命令、commit message 是否含 `refs #...` 或 PR closeout 所需 reference。
+- post-push readback：讀回 commit SHA、push branch、remote branch、PR head SHA、CI/check 狀態、review/readback 狀態。
+- PR log/evidence 整理：把 controller-owned git write 的原因、ops_spark checklist、post-push readback 與剩餘 blocker 寫進 PR log 或 closeout evidence。
+
+如果 controller 因工具故障、權限不足、trivial/self-only exception，或任務切片太小而自行完成 pre-commit checklist / post-push readback，PR Delegation Execution Log 必須寫明原因，並列出等價證據：commit SHA、push branch、PR head SHA、CI/check readback 與讀回時間點。
 
 ## Automated Review Gate
 
 任何 autonomous PR merge 前，總控必須完成 fresh review readback：
 
-1. 確認最新 PR head SHA、base branch、mergeability 與 CI/check 狀態。
-2. 確認 CodeRabbit 已產生實際 review；若 CodeRabbit 明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。
-3. 確認 `chatgpt-codex-connector` 已留下 review/comment，或在第一則 PR comment 左下角留下 reaction。只有兩者都沒有時，才手動 comment `@codex review`。
+1. 先指派 `ops_spark` 讀回最新 PR head SHA、base branch、mergeability 與 CI/check 狀態；總控審核讀回結果。
+2. 先指派 `ops_spark` 確認 CodeRabbit 是否已產生實際 review；若 CodeRabbit 明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。
+3. 先指派 `ops_spark` 確認 `chatgpt-codex-connector` 已留下 review/comment，或在第一則 PR comment 左下角留下 reaction。只有兩者都沒有時，才手動 comment `@codex review`。
 4. 針對每個 actionable automated review finding，merge 前只能選一條路：
    - 修正、push、重跑相關驗證；
    - 留下技術佐證 comment 說明為何不採用。
-5. GitHub 允許時，將已處理的 review thread/comment resolve。
-6. 若 push 過新 commit，merge 前重新讀回 head SHA。
+5. GitHub 允許時，將已處理的 review thread/comment resolve；routine comment/resolve/readback 由 `ops_spark` 執行或整理，總控負責判斷處置是否足夠。
+6. 若 push 過新 commit，merge 前由 `ops_spark` 重新讀回 head SHA 與 automated review 狀態。
 
 CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".*"]`，讓 PR target branch 不限 default branch 都能觸發 auto review。
+
+## Review Conversation Closeout Gate
+
+每個 autonomous PR 都要把 automated review conversation 收斂到可追溯狀態，無論是修正還是不採用：
+
+1. 對每一則 actionable finding，總控需先列出處置；`ops_spark` 負責蒐集 thread/comment/readback 證據：
+   - `fix`：推上修正 commit，補上「已修正」comment（可含驗證證據），並在可見 thread 上 resolve。
+   - `not adopted`：保留不採用理由 comment，並在可見 thread 上 resolve。
+2. 如果沒有權限/工具不允許 resolve thread，必須在 PR comment 補一則替代紀錄，包含 thread URL、處置原因與剩餘風險或後續追蹤狀態。
+3. 新增 commit 後，指派 `ops_spark` 回到 PR 做 fresh readback，重確認：
+   - review/auto-review 狀態
+   - 每則 finding 的處置紀錄仍保留完整
+   - head SHA 與最新 conversation 狀態一致
+4. PR closeout 前，review conversation 要求不得是「僅有文字變更描述」，最少要有 comment 或 resolve 證據可被 reviewer/readback 看到。
+5. 總控不得把「留證據並 resolve」這類資訊搬運工作預設留給自己做；只有工具故障、權限不足、或任務小到符合 trivial/self-only exception 時才可自行處理，且必須在 PR log 寫明原因。
 
 ## PR Scope Police Contract
 
@@ -151,16 +192,16 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 ## Standard Autonomous Loop
 
 1. 評估現況與產品級缺口。
-2. 總控決定 issue scope；`ops_spark` 可負責建立或更新 GitHub issue，並讀回 URL、state、labels。
+2. 總控決定 issue scope；`ops_spark` 負責建立或更新 GitHub issue，並讀回 URL、state、labels。
 3. 從 `develop` 切 scoped branch。
 4. 依任務類型指派 worker。
 5. worker 回報變更與驗證；總控審查 diff。
 6. 總控或 worker 補必要修正。
 7. 跑 relevant validation；高風險改動需 full validation。
-8. 開 PR 到 `develop`，PR body 包含 Source of truth、Depends on PR、non-goals、validation。
-9. 等 CI/checks/review 狀態 fresh readback。
+8. `ops_spark` 可依總控核准內容開 PR 到 `develop` 或更新 PR body；PR body 包含 Source of truth、Depends on PR、non-goals、validation。
+9. `ops_spark` 做 CI/checks/review 狀態 fresh readback，總控判斷是否需要補修或等待。
 10. 總控用 guarded merge 合併。
-11. 補 issue evidence comment，確認 issue state / labels / closeout。
+11. `ops_spark` 補 issue evidence comment，確認 issue state / labels / closeout；總控審核 closeout scope。
 12. 更新本機 `develop`，回報 merge commit、驗證與剩餘風險。
 
 ## Validation Policy

@@ -56,10 +56,159 @@ jobs:
             const title = pr.title || ''
             const body = pr.body || ''
             const bodyForAutonomousGate = body.replace(/<!--[\s\S]*?-->/g, '')
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const extractSectionBody = (label) => {
+              const pattern = new RegExp(
+                `(?:^|\\n)\\s*(?:-\\s*)?(?:#{1,6}\\s*)?${escapeRegExp(label)}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*##\\s|\\n*$)`,
+                'i',
+              )
+              const match = bodyForAutonomousGate.match(pattern)
+              return match?.[1] ?? ''
+            }
+            const extractDelegationFieldBody = (label) => {
+              const delegatedLabels = [
+                'Source issue delegation plan',
+                'Actual worker profile(s)',
+                'Task',
+                'Model strength',
+                'Spawn directive',
+                'Trivial/self-only exception reason',
+                'Evidence / verification',
+                'Review conversation closeout',
+              ]
+              const pattern = new RegExp(
+                `(?:^|\\n)\\s*-\\s*${escapeRegExp(label)}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:${delegatedLabels
+                  .map((value) => escapeRegExp(value))
+                  .join('|')})\\s*[：:]|\\n\\s*##\\s|\\n*$)`,
+                'i',
+              )
+              const match = bodyForAutonomousGate.match(pattern)
+              return match?.[1] ?? ''
+            }
+            const normalizeSectionLine = (line) =>
+              line
+                .replace(/^\s*[-*]\s*/, '')
+                .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
+                .replace(/[.,。:：;；!?！？]+$/g, '')
+                .trim()
+            const normalizePlaceholderValue = (value) =>
+              value
+                .trim()
+                .replace(/[.,。:：;；!?！？]+$/g, '')
+                .toLowerCase()
+            const placeholderValues = new Set([
+              'n/a',
+              'none',
+              '無',
+              '不適用',
+              'na',
+              'n.a',
+              'tbd',
+              'todo',
+              'pending',
+              '-',
+              '—',
+              '待定',
+              '尚未',
+              '略',
+              '略過',
+              '待補',
+            ])
+            const isPlaceholderCloseoutLine = (line) => placeholderValues.has(normalizePlaceholderValue(line))
+            const extractSpawnDirectives = () => {
+              const spawnFieldPattern = /(?:^|\n)[^\S\n]*-[^\S\n]*(?:Spawn directive|spawn)[^\S\n]*[：:][^\S\n]*([^\n]+)/gi
+              const spawnValuePattern = (key, line) => {
+                const pattern = new RegExp(`${key}\\s*[=:]\\s*([^\\s]+)`, 'i')
+                const match = line.match(pattern)
+                return match?.[1]?.trim() ?? ''
+              }
+              const spawnFallbackReasonPattern = (line) => {
+                const pattern = /fallback_reason\s*[=:]\s*(.+)/i
+                const match = line.match(pattern)
+                return match?.[1]?.trim() ?? ''
+              }
+              const parseSpawn = (line) => {
+                const trimmed = line.trim()
+                const profileMatch = trimmed.match(/^\s*profile\s*[=:]\s*([A-Za-z0-9_]+)\s/i)
+                const profile = profileMatch?.[1] ?? trimmed.split(/\s+/)[0]
+                const model = spawnValuePattern('model', trimmed)
+                const reasoning = spawnValuePattern('reasoning', trimmed)
+                const controllerFallback = spawnValuePattern('controller_fallback', trimmed)
+                const fallbackReason = spawnFallbackReasonPattern(trimmed)
+                return {
+                  line: trimmed,
+                  profile,
+                  model,
+                  reasoning,
+                  controllerFallback,
+                  fallbackReason,
+                }
+              }
+              return [...bodyForAutonomousGate.matchAll(spawnFieldPattern)].map((match) => parseSpawn(match[1] || ''))
+            }
+            const spawnDirectives = extractSpawnDirectives()
+            const hasSpawnDirective = spawnDirectives.length > 0
+            const hasSpawnModel = spawnDirectives.some(
+              (spawn) =>
+                spawn.model &&
+                !placeholderValues.has(normalizePlaceholderValue(spawn.model)) &&
+                /^[A-Za-z0-9.\\-]+$/i.test(spawn.model),
+            )
             const normalizedLabels = (pr.labels || []).map((label) => (label.name || '').toLowerCase())
             const hasAutonomousLabel = normalizedLabels.some((label) => autonomousLabels.has(label))
             const hasDelegationExecutionLog = /(?:^|\n)\s*(?:#{1,6}\s*)?Delegation Execution Log\b/i.test(bodyForAutonomousGate)
-            const autonomousDetected = hasAutonomousLabel || hasDelegationExecutionLog
+            const delegationExecutionLogLabels = [
+              'Source issue delegation plan',
+              'Actual worker profile(s)',
+              'Task',
+              'Model strength',
+              'Spawn directive',
+              'Trivial/self-only exception reason',
+            ]
+            const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
+              extractDelegationFieldBody(label)
+                .split('\n')
+                .map(normalizeSectionLine)
+                .filter(Boolean)
+                .some((line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
+            )
+            const hasSpawnReasoning = spawnDirectives.some(
+              (spawn) =>
+                spawn.reasoning &&
+                !placeholderValues.has(normalizePlaceholderValue(spawn.reasoning)) &&
+                /^[A-Za-z0-9]+$/i.test(spawn.reasoning),
+            )
+            const hasSpawnControllerFallback = spawnDirectives.some(
+              (spawn) =>
+                spawn.controllerFallback &&
+                ['not_allowed', 'allowed'].includes(normalizePlaceholderValue(spawn.controllerFallback)),
+            )
+            const hasSpawnDirectiveWithModelReasoning = spawnDirectives.length > 0 && spawnDirectives.every(
+              (spawn) =>
+                spawn.model &&
+                !placeholderValues.has(normalizePlaceholderValue(spawn.model)) &&
+                /^[A-Za-z0-9.\\-]+$/i.test(spawn.model) &&
+                spawn.reasoning &&
+                !placeholderValues.has(normalizePlaceholderValue(spawn.reasoning)) &&
+                /^[A-Za-z0-9]+$/i.test(spawn.reasoning) &&
+                ['not_allowed', 'allowed'].includes(normalizePlaceholderValue(spawn.controllerFallback)) &&
+                (!/\bops_spark\b/i.test(spawn.line) || normalizePlaceholderValue(spawn.model) === 'gpt-5.3-codex-spark'),
+            )
+            const hasSpawnAllowedWithoutReason = spawnDirectives.some(
+              (spawn) =>
+                normalizePlaceholderValue(spawn.controllerFallback) === 'allowed' &&
+                (!spawn.fallbackReason || isPlaceholderCloseoutLine(spawn.fallbackReason)),
+            )
+            const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog
+            const reviewConversationCloseoutBody = extractSectionBody('Review conversation closeout')
+            const reviewConversationCloseoutLines = reviewConversationCloseoutBody
+              .split('\n')
+              .map(normalizeSectionLine)
+              .filter(Boolean)
+            const hasReviewConversationCloseout = reviewConversationCloseoutLines.length > 0
+            const hasMeaningfulReviewConversationCloseout = reviewConversationCloseoutLines.some(
+              (line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line),
+            )
             const workerProfileNames = [
               'controller',
               'ops_spark',
@@ -75,13 +224,49 @@ jobs:
             const hasWorkerProfileMention = workerProfileNames.some((profile) =>
               new RegExp(`\\b${profile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(bodyForAutonomousGate),
             )
+            const hasOpsSparkMention = bodyForAutonomousGate.toLowerCase().includes('ops_spark')
             const trivialExceptionMatch = bodyForAutonomousGate.match(
               /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
             )
             const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim()
+            const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody('Trivial/self-only exception reason')
+              .split('\n')
+              .map(normalizeSectionLine)
+              .filter(Boolean)
+              .some((line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line))
             const hasTrivialExceptionReason =
-              Boolean(trivialExceptionReason) &&
-              !/^(?:n\/a|none|無|不適用)$/i.test(trivialExceptionReason)
+              hasMeaningfulTrivialExceptionField ||
+              (Boolean(trivialExceptionReason) &&
+                !placeholderValues.has(normalizePlaceholderValue(normalizeSectionLine(trivialExceptionReason))))
+            const routineOpsKeywords = [
+              'readback',
+              'ci status',
+              'check status',
+              'review closeout',
+              'review conversation closeout',
+              'closeout evidence',
+              'commit',
+              'push',
+              'pre-commit',
+              'post-push',
+              'head sha',
+              'branch',
+              'pr body',
+              'pr comment',
+              'issue comment',
+              'thread',
+              'resolve',
+              'resolved',
+              '讀回',
+              '狀態讀回',
+              '留言',
+              '證據',
+              '收斂',
+              '關閉對話',
+            ]
+            const hasRoutineOpsWork = routineOpsKeywords.some((keyword) =>
+              bodyForAutonomousGate.toLowerCase().includes(keyword.toLowerCase()),
+            )
 
             const allowedPrefixes = ['[backend]', '[frontend]', '[discussion]']
             const titlePrefix = allowedPrefixes.find((prefix) => title.startsWith(prefix))
@@ -157,6 +342,26 @@ jobs:
                   'Autonomous PRs must name at least one worker profile or give an explicit trivial/self-only exception reason.',
                 )
               }
+
+              if (!hasMeaningfulReviewConversationCloseout) {
+                failures.push('Autonomous PRs must include a meaningful `Review conversation closeout` field.')
+              }
+
+              if (!hasTrivialExceptionReason && hasDelegationExecutionLog && !hasSpawnDirectiveWithModelReasoning) {
+                failures.push(
+                  'Autonomous PRs with worker delegation must include a Spawn directive with `model=` and `reasoning=`.',
+                )
+              }
+
+              if (hasSpawnAllowedWithoutReason) {
+                failures.push('Autonomous PRs with `controller_fallback=allowed` must include `fallback_reason=`.')
+              }
+
+              if (hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason) {
+                warnings.push(
+                  'Autonomous PRs with routine readback/comment/closeout or commit-push checklist work should delegate that slice to `ops_spark` or document a trivial/self-only exception.',
+                )
+              }
             }
 
             if (!bypassed && filenames.length > hardMaxChangedFiles) {
@@ -214,6 +419,14 @@ jobs:
             summaryLines.push(`- Workflow touched: ${touches.workflow ? 'yes' : 'no'}`)
             summaryLines.push(`- Autonomous label hit: ${hasAutonomousLabel ? 'yes' : 'no'}`)
             summaryLines.push(`- Delegation log present: ${hasDelegationExecutionLog ? 'yes' : 'no'}`)
+            summaryLines.push(`- Delegation log meaningful: ${hasMeaningfulDelegationExecutionLog ? 'yes' : 'no'}`)
+            summaryLines.push(`- Spawn directive count: ${spawnDirectives.length}`)
+            summaryLines.push(`- Spawn model present: ${hasSpawnModel ? 'yes' : 'no'}`)
+            summaryLines.push(`- Spawn reasoning present: ${hasSpawnReasoning ? 'yes' : 'no'}`)
+            summaryLines.push(`- Spawn controller_fallback present: ${hasSpawnControllerFallback ? 'yes' : 'no'}`)
+            summaryLines.push(`- Routine ops delegation hint: ${hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason ? 'missing ops_spark' : 'ok'}`)
+            summaryLines.push(`- Review conversation closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
+            summaryLines.push(`- Review conversation closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')
 
             const commentBody = summaryLines.join('\n')
