@@ -150,6 +150,7 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     "Actual worker profile(s)",
     "Task",
     "Model strength",
+    "Spawn directive",
     "Trivial/self-only exception reason",
   ];
   const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
@@ -563,20 +564,7 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
         hasSpawnAllowedWithoutReason: false,
       },
     },
-    {
-      name: "valid spawn with model/reasoning passes",
-      body: bodyWithSpawnDirective({
-        spawnDirective: "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed",
-      }),
-      labels: ["codex"],
-      expected: {
-        ...spawnExpectedBase,
-        hasOpsSparkMention: true,
-        hasSpawnModel: true,
-        hasSpawnReasoning: true,
-        hasSpawnAllowedWithoutReason: false,
-      },
-    },
+    ["valid spawn with model/reasoning passes", "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed", { hasOpsSparkMention: true, hasSpawnModel: true, hasSpawnReasoning: true, hasSpawnAllowedWithoutReason: false }],
     {
       name: "fallback allowed must include reason",
       body: bodyWithSpawnDirective({
@@ -612,12 +600,13 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
     },
   ];
 
-  for (const { name, body, labels, expected } of spawnCases) {
+  for (const item of spawnCases) {
+    const { name, body, labels, expected } = Array.isArray(item)
+      ? { name: item[0], body: bodyWithSpawnDirective({ spawnDirective: item[1] }), labels: ["codex"], expected: { ...spawnExpectedBase, ...item[2] } }
+      : item;
     assertGate(name, body, labels, expected);
   }
 });
-
-
 
 test("Autonomous PR routine ops work warns when ops_spark is missing", () => {
   const withoutOpsSpark = `
