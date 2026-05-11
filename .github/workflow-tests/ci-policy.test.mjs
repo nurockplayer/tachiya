@@ -56,4 +56,5 @@ test("API CI keeps lint, timeout, and compile-scope hardening", () => {
   assert.match(workflow, /timeout-minutes: 20/);
   assert.match(workflow, /python -m compileall config\.py database\.py main\.py security\.py models routers services tests/);
   assert.doesNotMatch(workflow, /python -m compileall \./);
+  assert.doesNotMatch(workflow, /weekly-release-pr\.yml/);
 });

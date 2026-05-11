@@ -1,6 +1,6 @@
 # Testing And CI Gates
 
-本文定義 Tachiya 目前的測試基線、現有 CI 現況，以及接下來應該補上的 required gates。目標不是把所有檢查塞進同一個 workflow，而是讓 root repo、Storefront repo 與跨 repo 邊界各自有清楚責任。
+本文定義 Tachiya 目前的測試基線、現有 CI 現況、各 gate 的 scope，以及還沒補完的缺口。目標不是把所有檢查塞進同一個 workflow，而是讓 root repo、Storefront repo 與跨 repo 邊界各自有清楚責任。
 
 ## 原則
 
@@ -21,11 +21,13 @@
 - `docker compose build api dashboard` 或等價 image build
 - `git diff --check`
 
-目前 root repo 的 CI 狀態：
+目前 root repo 已追蹤並正式生效的 CI gate：
 
-- 本機存在 [`.github/workflows/build.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/build.yml) 草案。
-- 但 `.github/` 目前未被 git 追蹤，代表它還不是正式生效中的 repo gate。
-- 現有草案只涵蓋 API image build 與 storefront app build，沒有 backend test gate。
+- [`.github/workflows/api-ci.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/api-ci.yml)
+  - scope: `api/**`、API contract docs、workflow regression、docker compose 相關 root 檔
+  - checks: `git diff --check`、`pytest`、`ruff check`、`ruff format --check`、`python -m compileall`、API image build
+
+目前 root repo 明確不再依賴 weekly release workflow，也不把任何本機未追蹤的 workflow 草案算進正式 gate。`frontend/` 在架構上是獨立 git repo，因此 frontend 的 PR CI 由 `nurockplayer/storefront` repo 自己擁有，不在 root repo duplicated 一套。
 
 ### Storefront repo
 
@@ -43,9 +45,9 @@ Storefront 目前有明確可執行的本地驗證指令：
 
 目前缺口：
 
-- `lint.yml` 是 `deployment_status` 觸發，不是每張 PR 必跑。
-- 沒有看見針對每張 PR 的 `test:run` 與 `build` gate。
-- 沒有把 Tachiya 特有 route hardening 視為 required check。
+- Storefront repo 自己的 PR gate 與 root repo 的 API / contract docs 還沒有 cross-repo contract 對照。
+- 沒有把 Tachiya 特有 route hardening 與 API contract drift 做成跨 repo required check。
+- root repo 內仍缺少一個可以驗證「文件宣告的 storefront contract 是否與獨立 storefront repo 現況一致」的自動 gate。
 
 ## 現有測試對應
 
@@ -89,25 +91,21 @@ Storefront 目前有明確可執行的本地驗證指令：
 - revalidate webhook 與 manual trigger sanitize / fallback
 - GraphQL runtime integer env fallback / clamp
 
-## 建議 required gates
+## 目前 required gates
 
-### Root repo PR gate
+### Root repo API / docs gate
 
-所有修改 `api/`、`docs/`、`docker-compose` 或整體整合文件的 PR，至少應該跑：
+所有修改 `api/`、API contract docs、`docker-compose` 或 API 相關 workflow 的 PR，至少應該跑：
 
 - `cd api && uv run --group dev pytest`
-- `cd api && python -m compileall .`
+- `cd api && python -m compileall config.py database.py main.py security.py models routers services tests`
 - `docker compose build api dashboard`
 - `git diff --check`
-
-若 PR 也依賴 Storefront 現況，應額外做一次整合 build：
-
-- `cd frontend && pnpm install --frozen-lockfile`
-- `cd frontend && SKIP_CODEGEN=1 pnpm run build`
+- `node --test .github/workflow-tests/*.test.mjs`（若有改 workflow / workflow tests）
 
 ### Storefront PR gate
 
-所有修改 `frontend/src`、`frontend/package.json`、`frontend/pnpm-lock.yaml` 或 `frontend/.github/workflows` 的 PR，至少應該跑：
+所有修改獨立 `storefront` repo 自身檔案的 PR，至少應該跑：
 
 - `pnpm install --frozen-lockfile`
 - `pnpm run lint`
@@ -120,31 +118,26 @@ Storefront 目前有明確可執行的本地驗證指令：
 純文件 PR 不需要硬跑整套 backend / frontend full suite，但至少應該跑：
 
 - `git diff --check`
+- `node --test .github/workflow-tests/*.test.mjs`（若文件同步改到 workflow / CI gate）
 - 檢查文件引用的檔名、issue / PR 編號與 workflow 現況是否正確
 
 如果文件宣告的是新的產品契約，而 repo 內還沒有對應 test，這不應視為可 merge 的 docs-only 變更，而應拆出補測工作。
 
-## 建議新增的 workflow 拆法
+## 目前 workflow 拆法
 
 ### Tachiya root repo
 
-- `ci/api-test`
-  跑 backend pytest 與 compile gate。
-- `ci/api-image`
-  只負責 API image build。
-- `ci/storefront-build-reference`
-  以 Tachiya 角度確認目前指定的 storefront `develop` 還 build 得起來。
+- `ci/api`
+  跑 backend pytest、lint、compile、image build 與 workflow regression。
+- root repo contract / docs checks
+  目前仍由 `ci/api` 的 workflow regression 與 docs sanity 共同承接；尚未拆成獨立 workflow。
 
 ### Storefront repo
 
-- `ci/lint`
-  每張 PR 必跑。
-- `ci/test`
-  跑 `pnpm run test:run`。
-- `ci/build`
-  跑 `SKIP_CODEGEN=1 pnpm run build`。
-- `ci/license`
-  維持既有 license check。
+- `ci/storefront`
+  目前在 `frontend/.github/workflows/pr-ci.yml` 定義 lint、test、e2e、build 與 whitespace check。
+- 其他 repo-local workflow
+  例如 license、dependency inventory、type update automation，維持 storefront repo 自己管理。
 
 ## 還沒補上的 gate
 
@@ -156,7 +149,7 @@ Storefront 目前有明確可執行的本地驗證指令：
 ## 實作優先序
 
 1. 先把 root repo 正式 workflow 納入版控。
-2. 再把 storefront PR 必跑的 lint / test / build gate 補齊。
+2. 再把 root repo 與獨立 storefront repo 的 required checks 對齊成同一份 contract matrix。
 3. 最後補 cross-repo smoke 與 contract drift check。
 
 這個順序的原因很直接：沒有穩定的 PR gate，後面的產品級測試再多，也會因為沒有被持續執行而失去保護效果。
