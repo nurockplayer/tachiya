@@ -47,8 +47,8 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 
 目前已經有的長期文件：
 
-- [docs/product-decisions.md](/Users/erickwang/Desktop/tachiya/docs/product-decisions.md)
-- [docs/internal-api-contracts.md](/Users/erickwang/Desktop/tachiya/docs/internal-api-contracts.md)
+- [product-decisions.md](product-decisions.md)
+- [internal-api-contracts.md](internal-api-contracts.md)
 
 這次補寫後，會把最近一波 hardening 的契約、測試基線與 CI 缺口一起落到 repo，避免只存在於 GitHub 討論串。
 
@@ -59,20 +59,20 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 後端目前有兩層測試已經形成基線：
 
 - Router / request schema 層：
-  [api/tests/test_coupon_internal_secret.py](/Users/erickwang/Desktop/tachiya/api/tests/test_coupon_internal_secret.py)
-  [api/tests/test_points_router.py](/Users/erickwang/Desktop/tachiya/api/tests/test_points_router.py)
-  [api/tests/test_referral_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_referral_service.py)
-  [api/tests/test_streamers_router.py](/Users/erickwang/Desktop/tachiya/api/tests/test_streamers_router.py)
+  [api/tests/test_coupon_internal_secret.py](../api/tests/test_coupon_internal_secret.py)
+  [api/tests/test_points_router.py](../api/tests/test_points_router.py)
+  [api/tests/test_referral_service.py](../api/tests/test_referral_service.py)
+  [api/tests/test_streamers_router.py](../api/tests/test_streamers_router.py)
 - Service / domain 邏輯層：
-  [api/tests/test_points_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_points_service.py)
-  [api/tests/test_revenue_share_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_revenue_share_service.py)
-  [api/tests/test_streamer_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_streamer_service.py)
+  [api/tests/test_points_service.py](../api/tests/test_points_service.py)
+  [api/tests/test_revenue_share_service.py](../api/tests/test_revenue_share_service.py)
+  [api/tests/test_streamer_service.py](../api/tests/test_streamer_service.py)
 
 這些測試已經能保住最近那批 strict integer、idempotency、FIFO balance、revenue share aggregation 的核心行為。
 
 ### Storefront
 
-Storefront 目前有 route / library / E2E smoke 測試基線。這些檔案屬於獨立 repo `nurockplayer/storefront`；若在本機操作，請使用 `/Users/erickwang/Desktop/storefront`，不要把 root repo 的 `frontend/` checkout 當成 Tachiya 版控內容。
+Storefront 目前有 route / library / E2E smoke 測試基線。這些檔案屬於獨立 repo `nurockplayer/storefront`；若在本機操作，請使用 `<workspace>/storefront`，不要把 root repo 的 `frontend/` checkout 當成 Tachiya 版控內容。
 
 - `src/app/api/revalidate/route.test.ts`
 - `src/app/api/auth/register/route.test.ts`
@@ -97,7 +97,7 @@ Storefront 目前有 route / library / E2E smoke 測試基線。這些檔案屬�
 
 目前觀察到的現況：
 
-- root repo 目前有正式追蹤的 [`.github/workflows/api-ci.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/api-ci.yml)，覆蓋 API、workflow regression 與相關 contract docs。
+- root repo 目前有正式追蹤的 [`.github/workflows/api-ci.yml`](../.github/workflows/api-ci.yml)，覆蓋 API、workflow regression 與相關 contract docs。
 - root repo 已移除 weekly release PR automation，release promotion 不再假設由排程 workflow 代辦。
 - storefront repo 自己擁有前端 PR CI；由於 `frontend/` 在架構上是獨立 git repo，root repo 不 duplicated 一套 frontend lint / test / build workflow。
 - root repo 與 storefront repo 之間已有 static cross-repo contract gate；尚未有需要真實服務或 mock server 的 end-to-end contract smoke。
@@ -123,6 +123,7 @@ Storefront 目前有 route / library / E2E smoke 測試基線。這些檔案屬�
 ### Phase 6: 文件與 CI 基線收斂
 
 - 補齊 contract docs、testing docs、CI gate docs。
+- 新增 domain 重構策略文件作為大規模 API 變更前的 Gate：[api-domain-migration-strategy.md](api-domain-migration-strategy.md)。
 - 維持 root repo 的 `ci/api` 與 storefront repo 的 `ci/storefront` 為正式 required gate。
 - 對齊 root repo 與 storefront repo 的 PR 必跑 lint / test / build contract。
 
@@ -140,6 +141,6 @@ Storefront 目前有 route / library / E2E smoke 測試基線。這些檔案屬�
 
 ## 本文件的使用方式
 
-- 要改 API request schema 前，先更新 [docs/internal-api-contracts.md](/Users/erickwang/Desktop/tachiya/docs/internal-api-contracts.md)。
-- 要改測試或 CI 流程前，先對照 [docs/testing-and-ci-gates.md](/Users/erickwang/Desktop/tachiya/docs/testing-and-ci-gates.md)。
+- 要改 API request schema 前，先更新 [internal-api-contracts.md](internal-api-contracts.md)。
+- 要改測試或 CI 流程前，先對照 [testing-and-ci-gates.md](testing-and-ci-gates.md)。
 - 若下一步要從「可開發」推到「可上線」，應優先做 Phase 6 的 CI gate 收斂，而不是再繼續只補單點 validation。

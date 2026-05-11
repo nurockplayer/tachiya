@@ -108,7 +108,7 @@ tachiya/frontend/    # 電商前端，自己的 fork（nurockplayer/storefront�
 ```
 
 - 獨立的 git repo（正式 repo: `nurockplayer/storefront`），不是 git submodule，也不在此 repo 的 git 管理範圍內。
-- 本機建議使用 `/Users/erickwang/Desktop/storefront` 作為 Storefront 工作區；`tachiya/frontend/` 只視為可被 `make clone-deps` 重新建立的 checkout。
+- 本機建議使用 `<workspace>/storefront` 作為 Storefront 工作區；`tachiya/frontend/` 只視為可被 `make clone-deps` 重新建立的 checkout。
 - Storefront 的 lint / test / build / E2E PR gate 在 Storefront repo 自己執行；Tachiya root repo 只用 cross-repo contract gate 檢查共享契約。
 
 ### 串接點
@@ -246,3 +246,7 @@ Email、Twitch user id、Tachigo member id、wallet address 都是可連結身�
 - 將 identity mapping 串進 Tachigo/Twitch/wallet 的 signed identity lookup，不再依 demo email bridge 做產品級查詢。
 - 規劃並淘汰 `GET /tachigo/users/points?email=...` 的前台依賴。
 - 補帳號合併、identity proof、解除連結後台操作規格；目前 link / unlink 已有基本 audit trail。
+
+### 後端 API 重構討論
+
+- API domain 遷移討論：[API domain migration strategy](api-domain-migration-strategy.md)
