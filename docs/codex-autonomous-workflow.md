@@ -4,6 +4,7 @@
 
 ## 核心原則
 
+- autonomous work 必須先過 Start-of-work Delegation Gate，然後才可以讀專案資料、開始計劃、建立 issue、或撰寫 PR body。
 - 總控 agent 負責架構、計劃、scope、最終 review、guarded merge、closeout。
 - worker/subagent 負責可切分的探索、實作、文件、測試、GitHub readback、CI log 分析。
 - 能用較快模型完成的工作優先交給 Spark / low-cost worker；高風險決策保留給總控或高推理 worker。
@@ -12,6 +13,45 @@
 - merge 前必須 fresh readback PR head SHA、CI/check 狀態、review/thread 狀態與 issue closeout scope。
 - merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback；`chatgpt-codex-connector` 無 finding 時可用第一則 PR comment 的 reaction 作為已看過證據，若有 actionable finding，必須修正或留下不採用佐證 comment 並 resolve。
 - 不得只用 CodeRabbit success status 判定 review 完成，因為 skipped review 也可能回報 success。
+- 只有單檔、單用途、沒有共享狀態、沒有跨檔驗證擴散風險的 trivial/self-only 任務，才可以不派 worker；這種例外必須在 issue plan 與 PR log 明確寫出 reason。
+
+## Start-of-work Delegation Gate
+
+- 總控 agent 必須先建立 Issue Delegation Plan，再讀專案資料、拆 task、寫 issue body、或建立 PR。
+- 總控 agent 必須先指派至少一個 worker profile，才可以開始正式工作；只有 trivial/self-only exception 才能不派 worker。
+- 總控 agent 不得先讀碼、先寫方案、先開 issue，然後才回頭補委派。
+- 總控 agent 不得把「只是先看一下」、「只是驗證標題」、「只是補一句說明」當成委派豁免。
+- trivial/self-only exception 只有在工作範圍單一、沒有跨檔脈絡、沒有 CI / schema / API / PR 連動風險時才成立。
+- 任何例外都必須同時寫進 Issue Delegation Plan 與 PR Delegation Execution Log。
+
+## Issue Delegation Plan
+
+Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR。
+
+- 必須列出 worker profile 名稱。
+- 必須列出每個 worker 只負責的 task。
+- 必須列出 model strength，並且明確寫出預期推理強度或 preferred model。
+- 必須列出 evidence / verification，包含要讀回的證據、驗證命令、或回收點。
+- 只有 trivial/self-only exception 才能不填 worker profile；這時仍然必須寫清楚 exception reason。
+- 不得把 issue 當成純描述票；只要是 autonomous work，就必須可從 issue body 讀出分工與驗證。
+
+建議格式如下，欄位名稱不得省略：
+
+- `Worker profile`
+- `Task`
+- `Model strength`
+- `Evidence / verification`
+- `Trivial/self-only exception reason`（只有例外時才可填）
+
+## PR Delegation Execution Log
+
+PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際分工。
+
+- 必須列出實際執行的 worker profile 名稱。
+- 必須列出每個 worker 的實際工作結果，不得只寫「已完成」。
+- 必須列出驗證結果與證據來源，包含測試、readback、或 CI 結果。
+- 必須把 issue plan 中的 trivial/self-only exception reason 原樣帶到 PR log；如果沒有例外，就不得亂寫例外。
+- 不得把 execution log 省略成一般摘要；只要是 autonomous PR，就必須看得到 delegation 與驗證的對應關係。
 
 ## 總控責任
 

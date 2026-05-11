@@ -12,6 +12,14 @@
 
 收到非簡單的任務時（跨檔案修改、新功能、架構調整），先用 Plan Mode 提出方案，等使用者確認後再開始寫 code。不要一收到需求就直接動手。
 
+### Autonomous 開工入口
+
+autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)，然後先做 delegation，再讀專案資料、寫 plan、開 issue、發 PR。
+
+- 必須先指派 worker，才可以開始正式工作。
+- 只有 trivial/self-only 任務才可以不派 worker，但一定要寫明 exception reason。
+- 總控負責決策與驗收，worker 只做被分派的切片。
+
 ### 驗證迴圈
 
 寫完 code 之後，主動跑相關的檢查來確認沒有問題：
@@ -185,6 +193,8 @@ make logs   # 查看 logs
 ### Autonomous Worker Profiles
 
 當使用者授權 autonomous product work 時，Codex 作為總控 agent，負責架構、計劃、scope、最終 review、guarded merge 與 closeout。
+
+autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)，先指派 worker，再讀專案資料、寫 plan、開 issue 或發 PR；只有 `trivial/self-only exception` 可以不分派，但必須明寫原因。
 
 可切分的探索、文件、測試、一般實作、GitHub readback、CI log 分析，可以依任務風險委派給 worker/subagent。routine GitHub / terminal / repo 探索優先使用 Spark 或較低推理成本的 worker；schema、migration、ledger、金流、權限模型與 merge decision 必須由總控或高推理 worker 審查。
 

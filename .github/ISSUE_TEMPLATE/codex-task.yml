@@ -1,0 +1,79 @@
+name: Codex Autonomous Delegation Plan
+description: Fill this form when opening an autonomous worker delegation issue.
+title: "[discussion] "
+labels:
+  - discussion
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Autonomous work 必須先完成 delegation plan，然後才可以進入讀碼、實作與 PR。
+        只有 trivial/self-only 任務才可以不派 worker，但必須寫出 exception reason。
+
+  - type: dropdown
+    id: work_type
+    attributes:
+      label: Work type
+      description: Choose the main surface for this issue.
+      options:
+        - backend
+        - frontend
+        - discussion
+    validations:
+      required: true
+
+  - type: textarea
+    id: worker_profile
+    attributes:
+      label: Worker profile
+      description: 列出要指派的 worker profile 名稱，例如 controller、ops_spark、repo_scout、docs_worker。
+      placeholder: |
+        controller: overall review and merge decision
+        repo_scout: scan existing patterns
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Task
+      description: 具體要做什麼，請列出每個 worker 的責任切片。
+      placeholder: |
+        - controller: read project docs and approve scope
+        - docs_worker: draft policy text
+        - ops_spark: verify issue and PR readback
+    validations:
+      required: true
+
+  - type: dropdown
+    id: model_strength
+    attributes:
+      label: Model strength
+      description: 選擇這個工作切片需要的推理強度。
+      options:
+        - low
+        - medium
+        - high
+        - xhigh
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence_verification
+    attributes:
+      label: Evidence / verification
+      description: 寫出要回收的證據、驗證命令、或 readback 項目。
+      placeholder: |
+        - git diff --check
+        - node --test .github/workflow-tests/*.test.mjs
+        - read back issue URL, labels, and PR body
+    validations:
+      required: true
+
+  - type: textarea
+    id: exception_reason
+    attributes:
+      label: Trivial/self-only exception reason
+      description: 只有在不派 worker 時才填寫。
+      placeholder: |
+        Single-file docs typo fix with no shared state and no validation drift.
