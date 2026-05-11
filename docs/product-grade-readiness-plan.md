@@ -96,8 +96,10 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 
 目前觀察到的現況：
 
-- root repo 本機有 `.github/workflows/build.yml` 草案，但 `.github/` 目前未被 git 追蹤，不能算已啟用的正式 CI 基線。
-- storefront repo 有已追蹤 workflow，但目前看到的是 license check、deployment 後 lint，以及 schema update automation，還不是完整 PR gate。
+- root repo 目前有正式追蹤的 [`.github/workflows/api-ci.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/api-ci.yml)，覆蓋 API、workflow regression 與相關 contract docs。
+- root repo 已移除 weekly release PR automation，release promotion 不再假設由排程 workflow 代辦。
+- storefront repo 自己擁有前端 PR CI；由於 `frontend/` 在架構上是獨立 git repo，root repo 不 duplicated 一套 frontend lint / test / build workflow。
+- root repo 與 storefront repo 之間還沒有 cross-repo contract gate。
 
 ### 3. E2E 與營運驗證不足
 
@@ -120,8 +122,8 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 ### Phase 6: 文件與 CI 基線收斂
 
 - 補齊 contract docs、testing docs、CI gate docs。
-- 把 root repo 的正式 CI workflow 納入版控。
-- 在 storefront 建立 PR 必跑的 lint / test / build gate。
+- 維持 root repo 的 `ci/api` 與 storefront repo 的 `ci/storefront` 為正式 required gate。
+- 對齊 root repo 與 storefront repo 的 PR 必跑 lint / test / build contract。
 
 ### Phase 7: Cross-repo contract 與 smoke coverage
 
