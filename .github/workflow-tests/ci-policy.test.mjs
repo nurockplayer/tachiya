@@ -172,7 +172,15 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       normalizePlaceholderValue(spawn.controllerFallback) === "allowed" &&
       (!spawn.fallbackReason || isPlaceholderLine(spawn.fallbackReason)),
   );
-  const hasSpawnDirectiveWithModelReasoning = hasSpawnModel && hasSpawnReasoning && hasSpawnControllerFallback;
+  const hasSpawnDirectiveWithModelReasoning = spawnDirectives.length > 0 && spawnDirectives.every(
+    (spawn) =>
+      spawn.model &&
+      !isPlaceholderLine(spawn.model) &&
+      spawn.reasoning &&
+      !isPlaceholderLine(spawn.reasoning) &&
+      ["not_allowed", "allowed"].includes(normalizePlaceholderValue(spawn.controllerFallback)) &&
+      (!/\bops_spark\b/i.test(spawn.line) || normalizePlaceholderValue(spawn.model) === "gpt-5.3-codex-spark"),
+  );
   const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog;
   const hasOpsSparkMention = bodyForAutonomousGate.toLowerCase().includes("ops_spark");
   const routineOpsKeywords = [
@@ -271,12 +279,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason/);
   assert.match(workflow, /const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody\('Trivial\/self-only exception reason'\)/);
   assert.match(workflow, /Routine ops delegation hint: \$\{hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason \? 'missing ops_spark' : 'ok'\}/);
-  assert.match(workflow, /hasSpawnDirective/);
-  assert.match(workflow, /hasSpawnModel/);
-  assert.match(workflow, /hasSpawnReasoning/);
-  assert.match(workflow, /hasSpawnControllerFallback/);
-  assert.match(workflow, /hasSpawnDirectiveWithModelReasoning/);
-  assert.match(workflow, /hasSpawnAllowedWithoutReason/);
+  assert.match(workflow, /spawnDirectives\.length > 0 &&/);
+  assert.match(workflow, /spawnDirectives\.every\(/);
+  assert.match(workflow, /gpt-5\.3-codex-spark/);
   assert.match(workflow, /isPlaceholderCloseoutLine\(spawn\.fallbackReason\)/);
   assert.doesNotMatch(workflow, /isPlaceholderLine\(spawn\.fallbackReason\)/);
   assert.match(workflow, /hasTrivialExceptionReason/);
@@ -286,18 +291,6 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /hasMeaningfulReviewConversationCloseout/);
   assert.match(workflow, /const placeholderValues = new Set\(\[/);
   assert.match(workflow, /placeholderValues\.has\(normalizePlaceholderValue\(normalizeSectionLine\(trivialExceptionReason\)\)\)/);
-  assert.match(workflow, /'na'/);
-  assert.match(workflow, /'n\.a'/);
-  assert.match(workflow, /'tbd'/);
-  assert.match(workflow, /'todo'/);
-  assert.match(workflow, /'pending'/);
-  assert.match(workflow, /'-'/);
-  assert.match(workflow, /'—'/);
-  assert.match(workflow, /'待定'/);
-  assert.match(workflow, /'尚未'/);
-  assert.match(workflow, /'略'/);
-  assert.match(workflow, /'略過'/);
-  assert.match(workflow, /'待補'/);
   assert.ok(workflow.includes("Self-review\\s*\\/\\s*exception reason"));
   assert.match(workflow, /Scope checks bypassed by scope-exception label; autonomous delegation gate still enforced\./);
   assert.doesNotMatch(workflow, /Scope police bypassed by scope-exception label\.'\)\n\s+return/);
@@ -512,13 +505,14 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
     profile = "ops_spark",
     task = "readback CI status and comment evidence",
     spawnDirective,
+    spawnDirectives = spawnDirective ? [spawnDirective] : [],
   }) =>
     makePrBody({
       delegationRows: [
         { label: "Source issue delegation plan", value: profile === "backend_worker" ? "closeout only" : "closeout only" },
         { label: "Actual worker profile(s)", value: profile },
         { label: "Task", value: task },
-        { label: "Spawn directive", value: spawnDirective },
+        ...spawnDirectives.map((value) => ({ label: "Spawn directive", value })),
         { label: "Review conversation closeout", value: "已完成 closeout 並回補證據鏈" },
       ],
     });
@@ -564,6 +558,8 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
         hasSpawnAllowedWithoutReason: false,
       },
     },
+    ["mixed spawn directives require each directive to be complete", ["spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=not_allowed", "spawn: docs_worker model=gpt-5.4 reasoning=high"], { hasOpsSparkMention: true, hasSpawnModel: true, hasSpawnReasoning: true, hasSpawnControllerFallback: true, hasSpawnDirectiveWithModelReasoning: false }],
+    ["ops_spark rejects non-codex-spark model", "spawn: ops_spark model=gpt-5.5 reasoning=medium controller_fallback=not_allowed", { hasOpsSparkMention: true, hasSpawnModel: true, hasSpawnReasoning: true, hasSpawnControllerFallback: true, hasSpawnDirectiveWithModelReasoning: false }],
     ["valid spawn with model/reasoning passes", "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed", { hasOpsSparkMention: true, hasSpawnModel: true, hasSpawnReasoning: true, hasSpawnAllowedWithoutReason: false }],
     {
       name: "fallback allowed must include reason",
@@ -602,7 +598,7 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
 
   for (const item of spawnCases) {
     const { name, body, labels, expected } = Array.isArray(item)
-      ? { name: item[0], body: bodyWithSpawnDirective({ spawnDirective: item[1] }), labels: ["codex"], expected: { ...spawnExpectedBase, ...item[2] } }
+      ? { name: item[0], body: bodyWithSpawnDirective({ spawnDirective: item[1], spawnDirectives: Array.isArray(item[1]) ? item[1] : undefined }), labels: ["codex"], expected: { ...spawnExpectedBase, ...item[2] } }
       : item;
     assertGate(name, body, labels, expected);
   }

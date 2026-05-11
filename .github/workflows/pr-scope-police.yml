@@ -183,7 +183,17 @@ jobs:
                 spawn.controllerFallback &&
                 ['not_allowed', 'allowed'].includes(normalizePlaceholderValue(spawn.controllerFallback)),
             )
-            const hasSpawnDirectiveWithModelReasoning = hasSpawnModel && hasSpawnReasoning && hasSpawnControllerFallback
+            const hasSpawnDirectiveWithModelReasoning = spawnDirectives.length > 0 && spawnDirectives.every(
+              (spawn) =>
+                spawn.model &&
+                !placeholderValues.has(normalizePlaceholderValue(spawn.model)) &&
+                /^[A-Za-z0-9.\\-]+$/i.test(spawn.model) &&
+                spawn.reasoning &&
+                !placeholderValues.has(normalizePlaceholderValue(spawn.reasoning)) &&
+                /^[A-Za-z0-9]+$/i.test(spawn.reasoning) &&
+                ['not_allowed', 'allowed'].includes(normalizePlaceholderValue(spawn.controllerFallback)) &&
+                (!/\bops_spark\b/i.test(spawn.line) || normalizePlaceholderValue(spawn.model) === 'gpt-5.3-codex-spark'),
+            )
             const hasSpawnAllowedWithoutReason = spawnDirectives.some(
               (spawn) =>
                 normalizePlaceholderValue(spawn.controllerFallback) === 'allowed' &&
