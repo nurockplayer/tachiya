@@ -11,10 +11,10 @@
 ## Repo 邊界
 
 - `tachiya/`：FastAPI、自家文件、docker-compose 與整體整合脈絡。
-- `tachiya/frontend/`：獨立 git repo `nurockplayer/storefront`，負責 Next.js Storefront。
+- `tachiya/frontend/`：本機 checkout 目錄；正式獨立 git repo 是 `nurockplayer/storefront`，負責 Next.js Storefront。
 - `tachigo/`：參考來源與未來共同商城需求輸入；本 repo 不直接修改它。
 
-這代表產品級 readiness 不是只看 `api/`，也必須同時看 `frontend/` 的 request validation、runtime env 防呆與 revalidation 邊界。
+這代表產品級 readiness 不是只看 `api/`，也必須同時看 `nurockplayer/storefront` 的 request validation、runtime env 防呆與 revalidation 邊界。Tachiya root repo 不 duplicated Storefront PR CI，而是用 cross-repo contract gate 監控雙方契約漂移。
 
 ## 已完成基線
 
@@ -70,27 +70,28 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 
 這些測試已經能保住最近那批 strict integer、idempotency、FIFO balance、revenue share aggregation 的核心行為。
 
-### Frontend
+### Storefront
 
-前端目前有 route / library 層測試基線：
+Storefront 目前有 route / library / E2E smoke 測試基線。這些檔案屬於獨立 repo `nurockplayer/storefront`；若在本機操作，請使用 `/Users/erickwang/Desktop/storefront`，不要把 root repo 的 `frontend/` checkout 當成 Tachiya 版控內容。
 
-- [frontend/src/app/api/revalidate/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/revalidate/route.test.ts)
-- [frontend/src/app/api/auth/register/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/auth/register/route.test.ts)
-- [frontend/src/app/api/auth/reset-password/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/auth/reset-password/route.test.ts)
-- [frontend/src/app/api/auth/set-password/route.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/app/api/auth/set-password/route.test.ts)
-- [frontend/src/lib/graphql.test.ts](/Users/erickwang/Desktop/tachiya/frontend/src/lib/graphql.test.ts)
+- `src/app/api/revalidate/route.test.ts`
+- `src/app/api/auth/register/route.test.ts`
+- `src/app/api/auth/reset-password/route.test.ts`
+- `src/app/api/auth/set-password/route.test.ts`
+- `src/lib/graphql.test.ts`
+- `tests/e2e/storefront-smoke.spec.ts`
 
 這些測試能保住「trim / reject blank / env fallback」這類邊界，但還不是完整使用者流程測試。
 
 ## 目前還缺什麼
 
-### 1. Cross-repo contract tests
+### 1. Contract tests beyond static drift checks
 
-現在的後端與前端都各自有測，但還沒有一個 gate 可以直接確認：
+目前已經有 `.github/workflows/cross-repo-contract.yml` 與 `.github/workflow-tests/cross-repo-contract.test.mjs`，可確認 Tachiya docs / router surface 與 Storefront develop consumer helper / tests 的基本契約沒有漂移。下一階段缺的是更接近 runtime 的 smoke：
 
-- Tachiya API contract 變更後，Storefront 仍然吃得下來。
+- Tachiya API contract 變更後，Storefront 以 mock / fixture payload 仍能吃得下來。
 - Storefront route hardening 沒有把既有 Saleor / Tachiya 呼叫格式打斷。
-- 文件中的 contract 與實作仍然同步。
+- 文件中的 contract 欄位能轉成更完整的 test matrix。
 
 ### 2. CI gate 不完整
 
@@ -99,14 +100,14 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 - root repo 目前有正式追蹤的 [`.github/workflows/api-ci.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/api-ci.yml)，覆蓋 API、workflow regression 與相關 contract docs。
 - root repo 已移除 weekly release PR automation，release promotion 不再假設由排程 workflow 代辦。
 - storefront repo 自己擁有前端 PR CI；由於 `frontend/` 在架構上是獨立 git repo，root repo 不 duplicated 一套 frontend lint / test / build workflow。
-- root repo 與 storefront repo 之間還沒有 cross-repo contract gate。
+- root repo 與 storefront repo 之間已有 static cross-repo contract gate；尚未有需要真實服務或 mock server 的 end-to-end contract smoke。
 
 ### 3. E2E 與營運驗證不足
 
 目前還缺：
 
 - 訂單完成後 points / referral / revenue share 串接的整體 smoke test。
-- Tachiya API 與 Storefront 之間的 contract drift 檢查。
+- Tachiya API 與 Storefront 之間更完整的 runtime contract smoke。
 - 營運視角的 replay、idempotency、payout queue、expired credit 對帳流程驗證。
 
 ### 4. Observability 與 release gate
@@ -127,7 +128,7 @@ Storefront 近期完成的是「把不乾淨 payload 擋在 route / runtime 邊�
 
 ### Phase 7: Cross-repo contract 與 smoke coverage
 
-- 建立 Tachiya API 與 Storefront 的 cross-repo smoke tests。
+- 擴充 Tachiya API 與 Storefront 的 cross-repo smoke tests。
 - 針對 points、coupon、referral、revenue share 建立最小 happy path / bad input path 契約測試。
 - 將文件中的產品契約欄位轉成可驗證的 test matrix。
 

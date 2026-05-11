@@ -48,6 +48,7 @@
 | 場景 | 預設指派 |
 |---|---|
 | GitHub issue/label/PR body/check readback | `ops_spark` |
+| GitHub issue creation with known scope/body | `ops_spark` drafts and creates, controller reviews scope before implementation |
 | CI log 初步分析、routine terminal 檢查 | `ops_spark` |
 | 大範圍找檔案、讀 code pattern | `repo_scout` |
 | 文件、計劃、issue/PR 草稿 | `docs_worker` |
@@ -62,7 +63,8 @@
 
 `ops_spark` 可以處理：
 
-- 建 issue、查 issue、補 issue comment。
+- 依總控核准的 scope 建 issue、查 issue、補 issue comment。
+- 驗證 issue label / state / URL readback。
 - 建 PR、更新 PR body。
 - 查 labels、milestones、review state、CI checks。
 - 抓 failed check logs 並整理摘要。
@@ -108,7 +110,7 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 ## Standard Autonomous Loop
 
 1. 評估現況與產品級缺口。
-2. 建立或更新 GitHub issue，明確寫背景、任務、規格、參考、完成條件。
+2. 總控決定 issue scope；`ops_spark` 可負責建立或更新 GitHub issue，並讀回 URL、state、labels。
 3. 從 `develop` 切 scoped branch。
 4. 依任務類型指派 worker。
 5. worker 回報變更與驗證；總控審查 diff。

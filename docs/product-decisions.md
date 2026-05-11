@@ -98,7 +98,7 @@ tachiya/
 ├── Saleor backend   # 電商核心，拉官方 Docker image，不改動
 ├── Saleor dashboard # 電商後台，build 自己的 image（繁體中文化）
 ├── api/             # FastAPI，處理折扣與區塊鏈代幣銷毀的中間層
-└── frontend/        # Storefront（獨立 git repo，掛在此目錄下）
+└── frontend/        # Storefront 本機 checkout（正式 repo: nurockplayer/storefront）
 ```
 
 ### Storefront（`tachiya/frontend/`）
@@ -107,8 +107,9 @@ tachiya/
 tachiya/frontend/    # 電商前端，自己的 fork（nurockplayer/storefront，fork 自 saleor/storefront）
 ```
 
-- 獨立的 git repo（有自己的 `.git`），不是 git submodule，也不在此 repo 的 git 管理範圍內
-- 以獨立 VSCode workspace + Claude Code 開發
+- 獨立的 git repo（正式 repo: `nurockplayer/storefront`），不是 git submodule，也不在此 repo 的 git 管理範圍內。
+- 本機建議使用 `/Users/erickwang/Desktop/storefront` 作為 Storefront 工作區；`tachiya/frontend/` 只視為可被 `make clone-deps` 重新建立的 checkout。
+- Storefront 的 lint / test / build / E2E PR gate 在 Storefront repo 自己執行；Tachiya root repo 只用 cross-repo contract gate 檢查共享契約。
 
 ### 串接點
 

@@ -116,13 +116,15 @@ Type：`feat` / `fix` / `docs` / `chore` / `refactor` / `test`
 ```
 tachiya/
 ├── api/              # Tachiya FastAPI（自訂業務邏輯、分潤）
-├── dashboard/        # Saleor Dashboard（繁體中文版，local build）
-├── frontend/         # Saleor Storefront（Next.js，消費者店面）
+├── dashboard/        # Saleor Dashboard（本機 checkout，不由此 repo 版控）
+├── frontend/         # Saleor Storefront（本機 checkout；正式 repo 是 nurockplayer/storefront）
 ├── docs/             # 設計文件
 └── translations/     # 翻譯檔（備份用）
 ```
 
-各子專案可以有自己的 `AGENTS.md`（例如 `frontend/AGENTS.md`），提供該區域專屬的上下文。
+`frontend/` 與 `dashboard/` 不進 Tachiya root repo git。Storefront 實作、測試、CI 與 PR 應在
+`<workspace>/storefront` / `nurockplayer/storefront` 處理；Tachiya root repo 只負責 API、docker-compose、
+文件與 cross-repo contract gate。
 
 ## 開發指令
 
