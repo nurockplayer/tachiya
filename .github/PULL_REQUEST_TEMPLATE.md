@@ -22,6 +22,8 @@ Depends on PR: <!-- `none` 或 `#123` -->
   - <!-- 若無例外請填 n/a -->
 - Evidence / verification:
   - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs -->
+- Review conversation closeout:
+  - <!-- autonomous: 填「已完成 closeout」，並補註 comment/resolve 驗證；非 autonomous human PR 填 n/a -->
 
 ## Validation
 - [ ] 本地測試過

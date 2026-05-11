@@ -202,7 +202,7 @@ autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/c
 
 ### Automated Review Gate
 
-Autonomous PR merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback。`chatgpt-codex-connector` 若沒有問題，通常會在第一則 PR comment 左下角留下 reaction；只有沒有 reaction、也沒有 review/comment 時才手動 comment `@codex review`。CodeRabbit 若明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。若 reviewer 提出 actionable finding，merge 前必須修正並回覆/resolve，或留下不採用的技術佐證 comment 並 resolve。不得只因 CodeRabbit status context 是 success 就視為 review 完成，因為 skip path 也可能回報 success。
+Autonomous PR merge 前必須等待 CodeRabbit 與 `chatgpt-codex-connector` review/readback。`chatgpt-codex-connector` 若沒有問題，通常會在第一則 PR comment 左下角留下 reaction；只有沒有 reaction、也沒有 review/comment 時才手動 comment `@codex review`。CodeRabbit 若明確回 rate limit，同一張 PR 不再重複要求 review，改由總控做 self-review 並留下替代 review 證據。若 reviewer 提出 actionable finding，merge 前每一條 finding 都必須有固定處置紀錄：修正並補上 comment/resolve，或留下不採用的技術佐證並 comment/resolve；至少要有一筆可見 comment 或 resolve 紀錄。不得只因 CodeRabbit status context 是 success 就視為 review 完成，因為 skip path 也可能回報 success。
 
 CodeRabbit 由 `.coderabbit.yaml` 設定為對所有 PR target branch 啟用 auto review。
 

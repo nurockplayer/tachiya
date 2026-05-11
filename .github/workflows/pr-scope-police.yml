@@ -56,10 +56,36 @@ jobs:
             const title = pr.title || ''
             const body = pr.body || ''
             const bodyForAutonomousGate = body.replace(/<!--[\s\S]*?-->/g, '')
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const extractSectionBody = (label) => {
+              const pattern = new RegExp(
+                `(?:^|\\n)\\s*(?:-\\s*)?(?:#{1,6}\\s*)?${escapeRegExp(label)}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*##\\s|\\n*$)`,
+                'i',
+              )
+              const match = bodyForAutonomousGate.match(pattern)
+              return match?.[1] ?? ''
+            }
+            const normalizeSectionLine = (line) =>
+              line
+                .replace(/^\s*[-*]\s*/, '')
+                .replace(/^[`"'“”‘’]+|[`"'“”‘’]+$/g, '')
+                .replace(/[.,。:：;；!?！？]+$/g, '')
+                .trim()
+            const isPlaceholderCloseoutLine = (line) =>
+              /^(?:n\/a|none|無|不適用)(?:$|[\s:：.,，。;；!?！？-].*)/i.test(line)
             const normalizedLabels = (pr.labels || []).map((label) => (label.name || '').toLowerCase())
             const hasAutonomousLabel = normalizedLabels.some((label) => autonomousLabels.has(label))
             const hasDelegationExecutionLog = /(?:^|\n)\s*(?:#{1,6}\s*)?Delegation Execution Log\b/i.test(bodyForAutonomousGate)
             const autonomousDetected = hasAutonomousLabel || hasDelegationExecutionLog
+            const reviewConversationCloseoutBody = extractSectionBody('Review conversation closeout')
+            const reviewConversationCloseoutLines = reviewConversationCloseoutBody
+              .split('\n')
+              .map(normalizeSectionLine)
+              .filter(Boolean)
+            const hasReviewConversationCloseout = reviewConversationCloseoutLines.length > 0
+            const hasMeaningfulReviewConversationCloseout = reviewConversationCloseoutLines.some(
+              (line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line),
+            )
             const workerProfileNames = [
               'controller',
               'ops_spark',
@@ -157,6 +183,10 @@ jobs:
                   'Autonomous PRs must name at least one worker profile or give an explicit trivial/self-only exception reason.',
                 )
               }
+
+              if (!hasMeaningfulReviewConversationCloseout) {
+                failures.push('Autonomous PRs must include a meaningful `Review conversation closeout` field.')
+              }
             }
 
             if (!bypassed && filenames.length > hardMaxChangedFiles) {
@@ -214,6 +244,8 @@ jobs:
             summaryLines.push(`- Workflow touched: ${touches.workflow ? 'yes' : 'no'}`)
             summaryLines.push(`- Autonomous label hit: ${hasAutonomousLabel ? 'yes' : 'no'}`)
             summaryLines.push(`- Delegation log present: ${hasDelegationExecutionLog ? 'yes' : 'no'}`)
+            summaryLines.push(`- Review closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
+            summaryLines.push(`- Review closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')
 
             const commentBody = summaryLines.join('\n')

@@ -135,6 +135,20 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 
 CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".*"]`，讓 PR target branch 不限 default branch 都能觸發 auto review。
 
+## Review Conversation Closeout Gate
+
+每個 autonomous PR 都要把 automated review conversation 收斂到可追溯狀態，無論是修正還是不採用：
+
+1. 對每一則 actionable finding，總控需先列出處置：
+   - `fix`：推上修正 commit，補上「已修正」comment（可含驗證證據），並在可見 thread 上 resolve。
+   - `not adopted`：保留不採用理由 comment，並在可見 thread 上 resolve。
+2. 如果沒有權限/工具不允許 resolve thread，必須在 PR comment 補一則替代紀錄，包含 thread URL、處置原因與剩餘風險或後續追蹤狀態。
+3. 新增 commit 後，回到 PR 做 fresh readback，重確認：
+   - review/auto-review 狀態
+   - 每則 finding 的處置紀錄仍保留完整
+   - head SHA 與最新 conversation 狀態一致
+4. PR closeout 前，review conversation 要求不得是「僅有文字變更描述」，最少要有 comment 或 resolve 證據可被 reviewer/readback 看到。
+
 ## PR Scope Police Contract
 
 開 PR 前必須先符合 `.github/workflows/pr-scope-police.yml` 的固定格式，避免靠 CI 打回才修：
