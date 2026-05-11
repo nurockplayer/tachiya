@@ -23,7 +23,7 @@
 
 目前 root repo 已追蹤並正式生效的 CI gate：
 
-- [`.github/workflows/api-ci.yml`](/Users/erickwang/Desktop/tachiya/.github/workflows/api-ci.yml)
+- [`.github/workflows/api-ci.yml`](../.github/workflows/api-ci.yml)
   - scope: `api/**`、API contract docs、workflow regression、docker compose 相關 root 檔
   - checks: `git diff --check`、`pytest`、`ruff check`、`ruff format --check`、`python -m compileall`、API image build
 
@@ -60,10 +60,10 @@ Storefront repo 目前已追蹤的核心 workflow：
 
 ### Backend request / router contracts
 
-- [api/tests/test_coupon_internal_secret.py](/Users/erickwang/Desktop/tachiya/api/tests/test_coupon_internal_secret.py)
-- [api/tests/test_points_router.py](/Users/erickwang/Desktop/tachiya/api/tests/test_points_router.py)
-- [api/tests/test_referral_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_referral_service.py)
-- [api/tests/test_streamers_router.py](/Users/erickwang/Desktop/tachiya/api/tests/test_streamers_router.py)
+- [api/tests/test_coupon_internal_secret.py](../api/tests/test_coupon_internal_secret.py)
+- [api/tests/test_points_router.py](../api/tests/test_points_router.py)
+- [api/tests/test_referral_service.py](../api/tests/test_referral_service.py)
+- [api/tests/test_streamers_router.py](../api/tests/test_streamers_router.py)
 
 保護的內容：
 
@@ -74,9 +74,9 @@ Storefront repo 目前已追蹤的核心 workflow：
 
 ### Backend domain / service logic
 
-- [api/tests/test_points_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_points_service.py)
-- [api/tests/test_revenue_share_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_revenue_share_service.py)
-- [api/tests/test_streamer_service.py](/Users/erickwang/Desktop/tachiya/api/tests/test_streamer_service.py)
+- [api/tests/test_points_service.py](../api/tests/test_points_service.py)
+- [api/tests/test_revenue_share_service.py](../api/tests/test_revenue_share_service.py)
+- [api/tests/test_streamer_service.py](../api/tests/test_streamer_service.py)
 
 保護的內容：
 
