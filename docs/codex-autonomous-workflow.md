@@ -91,20 +91,11 @@ profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `con
 
 ## Routing Rules
 
-| 場景 | 指派 profile | required model | reasoning | controller_fallback |
-|---|---|---|---|---|
-| GitHub issue/label/PR body/check readback | `ops_spark` | `gpt-5.3-codex-spark` | low / medium | not_allowed |
-| CI log 初步分析、routine terminal | `ops_spark` | `gpt-5.3-codex-spark` | low / medium | not_allowed |
-| 資訊來回、PR body/comment 整理、review closeout evidence 蒐集 | `ops_spark` | `gpt-5.3-codex-spark` | low / medium | not_allowed |
-| 大範圍找檔案、讀 code pattern | `repo_scout` | `gpt-5.3-codex-spark` | medium | not_allowed |
-| 文件、計劃、issue/PR 草稿 | `docs_worker` | `gpt-5.3-codex-spark` | medium | not_allowed |
-| 單檔或小範圍 test 補強 | `test_worker` | `gpt-5.4-mini` 或 `gpt-5.4` | medium / high | not_allowed |
-| 一般 API router/service 實作 | `backend_worker` | `gpt-5.4` | high | allowed only with fallback_reason |
-| schema、migration、資料一致性、ledger | `schema_worker` | `gpt-5.5` | high / xhigh | allowed only with fallback_reason |
-| 跨 tachiya / storefront / Docker / contract | `integration_worker` | `gpt-5.4` | high | allowed only with fallback_reason |
-| 一般 storefront/dashboard UI | `frontend_worker` | `gpt-5.4` | medium / high | allowed only with fallback_reason |
-| merge 前風險掃描（總控最終決策） | `review_worker` | `gpt-5.4` 或 `gpt-5.5` | high | allowed only with fallback_reason |
-| controller / merge decision | `controller` | `gpt-5.5` | high / xhigh | N/A |
+依 `Worker Profiles` 表格路由，特別注意：
+
+- `ops_spark` / `repo_scout` / `docs_worker` 一律顯式使用 `gpt-5.3-codex-spark`，不得繼承 controller 的 `gpt-5.5`。
+- routine readback、PR body/comment、closeout evidence、CI log、simple terminal 都走 `ops_spark`。
+- schema、migration、ledger、金流、權限模型與 merge decision 才保留 `gpt-5.5` high/xhigh。
 
 Spawn 指令為硬規則（建議每個 worker 一筆）：
 

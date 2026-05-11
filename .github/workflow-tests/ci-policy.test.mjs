@@ -4,6 +4,46 @@ import { test } from "node:test";
 
 const readWorkflow = (name) => readFileSync(new URL(`../workflows/${name}`, import.meta.url), "utf8");
 const readRepoFile = (relativePath) => readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
+const makePrBody = ({ delegationRows = [], sections = ["## Validation\n- node --test .github/workflow-tests/ci-policy.test.mjs"] }) => {
+  const delegationSection =
+    delegationRows.length === 0
+      ? ""
+      : `## Delegation Execution Log\n${delegationRows
+          .map(
+            ({ label, value }) =>
+              `- ${label}:\n${value
+                .split("\n")
+                .map((line) => `  - ${line}`)
+                .join("\n")}`,
+          )
+          .join("\n")}`;
+  return [delegationSection, ...sections].filter(Boolean).join("\n");
+};
+
+const buildGateExpected = (overrides = {}) =>
+  ({
+    autonomousDetected: false,
+    hasDelegationExecutionLog: false,
+    hasMeaningfulDelegationExecutionLog: false,
+    hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: false,
+    hasSpawnDirective: false,
+    hasSpawnModel: false,
+    hasSpawnReasoning: false,
+    hasSpawnControllerFallback: false,
+    hasSpawnDirectiveWithModelReasoning: false,
+    hasSpawnAllowedWithoutReason: false,
+    hasRoutineOpsDelegationWarning: false,
+    hasReviewConversationCloseout: false,
+    hasMeaningfulReviewConversationCloseout: false,
+    ...withSpawnDefaults({}),
+    ...overrides,
+  });
+
+const assertGate = (name, body, labels, expectedOverrides) => {
+  assert.deepEqual(evaluateAutonomousCloseoutGate({ body, labels }), buildGateExpected(expectedOverrides), name);
+};
 
 const stripTemplateComments = (body) => body.replace(/<!--[\s\S]*?-->/g, "");
 
@@ -208,15 +248,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   const issueConfig = readRepoFile(".github/ISSUE_TEMPLATE/config.yml");
   const workflow = readWorkflow("pr-scope-police.yml");
 
-  assert.match(prTemplate, /Source of truth/);
-  assert.match(prTemplate, /Depends on PR/);
-  assert.match(prTemplate, /本 PR 明確不做/);
-  assert.match(prTemplate, /Delegation Execution Log/);
-  assert.match(prTemplate, /Spawn directive/);
-  assert.match(prTemplate, /model=/);
-  assert.match(prTemplate, /reasoning=/);
-  assert.match(prTemplate, /controller_fallback=/);
-  assert.match(prTemplate, /Validation/);
+  for (const pattern of [/Source of truth/, /Depends on PR/, /本 PR 明確不做/, /Delegation Execution Log/, /Spawn directive/, /model=/, /reasoning=/, /controller_fallback=/, /Validation/]) {
+    assert.match(prTemplate, pattern);
+  }
 
   assert.match(issueTemplate, /Worker profile/);
   assert.match(issueTemplate, /Task/);
@@ -293,178 +327,24 @@ test("PR scope police keeps Tachiya title, body, and size gates", () => {
 });
 
 test("Autonomous PR closeout gate treats template bullets as meaningful only when filled", () => {
-  const templateOnlyHumanCloseout = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - n/a
-- Actual worker profile(s):
-  - n/a
-- Task:
-  - n/a
-- Model strength:
-  - n/a
-- Trivial/self-only exception reason:
-  - n/a
-- Evidence / verification:
-  - n/a
-- Review conversation closeout:
-  - n/a
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const humanMeaningfulCloseoutOnly = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - n/a
-- Actual worker profile(s):
-  - n/a
-- Task:
-  - n/a
-- Model strength:
-  - n/a
-- Trivial/self-only exception reason:
-  - n/a
-- Evidence / verification:
-  - n/a
-- Review conversation closeout:
-  - Not applicable - human-authored PR
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const humanEvidenceOnlyWithPlaceholderDelegation = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - n/a
-- Actual worker profile(s):
-  - n/a
-- Task:
-  - n/a
-- Model strength:
-  - n/a
-- Trivial/self-only exception reason:
-  - n/a
-- Evidence / verification:
-  - pnpm test
-  - node --test .github/workflow-tests/ci-policy.test.mjs
-- Review conversation closeout:
-  - n/a
-## Validation
-- pnpm test
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const placeholderVariants = [
-    "na",
-    "n.a.",
-    "tbd",
-    "todo",
-    "pending",
-    "-",
-    "—",
-    "待定",
-    "尚未",
-    "略",
-    "略過",
-    "待補",
+  const placeholderVariants = ["na", "n.a.", "tbd", "todo", "pending", "-", "—", "待定", "尚未", "略", "略過", "待補"];
+  const toRows = (rows) => rows.map(([label, value]) => ({ label, value }));
+  const normalizeRows = (rows = []) => {
+    if (rows.length === 0) return [];
+    if (Array.isArray(rows[0])) return toRows(rows);
+    return rows;
+  };
+  const asPrBody = (rows = []) => makePrBody({ delegationRows: normalizeRows(rows) });
+  const closeoutBaseTemplateRows = [
+    ["Source issue delegation plan", "n/a"],
+    ["Actual worker profile(s)", "n/a"],
+    ["Task", "n/a"],
+    ["Model strength", "n/a"],
+    ["Trivial/self-only exception reason", "n/a"],
+    ["Evidence / verification", "n/a"],
+    ["Review conversation closeout", "n/a"],
   ];
-  const autonomousMissingCloseout = `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - controller
-- Task:
-  - review policy gate
-- Review conversation closeout:
-  - n/a
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousFilledCloseout = `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - controller
-- Task:
-  - review policy gate
-- Review conversation closeout:
-  - 已完成 closeout；已回覆 CodeRabbit 與 reviewer thread，並確認 resolve 紀錄可讀回
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousPlaceholderExceptionReason = `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - controller
-- Task:
-  - review policy gate
-- Trivial/self-only exception reason:
-  - tbd
-- Review conversation closeout:
-  - 已完成 closeout；已回覆 CodeRabbit 與 reviewer thread，並確認 resolve 紀錄可讀回
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const humanMissingCloseout = `
-## Notes for Review
-- This is a human-authored change.
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousScopeExceptionMissingCloseout = `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - controller
-- Task:
-  - review policy gate
-- Review conversation closeout:
-  - 無
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousMissingCloseout, labels: ["codex"] }),
-    withSpawnDefaults({
-    autonomousDetected: true,
-    hasDelegationExecutionLog: true,
-    hasMeaningfulDelegationExecutionLog: true,
-    hasTrivialExceptionReason: false,
-    hasOpsSparkMention: false,
-    hasRoutineOpsWork: true,
-    hasRoutineOpsDelegationWarning: true,
-    hasReviewConversationCloseout: true,
-    hasMeaningfulReviewConversationCloseout: false,
-  }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousFilledCloseout, labels: ["auto-ready"] }),
-    withSpawnDefaults({
-    autonomousDetected: true,
-    hasDelegationExecutionLog: true,
-    hasMeaningfulDelegationExecutionLog: true,
-    hasTrivialExceptionReason: false,
-    hasOpsSparkMention: false,
-    hasRoutineOpsWork: true,
-    hasRoutineOpsDelegationWarning: true,
-    hasReviewConversationCloseout: true,
-    hasMeaningfulReviewConversationCloseout: true,
-  }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousPlaceholderExceptionReason, labels: ["codex"] }),
-    withSpawnDefaults({
-    autonomousDetected: true,
-    hasDelegationExecutionLog: true,
-    hasMeaningfulDelegationExecutionLog: true,
-    hasTrivialExceptionReason: false,
-    hasOpsSparkMention: false,
-    hasRoutineOpsWork: true,
-    hasRoutineOpsDelegationWarning: true,
-    hasReviewConversationCloseout: true,
-    hasMeaningfulReviewConversationCloseout: true,
-  }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: templateOnlyHumanCloseout, labels: [] }),
-    withSpawnDefaults({
-    autonomousDetected: false,
+  const closeoutExpectedBase = {
     hasDelegationExecutionLog: true,
     hasMeaningfulDelegationExecutionLog: false,
     hasTrivialExceptionReason: false,
@@ -473,331 +353,271 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasRoutineOpsDelegationWarning: false,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
-  }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: humanMeaningfulCloseoutOnly, labels: [] }),
-    withSpawnDefaults({
-    autonomousDetected: false,
-    hasDelegationExecutionLog: true,
-    hasMeaningfulDelegationExecutionLog: false,
-    hasTrivialExceptionReason: false,
-    hasOpsSparkMention: false,
-    hasRoutineOpsWork: true,
-    hasRoutineOpsDelegationWarning: false,
-    hasReviewConversationCloseout: true,
-    hasMeaningfulReviewConversationCloseout: true,
-  }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: humanEvidenceOnlyWithPlaceholderDelegation, labels: [] }),
-    withSpawnDefaults({
-    autonomousDetected: false,
-    hasDelegationExecutionLog: true,
-    hasMeaningfulDelegationExecutionLog: false,
-    hasTrivialExceptionReason: false,
-    hasOpsSparkMention: false,
-    hasRoutineOpsWork: true,
-    hasRoutineOpsDelegationWarning: false,
-    hasReviewConversationCloseout: true,
-    hasMeaningfulReviewConversationCloseout: false,
-  }),
-  );
-  for (const placeholderVariant of placeholderVariants) {
-    assert.deepEqual(
-      evaluateAutonomousCloseoutGate({
-        body: `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - ${placeholderVariant}
-- Task:
-  - ${placeholderVariant}
-- Review conversation closeout:
-  - ${placeholderVariant}
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`,
-        labels: [],
+  };
+  const closeoutExpectedAutonomous = {
+    ...closeoutExpectedBase,
+    autonomousDetected: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasRoutineOpsDelegationWarning: true,
+  };
+  const placeholderRows = (closeoutValue, taskValue = "review policy gate", workerValue = "controller") => [
+    ["Actual worker profile(s)", workerValue],
+    ["Task", taskValue],
+    ["Review conversation closeout", closeoutValue],
+  ];
+  const closeoutCases = [
+    {
+      name: "autonomous missing closeout is not meaningful",
+      body: asPrBody(placeholderRows("n/a")),
+      labels: ["codex"],
+      expected: {
+        ...closeoutExpectedAutonomous,
+      },
+    },
+    {
+      name: "autonomous meaningful closeout passes when review closeout filled",
+      body: asPrBody(placeholderRows("已完成 closeout；已回覆 CodeRabbit 與 reviewer thread，並確認 resolve 紀錄可讀回")),
+      labels: ["auto-ready"],
+      expected: {
+        ...closeoutExpectedAutonomous,
+        hasMeaningfulReviewConversationCloseout: true,
+      },
+    },
+    {
+      name: "autonomous placeholder trivial exception reason is not meaningful",
+      body: asPrBody([
+        ["Actual worker profile(s)", "controller"],
+        ["Task", "review policy gate"],
+        ["Trivial/self-only exception reason", "tbd"],
+        ["Review conversation closeout", "已完成 closeout；已回覆 CodeRabbit 與 reviewer thread，並確認 resolve 紀錄可讀回"],
+      ]),
+      labels: ["codex"],
+      expected: {
+        ...closeoutExpectedAutonomous,
+        hasMeaningfulReviewConversationCloseout: true,
+      },
+    },
+    {
+      name: "template-only human closeout stays non-autonomous",
+      body: asPrBody(toRows(closeoutBaseTemplateRows)),
+      labels: [],
+      expected: {
+        ...closeoutExpectedBase,
+      },
+    },
+    {
+      name: "human meaningful closeout is allowed",
+      body: asPrBody(
+        [
+          ...closeoutBaseTemplateRows.filter(([label]) => label !== "Review conversation closeout"),
+          ["Review conversation closeout", "Not applicable - human-authored PR"],
+        ].map(([label, value]) => ({ label, value })),
+      ),
+      labels: [],
+      expected: {
+        ...closeoutExpectedBase,
+        hasMeaningfulReviewConversationCloseout: true,
+      },
+    },
+    {
+      name: "human evidence-only with placeholder delegation remains non-autonomous",
+      body: asPrBody(
+        [
+          ...closeoutBaseTemplateRows.filter(
+            ([label]) =>
+              label !== "Trivial/self-only exception reason" &&
+              label !== "Review conversation closeout" &&
+              label !== "Evidence / verification",
+          ),
+          ["Evidence / verification", "pnpm test\nnode --test .github/workflow-tests/ci-policy.test.mjs"],
+          ["Review conversation closeout", "n/a"],
+        ].map(([label, value]) => ({ label, value })),
+      ),
+      labels: [],
+      expected: {
+        ...closeoutExpectedBase,
+      },
+    },
+    ...placeholderVariants.map((placeholderVariant) => ({
+      name: `placeholder variant ${placeholderVariant} should stay non-meaningful`,
+      body: asPrBody(placeholderRows(placeholderVariant, placeholderVariant, placeholderVariant)),
+      labels: [],
+      expected: {
+        ...closeoutExpectedBase,
+      },
+    })),
+    {
+      name: "real delegation content marks autonomous",
+      body: asPrBody([
+        ["Actual worker profile(s)", "pending reviewer reply, evidence attached in thread"],
+        ["Task", "review policy gate"],
+        ["Review conversation closeout", "follow-up evidence remains pending on the thread"],
+      ]),
+      labels: [],
+      expected: {
+        ...closeoutExpectedAutonomous,
+        hasMeaningfulReviewConversationCloseout: true,
+      },
+    },
+    {
+      name: "human-only text without delegation log is not autonomous",
+      body: makePrBody({
+        delegationRows: [],
+        sections: ["## Notes for Review\n- This is a human-authored change."],
       }),
-      withSpawnDefaults({
+      labels: [],
+      expected: {
         autonomousDetected: false,
-        hasDelegationExecutionLog: true,
+        hasDelegationExecutionLog: false,
         hasMeaningfulDelegationExecutionLog: false,
         hasTrivialExceptionReason: false,
         hasOpsSparkMention: false,
-        hasRoutineOpsWork: true,
+        hasRoutineOpsWork: false,
         hasRoutineOpsDelegationWarning: false,
-        hasReviewConversationCloseout: true,
+        hasReviewConversationCloseout: false,
         hasMeaningfulReviewConversationCloseout: false,
-      }),
-      `placeholder variant ${placeholderVariant} should stay non-meaningful`,
-    );
-  }
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({
-      body: `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - pending reviewer reply, evidence attached in thread
-- Task:
-  - review policy gate
-- Review conversation closeout:
-  - follow-up evidence remains pending on the thread
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`,
-      labels: [],
-      }),
-      withSpawnDefaults({
-        autonomousDetected: true,
-        hasDelegationExecutionLog: true,
-        hasMeaningfulDelegationExecutionLog: true,
-        hasTrivialExceptionReason: false,
-        hasOpsSparkMention: false,
-        hasRoutineOpsWork: true,
-        hasRoutineOpsDelegationWarning: true,
-        hasReviewConversationCloseout: true,
-        hasMeaningfulReviewConversationCloseout: true,
-      }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: humanMissingCloseout, labels: [] }),
-    withSpawnDefaults({
-    autonomousDetected: false,
-    hasDelegationExecutionLog: false,
-    hasMeaningfulDelegationExecutionLog: false,
-    hasTrivialExceptionReason: false,
-    hasOpsSparkMention: false,
-    hasRoutineOpsWork: false,
-    hasRoutineOpsDelegationWarning: false,
-    hasReviewConversationCloseout: false,
-    hasMeaningfulReviewConversationCloseout: false,
-  }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({
-      body: autonomousScopeExceptionMissingCloseout,
+      },
+    },
+    {
+      name: "scope-exception still applies routine ops gating",
+      body: asPrBody(placeholderRows("無")),
       labels: ["codex", "scope-exception"],
-    }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: false,
-      hasRoutineOpsWork: true,
-      hasRoutineOpsDelegationWarning: true,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: false,
-    }),
-  );
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({
-      body: `
-## Delegation Execution Log
-- Actual worker profile(s):
-  - controller
-- Review conversation closeout:
-  - n/a
-`,
+      expected: {
+        ...closeoutExpectedAutonomous,
+        hasMeaningfulReviewConversationCloseout: false,
+      },
+    },
+    {
+      name: "codex-automation label enforces autonomous detection",
+      body: asPrBody([
+        ["Actual worker profile(s)", "controller"],
+        ["Review conversation closeout", "n/a"],
+      ]),
       labels: ["codex-automation"],
-    }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: false,
-      hasRoutineOpsWork: true,
-      hasRoutineOpsDelegationWarning: true,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: false,
-    }),
-  );
+      expected: {
+        ...closeoutExpectedAutonomous,
+        hasMeaningfulReviewConversationCloseout: false,
+      },
+    },
+  ];
+
+  for (const { name, body, labels, expected } of closeoutCases) {
+    assertGate(name, body, labels, expected);
+  }
 });
 
 test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
-  const autonomousMissingModel = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - closeout only
-- Actual worker profile(s):
-  - ops_spark
-- Task:
-  - readback CI status and comment evidence
-- Spawn directive:
-  - spawn: ops_spark controller_fallback=not_allowed
-- Review conversation closeout:
-  - 已完成 closeout 並回補證據鏈
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousMissingReasoning = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - closeout only
-- Actual worker profile(s):
-  - ops_spark
-- Task:
-  - readback CI status and comment evidence
-- Spawn directive:
-  - spawn: ops_spark model=gpt-5.3-codex-spark controller_fallback=not_allowed
-- Review conversation closeout:
-  - 已完成 closeout 並回補證據鏈
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousValidSpawn = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - closeout only
-- Actual worker profile(s):
-  - ops_spark
-- Task:
-  - readback CI status and comment evidence
-- Spawn directive:
-  - spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed
-- Review conversation closeout:
-  - 已完成 closeout 並回補證據鏈
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousMissingFallbackReason = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - closeout only
-- Actual worker profile(s):
-  - backend_worker
-- Task:
-  - review policy gate
-- Spawn directive:
-  - spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=allowed
-- Review conversation closeout:
-  - 已完成 closeout 並回補證據鏈
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
-  const autonomousFallbackWithReason = `
-## Delegation Execution Log
-- Source issue delegation plan:
-  - closeout only
-- Actual worker profile(s):
-  - backend_worker
-- Task:
-  - review policy gate
-- Spawn directive:
-  - spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=allowed fallback_reason=high-risk schema drift check
-- Review conversation closeout:
-  - 已完成 closeout 並回補證據鏈
-## Validation
-- node --test .github/workflow-tests/ci-policy.test.mjs
-`;
+  const bodyWithSpawnDirective = ({
+    profile = "ops_spark",
+    task = "readback CI status and comment evidence",
+    spawnDirective,
+  }) =>
+    makePrBody({
+      delegationRows: [
+        { label: "Source issue delegation plan", value: profile === "backend_worker" ? "closeout only" : "closeout only" },
+        { label: "Actual worker profile(s)", value: profile },
+        { label: "Task", value: task },
+        { label: "Spawn directive", value: spawnDirective },
+        { label: "Review conversation closeout", value: "已完成 closeout 並回補證據鏈" },
+      ],
+    });
+  const spawnExpectedBase = {
+    autonomousDetected: true,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasTrivialExceptionReason: false,
+    hasOpsSparkMention: false,
+    hasRoutineOpsWork: true,
+    hasSpawnDirective: true,
+    hasSpawnControllerFallback: true,
+    hasSpawnDirectiveWithModelReasoning: true,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: true,
+  };
+  const spawnCases = [
+    {
+      name: "missing model fails spawn gating",
+      body: bodyWithSpawnDirective({ spawnDirective: "spawn: ops_spark controller_fallback=not_allowed" }),
+      labels: ["codex"],
+      expected: {
+        ...spawnExpectedBase,
+        hasOpsSparkMention: true,
+        hasSpawnModel: false,
+        hasSpawnReasoning: false,
+        hasSpawnDirectiveWithModelReasoning: false,
+        hasSpawnAllowedWithoutReason: false,
+      },
+    },
+    {
+      name: "missing reasoning fails spawn gating",
+      body: bodyWithSpawnDirective({
+        spawnDirective: "spawn: ops_spark model=gpt-5.3-codex-spark controller_fallback=not_allowed",
+      }),
+      labels: ["codex"],
+      expected: {
+        ...spawnExpectedBase,
+        hasOpsSparkMention: true,
+        hasSpawnModel: true,
+        hasSpawnReasoning: false,
+        hasSpawnDirectiveWithModelReasoning: false,
+        hasSpawnAllowedWithoutReason: false,
+      },
+    },
+    {
+      name: "valid spawn with model/reasoning passes",
+      body: bodyWithSpawnDirective({
+        spawnDirective: "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed",
+      }),
+      labels: ["codex"],
+      expected: {
+        ...spawnExpectedBase,
+        hasOpsSparkMention: true,
+        hasSpawnModel: true,
+        hasSpawnReasoning: true,
+        hasSpawnAllowedWithoutReason: false,
+      },
+    },
+    {
+      name: "fallback allowed must include reason",
+      body: bodyWithSpawnDirective({
+        profile: "backend_worker",
+        spawnDirective: "spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=allowed",
+        task: "review policy gate",
+      }),
+      labels: ["codex"],
+      expected: {
+        ...spawnExpectedBase,
+        hasSpawnModel: true,
+        hasSpawnReasoning: true,
+        hasSpawnAllowedWithoutReason: true,
+        hasRoutineOpsDelegationWarning: true,
+      },
+    },
+    {
+      name: "fallback allowed with reason passes",
+      body: bodyWithSpawnDirective({
+        profile: "backend_worker",
+        spawnDirective:
+          "spawn: backend_worker model=gpt-5.4 reasoning=high controller_fallback=allowed fallback_reason=high-risk schema drift check",
+        task: "review policy gate",
+      }),
+      labels: ["codex"],
+      expected: {
+        ...spawnExpectedBase,
+        hasSpawnModel: true,
+        hasSpawnReasoning: true,
+        hasSpawnAllowedWithoutReason: false,
+        hasRoutineOpsDelegationWarning: true,
+      },
+    },
+  ];
 
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousMissingModel, labels: ["codex"] }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: true,
-      hasRoutineOpsWork: true,
-      hasSpawnDirective: true,
-      hasSpawnModel: false,
-      hasSpawnReasoning: false,
-      hasSpawnControllerFallback: true,
-      hasSpawnDirectiveWithModelReasoning: false,
-      hasSpawnAllowedWithoutReason: false,
-      hasRoutineOpsDelegationWarning: false,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: true,
-    }),
-  );
-
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousMissingReasoning, labels: ["codex"] }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: true,
-      hasRoutineOpsWork: true,
-      hasSpawnDirective: true,
-      hasSpawnModel: true,
-      hasSpawnReasoning: false,
-      hasSpawnControllerFallback: true,
-      hasSpawnDirectiveWithModelReasoning: false,
-      hasSpawnAllowedWithoutReason: false,
-      hasRoutineOpsDelegationWarning: false,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: true,
-    }),
-  );
-
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousValidSpawn, labels: ["codex"] }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: true,
-      hasRoutineOpsWork: true,
-      hasSpawnDirective: true,
-      hasSpawnModel: true,
-      hasSpawnReasoning: true,
-      hasSpawnControllerFallback: true,
-      hasSpawnDirectiveWithModelReasoning: true,
-      hasSpawnAllowedWithoutReason: false,
-      hasRoutineOpsDelegationWarning: false,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: true,
-    }),
-  );
-
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousMissingFallbackReason, labels: ["codex"] }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: false,
-      hasRoutineOpsWork: true,
-      hasSpawnDirective: true,
-      hasSpawnModel: true,
-      hasSpawnReasoning: true,
-      hasSpawnControllerFallback: true,
-      hasSpawnDirectiveWithModelReasoning: true,
-      hasSpawnAllowedWithoutReason: true,
-      hasRoutineOpsDelegationWarning: true,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: true,
-    }),
-  );
-
-  assert.deepEqual(
-    evaluateAutonomousCloseoutGate({ body: autonomousFallbackWithReason, labels: ["codex"] }),
-    withSpawnDefaults({
-      autonomousDetected: true,
-      hasDelegationExecutionLog: true,
-      hasMeaningfulDelegationExecutionLog: true,
-      hasTrivialExceptionReason: false,
-      hasOpsSparkMention: false,
-      hasRoutineOpsWork: true,
-      hasSpawnDirective: true,
-      hasSpawnModel: true,
-      hasSpawnReasoning: true,
-      hasSpawnControllerFallback: true,
-      hasSpawnDirectiveWithModelReasoning: true,
-      hasSpawnAllowedWithoutReason: false,
-      hasRoutineOpsDelegationWarning: true,
-      hasReviewConversationCloseout: true,
-      hasMeaningfulReviewConversationCloseout: true,
-    }),
-  );
+  for (const { name, body, labels, expected } of spawnCases) {
+    assertGate(name, body, labels, expected);
+  }
 });
+
+
 
 test("Autonomous PR routine ops work warns when ops_spark is missing", () => {
   const withoutOpsSpark = `
