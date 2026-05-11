@@ -28,8 +28,8 @@ jobs:
             }
 
             const bypassLabels = new Set(['scope-exception'])
-            const labels = (pr.labels || []).map((label) => label.name)
-            const bypassed = labels.some((label) => bypassLabels.has(label))
+            const rawLabels = (pr.labels || []).map((label) => label.name)
+            const bypassed = rawLabels.some((label) => bypassLabels.has(label))
             if (bypassed) {
               core.notice('Scope police bypassed by scope-exception label.')
               return
@@ -41,6 +41,7 @@ jobs:
             const hardMaxDiffLines = 1000
             const warningDiffLines = 600
             const commentHeader = '<!-- tachiya-pr-scope-police -->'
+            const autonomousLabels = new Set(['codex', 'codex-automation', 'auto-ready'])
 
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner,
@@ -58,6 +59,33 @@ jobs:
             const diffLines = files.reduce((sum, file) => sum + file.additions + file.deletions, 0)
             const title = pr.title || ''
             const body = pr.body || ''
+            const bodyForAutonomousGate = body.replace(/<!--[\s\S]*?-->/g, '')
+            const normalizedLabels = (pr.labels || []).map((label) => (label.name || '').toLowerCase())
+            const hasAutonomousLabel = normalizedLabels.some((label) => autonomousLabels.has(label))
+            const hasDelegationExecutionLog = /(?:^|\n)\s*(?:#{1,6}\s*)?Delegation Execution Log\b/i.test(bodyForAutonomousGate)
+            const autonomousDetected = hasAutonomousLabel || hasDelegationExecutionLog
+            const workerProfileNames = [
+              'controller',
+              'ops_spark',
+              'repo_scout',
+              'docs_worker',
+              'test_worker',
+              'backend_worker',
+              'frontend_worker',
+              'schema_worker',
+              'integration_worker',
+              'review_worker',
+            ]
+            const hasWorkerProfileMention = workerProfileNames.some((profile) =>
+              new RegExp(`\\b${profile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(bodyForAutonomousGate),
+            )
+            const trivialExceptionMatch = bodyForAutonomousGate.match(
+              /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason)\s*[：:]\s*(.+)/i,
+            )
+            const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim()
+            const hasTrivialExceptionReason =
+              Boolean(trivialExceptionReason) &&
+              !/^(?:n\/a|none|無|不適用)$/i.test(trivialExceptionReason)
 
             const allowedPrefixes = ['[backend]', '[frontend]', '[discussion]']
             const titlePrefix = allowedPrefixes.find((prefix) => title.startsWith(prefix))
@@ -119,6 +147,18 @@ jobs:
               failures.push('PR body must include a `本 PR 明確不做` section.')
             }
 
+            if (autonomousDetected) {
+              if (!hasDelegationExecutionLog) {
+                failures.push('Autonomous PRs must include a `Delegation Execution Log` section.')
+              }
+
+              if (!hasWorkerProfileMention && !hasTrivialExceptionReason) {
+                failures.push(
+                  'Autonomous PRs must name at least one worker profile or give an explicit trivial/self-only exception reason.',
+                )
+              }
+            }
+
             if (filenames.length > hardMaxChangedFiles) {
               failures.push(`PR changes ${filenames.length} files, which exceeds the hard limit of ${hardMaxChangedFiles}.`)
             }
@@ -172,6 +212,8 @@ jobs:
             summaryLines.push(`- Diff lines (+/-): ${diffLines}`)
             summaryLines.push(`- Product surfaces: ${productSurfaces.length > 0 ? productSurfaces.join(', ') : 'none'}`)
             summaryLines.push(`- Workflow touched: ${touches.workflow ? 'yes' : 'no'}`)
+            summaryLines.push(`- Autonomous label hit: ${hasAutonomousLabel ? 'yes' : 'no'}`)
+            summaryLines.push(`- Delegation log present: ${hasDelegationExecutionLog ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')
 
             const commentBody = summaryLines.join('\n')

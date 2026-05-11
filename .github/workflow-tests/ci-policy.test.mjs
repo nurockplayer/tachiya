@@ -3,6 +3,36 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const readWorkflow = (name) => readFileSync(new URL(`../workflows/${name}`, import.meta.url), "utf8");
+const readRepoFile = (relativePath) => readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
+
+test("Autonomous delegation gate ships root templates and workflow body checks", () => {
+  const prTemplate = readRepoFile(".github/PULL_REQUEST_TEMPLATE.md");
+  const issueTemplate = readRepoFile(".github/ISSUE_TEMPLATE/codex-task.yml");
+  const issueConfig = readRepoFile(".github/ISSUE_TEMPLATE/config.yml");
+  const workflow = readWorkflow("pr-scope-police.yml");
+
+  assert.match(prTemplate, /Source of truth/);
+  assert.match(prTemplate, /Depends on PR/);
+  assert.match(prTemplate, /本 PR 明確不做/);
+  assert.match(prTemplate, /Delegation Execution Log/);
+  assert.match(prTemplate, /Validation/);
+
+  assert.match(issueTemplate, /Worker profile/);
+  assert.match(issueTemplate, /Task/);
+  assert.match(issueTemplate, /Model strength/);
+  assert.match(issueTemplate, /Evidence \/ verification/);
+  assert.match(issueTemplate, /Trivial\/self-only exception reason/);
+  assert.match(issueConfig, /blank_issues_enabled:\s*false/);
+
+  assert.match(workflow, /const autonomousLabels = new Set\(\['codex', 'codex-automation', 'auto-ready'\]\)/);
+  assert.match(workflow, /const bodyForAutonomousGate = body\.replace\(\/<!--\[\\s\\S\]\*\?-->\//);
+  assert.match(workflow, /hasDelegationExecutionLog/);
+  assert.match(workflow, /hasWorkerProfileMention/);
+  assert.match(workflow, /hasTrivialExceptionReason/);
+  assert.match(workflow, /Autonomous PRs must include a `Delegation Execution Log` section\./);
+  assert.match(workflow, /Autonomous PRs must name at least one worker profile or give an explicit trivial\/self-only exception reason\./);
+  assert.match(workflow, /scope-exception/);
+});
 
 test("PR scope police keeps Tachiya title, body, and size gates", () => {
   const workflow = readWorkflow("pr-scope-police.yml");
