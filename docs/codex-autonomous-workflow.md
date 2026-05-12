@@ -98,7 +98,7 @@ Tachiya 的 autonomous workflow 優化先採用工作假設：目前約 40% 時�
 | infra 本質複雜 | GitHub API / review thread 狀態、CI check rollup、rate limit、跨 repo metadata、不同模型額度 | 接受其存在，用固定 readback 欄位與驗證命令降低不確定性 |
 | 工作流自己製造摩擦 | 忘記先派 worker、總控自己做 routine readback、worker 完成後未 close、PR 後期無限加碼、review finding 沒有 comment/resolve 證據 | 用 routing map、lifecycle checklist、review closeout checklist、follow-up split policy 消除 |
 
-每張 autonomous PR 的 `Delegation Execution Log` 應說明這次是否遇到 60% 類型的流程摩擦，以及已如何避免它重演。若只是 infra 本質複雜，應留下讀回證據；若是流程摩擦，優先修流程或另開 follow-up issue。
+每張 autonomous PR 的 `Delegation Execution Log` 應說明這次是否遇到 60% 類型的流程摩擦，以及已如何避免它重現。若只是 infra 本質複雜，應留下讀回證據；若是流程摩擦，優先修流程或另開 follow-up issue。
 
 ## Routing Rules
 
