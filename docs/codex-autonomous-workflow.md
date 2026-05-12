@@ -132,7 +132,7 @@ Tachiya 的 autonomous workflow 優化先採用工作假設：目前約 40% 時�
 - finding 涉及 schema / auth / wallet / ledger / migration / production data。
 - PR scope 需要拆分、rebase、merge conflict 或 branch protection 決策。
 
-若 `ops_spark` 額度、工具或模型不可用，總控可以改用同級低成本替代 worker，並在 `Delegation Execution Log` 寫明替代理由。若低成本 worker 都不可用，總控可以完成必要收斂工作，但必須把 `worker unavailable` 列為 closeout evidence，不得假裝已正常委派。
+若 `ops_spark` 額度、工具或模型不可用，總控可以改用同級低成本替代 worker，白名單限制為 `repo_scout`、`docs_worker`。並且必須在 `Delegation Execution Log` 寫明 fallback profile 與替代理由。若低成本 worker 都不可用，總控可以完成必要收斂工作，但必須把 `worker unavailable` 列為 closeout evidence，不得假裝已正常委派。
 
 Spawn 指令為硬規則（建議每個 worker 一筆）：
 
@@ -243,8 +243,12 @@ closeout comment 至少要列出 latest head SHA、CI/check 結論、unresolved 
 1. spawn 前先確認任務是否真的需要 worker，並保留 thread buffer；同類 routine readback 盡量合併成一個 `ops_spark` 任務。
 2. spawn prompt 必須列出 write scope、禁止事項、驗證命令、回報格式與 closeout 需求。
 3. worker 回報後，總控先讀回結果；若不需追加任務，立即 close worker session。
-4. close 後在 PR `Worker session closeout` 欄位記錄「已讀回結果並 close」，或記錄 `close_agent` 失敗的 handle / 重試次數 / fallback。
-5. 若 close 失敗但 worker 已完成且無 active handle，可記為 stale / unavailable handle；若仍可能執行中，禁止再派同類 worker 直到釐清狀態。
+4. close 後在 PR `Worker session closeout` 欄位記錄「已讀回結果並 close」，或至少記錄 `close_agent` 的 `retry_count`、`last_error`、`next_retry_eta`、`final_outcome` 與 fallback。
+5. `close_agent` 失敗時，硬性重試規則為：
+   - `MAX_CLOSE_RETRIES=3`。
+   - Backoff 分別為 30 秒、90 秒、180 秒。
+   - 累計超過 5 分鐘即視為 hard cutoff，必須停止再重試。
+6. 若 close 失敗但 worker 已完成且無 active handle，標記 `stale/unavailable`；若仍可能執行中，禁止再派同類 worker，改走 controller fallback 或人工釐清，並在 `Worker session closeout` 記錄 `final_outcome=worker unavailable/stale`。
 
 spawn 前名額檢查採下列警戒線：
 
