@@ -67,6 +67,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://tachiya:tachiya@localhost:5432/tachiya
+      TACHIYA_MIGRATION_SMOKE_USE_DATABASE_URL: "1"
 
     steps:
       - name: Checkout tachiya

@@ -42,6 +42,7 @@ Root repo 也有 PostgreSQL migration gate：
   - scope: Alembic config、migration versions、SQLAlchemy models、DB bootstrap code、相關 CI docs
   - triggers: `workflow_dispatch`、weekly schedule、以及 path-filtered `pull_request` / `push`
   - checks: 啟動 PostgreSQL 16 service container，設定非 production `DATABASE_URL`，在 `api/` 執行 `uv run --group dev pytest -o addopts='' tests/test_migrations.py`
+  - safety: workflow 會顯式設 `TACHIYA_MIGRATION_SMOKE_USE_DATABASE_URL=1`，本機預設則只會落到暫時性 SQLite，避免開發者環境中既有的 `DATABASE_URL` 被誤用
   - smoke 內容：保留既有 `upgrade head` schema smoke，另加一個 rollback smoke，驗證 `head -> downgrade -1 -> head` 期間 Alembic version table 會切到前一版再回到 head，且最新 migration 建立的 `uq_tachiya_referral_rewards_referee_id` index 會被移除再恢復
   - 不保護：資料回填效能、多步 downgrade matrix、production secret / network、跨服務 end-to-end smoke
 
