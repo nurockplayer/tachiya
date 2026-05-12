@@ -254,7 +254,12 @@ closeout 前至少要有等價於下列資訊的讀回；指令可依工具可�
 gh pr view <pr> --json headRefOid,mergeStateStatus,mergeable,state,url
 gh pr checks <pr>
 gh pr view <pr> --json comments,latestReviews
-gh api graphql ... reviewThreads(first:50) { nodes { isResolved isOutdated comments { nodes { url author { login } body } } } }
+gh api graphql ... reviewThreads(first:50, after: $cursor) {
+  pageInfo { hasNextPage endCursor }
+  nodes { isResolved isOutdated comments { nodes { url author { login } body } } }
+}
+
+必須循環呼叫，直到 `pageInfo.hasNextPage == false`，每次使用上一頁的 `pageInfo.endCursor` 作為 `$cursor`。
 ```
 
 讀回結果必須整理到 PR `Review conversation closeout` 或 closeout comment，至少包含：
