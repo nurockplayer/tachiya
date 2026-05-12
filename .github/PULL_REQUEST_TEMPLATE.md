@@ -29,7 +29,7 @@ Depends on PR: <!-- `none` 或 `#123` -->
 - Workflow friction / follow-up split:
   - <!-- autonomous PR 請說明本次約 40% infra 複雜 / 約 60% 工作流摩擦中，哪些已由 routing / closeout / lifecycle / follow-up issue 收斂；非 autonomous PR 可填 n/a -->
 - Review conversation closeout:
-  - <!-- autonomous: 填「已完成 closeout」，並補註 comment/resolve/thread URL/readback 驗證；非 autonomous human PR 填 n/a -->
+  - <!-- autonomous: 請填 latest_head_sha、ci_check_summary、coderabbit_status、codex_connector_status、unresolved_thread_count、finding_disposition、evidence_urls；若 metadata rerun，請註明是否用新的 PR edited/labeled event，不要只 rerun 舊 payload。非 autonomous human PR 填 n/a -->
 
 ## Validation
 - [ ] 本地測試過

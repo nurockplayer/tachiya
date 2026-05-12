@@ -342,6 +342,15 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /scope-exception/);
   assert.match(prTemplate, /Worker session closeout/);
   assert.match(prTemplate, /Workflow friction \/ follow-up split/);
+  assert.match(prTemplate, /latest_head_sha/);
+  assert.match(prTemplate, /ci_check_summary/);
+  assert.match(prTemplate, /coderabbit_status/);
+  assert.match(prTemplate, /codex_connector_status/);
+  assert.match(prTemplate, /unresolved_thread_count/);
+  assert.match(prTemplate, /finding_disposition/);
+  assert.match(prTemplate, /evidence_urls/);
+  assert.match(prTemplate, /新的 PR edited\/labeled event/);
+  assert.match(prTemplate, /不要只 rerun 舊 payload/);
   assert.match(prTemplate, /約 40% infra 複雜 \/ 約 60% 工作流摩擦/);
   assert.match(prTemplate, /Spawn directive 必須填在欄位同一行/);
   assert.doesNotMatch(
@@ -362,9 +371,25 @@ test("Autonomous workflow docs cover routing, closeout, lifecycle, and follow-up
     /## Subagent Lifecycle 與 Thread-limit Cleanup/,
     /## Issue-first 與 Follow-up Split Policy/,
     /## PR Template 與 Policy-test Hardening/,
+    /## Autonomous Review Closeout Evidence Runbook/,
     /### Review Closeout Evidence Matrix/,
+    /### Metadata rerun 規則/,
     /ops_spark Routing Hardening/,
     /約 40% 時間消耗來自 infra 本質複雜，約 60% 來自工作流自己製造摩擦/,
+    /latest_head_sha/,
+    /ci_check_summary/,
+    /coderabbit_status/,
+    /codex_connector_status/,
+    /unresolved_thread_count/,
+    /finding_disposition/,
+    /evidence_urls/,
+    /reviewThreads\(first:50,\s*after:\s*\$cursor\)/,
+    /hasNextPage/,
+    /endCursor/,
+    /hasNextPage == false/,
+    /endCursor.*cursor/,
+    /不要只 rerun 舊的 failed workflow run/,
+    /舊 run 可能重用舊 event payload/,
     /evidence_url/,
     /state_snapshot/,
     /blockage_reason/,
@@ -381,6 +406,7 @@ test("Autonomous workflow docs cover routing, closeout, lifecycle, and follow-up
   }
 
   assert.match(agents, /約 40% infra 本質複雜、約 60% 工作流自己製造摩擦/);
+  assert.match(agents, /Autonomous Review Closeout Evidence Runbook/);
   assert.match(claude, /約 40% infra 本質複雜、約 60% 工作流自己製造摩擦/);
 });
 
