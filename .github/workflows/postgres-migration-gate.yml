@@ -90,4 +90,13 @@ jobs:
         run: uv sync --group dev
 
       - name: Run PostgreSQL migration rollback smoke
-        run: uv run --group dev pytest -o addopts='' tests/test_migrations.py
+        run: uv run --group dev pytest -o addopts='' --junitxml=postgres-migration-smoke.xml tests/test_migrations.py
+
+      - name: Upload PostgreSQL migration smoke artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-smoke
+          path: api/postgres-migration-smoke.xml
+          if-no-files-found: ignore
+          retention-days: 7
