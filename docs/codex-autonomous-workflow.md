@@ -230,7 +230,7 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 | fixed | 修正 commit、相關驗證命令、finding thread/comment URL、resolved 狀態 | 可 merge |
 | not adopted | 技術理由 comment、剩餘風險、thread/comment URL、resolved 狀態 | 可 merge，但需 reviewer 可讀 |
 | converted to follow-up | follow-up issue URL、此 PR 不做的理由、finding URL | 只有非 blocking finding 可用 |
-| rate limit fallback | CodeRabbit rate limit / skipped 證據、總控 self-review comment、驗證結果 | 可以，但不得重複要求同一張 PR 的 CodeRabbit review |
+| rate limit fallback | CodeRabbit 明確 rate limit 證據、總控 self-review comment、驗證結果 | 可以，但不得重複要求同一張 PR 的 CodeRabbit review |
 | connector reaction-only | `chatgpt-codex-connector` 對 latest head 的 reaction 或明確 review/comment readback | 可以 |
 | blocked | 無法驗證、無法 resolve、finding 仍 actionable | 不可 merge |
 
