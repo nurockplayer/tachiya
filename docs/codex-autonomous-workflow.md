@@ -269,7 +269,7 @@ spawn 前若已知 worker 額度或 thread limit 不足，先選低成本替代 
 - 新的優化、文件補強、流程 polish、非 blocking reviewer 建議，必須拆成 follow-up issue。
 - 若一張 PR 反覆因新想法加碼，總控應停止擴張，將剩餘優化移出當前 PR。
 
-follow-up issue 至少要包含：背景、當前 PR 不做的理由、建議輸出、完成條件、參考 PR/comment URL。這讓人類與後續 agent 都能從 issue 直接接手，不必重新翻整段對話。
+follow-up issue 至少要包含：背景、當前 PR 不做的理由、建議輸出、完成條件、參考 PR/comment URL。若 follow-up issue 為 `[backend]` 或 `[frontend]` 開發任務，還必須額外補上：Task checklist、Interface/Specification、Reference file paths。這讓人類與後續 agent 都能從 issue 直接接手，不必重新翻整段對話。
 
 ## PR Template 與 Policy-test Hardening
 
