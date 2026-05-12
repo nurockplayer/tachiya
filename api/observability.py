@@ -7,6 +7,7 @@ from fastapi import Request
 REQUEST_ID_HEADER = "X-Request-ID"
 REQUEST_ID_STATE_KEY = "request_id"
 SERVICE_NAME = "tachiya-api"
+UNMATCHED_ROUTE_PATH = "<unmatched>"
 
 logger = logging.getLogger("tachiya.observability")
 
@@ -62,7 +63,7 @@ def get_route_path_template(request: Request) -> str:
     route_path = getattr(route, "path", None)
     if isinstance(route_path, str) and route_path:
         return route_path
-    return request.url.path
+    return UNMATCHED_ROUTE_PATH
 
 
 def build_structured_error_event(

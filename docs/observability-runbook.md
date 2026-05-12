@@ -34,7 +34,7 @@
   - `error_code`
   - `request_id`
   - `status_code`
-  - `path`：優先記錄 FastAPI route template，避免把 path params、PII 或高基數外部識別值寫進 log。
+  - `path`：優先記錄 FastAPI route template；沒有匹配 route 的請求記為 `<unmatched>`，避免把 path params、PII 或高基數外部識別值寫進 log。
   - `method`
 
 ### 必填共用欄位

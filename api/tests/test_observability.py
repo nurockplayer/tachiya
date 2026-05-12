@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi import HTTPException
@@ -147,12 +148,31 @@ def test_unhandled_server_error_response_still_has_request_id_header():
     assert response.headers["X-Request-ID"]
 
 
+def test_unhandled_server_error_logs_exception_context(caplog):
+    client = _build_app_client(raise_server_exceptions=False)
+
+    with caplog.at_level("ERROR", logger="tachiya.observability"):
+        response = client.get(f"{TEST_ROUTE_PREFIX}/server-error")
+
+    assert response.status_code == 500
+
+    matching_record = None
+    for record in caplog.records:
+        if "Unhandled exception" in record.getMessage():
+            matching_record = record
+            break
+
+    assert matching_record is not None
+    assert matching_record.exc_info is not None
+
+
 def test_structured_error_log_includes_required_fields(caplog):
     request = Request(
         {
             "type": "http",
             "method": "GET",
             "path": f"{TEST_ROUTE_PREFIX}/http-exception",
+            "route": SimpleNamespace(path=f"{TEST_ROUTE_PREFIX}/http-exception"),
             "headers": [(b"x-request-id", b"req-structured-log")],
             "scheme": "http",
             "server": ("testserver", 80),
@@ -213,3 +233,28 @@ def test_structured_error_log_uses_route_template_without_raw_path_values(caplog
     )
     assert raw_subject not in matching_payload["path"]
     assert raw_subject not in json.dumps(matching_payload, ensure_ascii=True)
+
+
+def test_unmatched_404_structured_log_redacts_raw_path(caplog):
+    client = _build_app_client()
+    raw_secret = "discord-user-raw-secret"
+    request_path = f"/not-found/{raw_secret}/token"
+
+    with caplog.at_level("WARNING", logger="tachiya.observability"):
+        response = client.get(
+            request_path,
+            headers={"X-Request-ID": "req-unmatched-404"},
+        )
+
+    assert response.status_code == 404
+
+    matching_payload = None
+    for record in caplog.records:
+        payload = _record_payload(record)
+        if payload.get("request_id") == "req-unmatched-404":
+            matching_payload = payload
+            break
+
+    assert matching_payload is not None
+    assert matching_payload["path"] == "<unmatched>"
+    assert raw_secret not in json.dumps(matching_payload, ensure_ascii=True)
