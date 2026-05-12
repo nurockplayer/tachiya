@@ -205,6 +205,7 @@ autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/c
 Autonomous Worker Profiles 的 follow-up 改善以「約 40% infra 本質複雜、約 60% 工作流自己製造摩擦」為基準：infra 複雜度用固定 readback 與 gate 管住；流程摩擦要靠 `ops_spark` routing、review closeout evidence、subagent lifecycle cleanup、issue-first planning 與 follow-up split 降低。
 
 完整 worker profile、路由規則與 GitHub 操作分工見 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)。
+Review closeout 的一頁式執行清單 `Autonomous Review Closeout Evidence Runbook` 以 [docs/codex-autonomous-workflow.md#autonomous-review-closeout-evidence-runbook](docs/codex-autonomous-workflow.md#autonomous-review-closeout-evidence-runbook) 為權威來源。
 
 ### Automated Review Gate
 

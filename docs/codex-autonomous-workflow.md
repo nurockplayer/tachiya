@@ -236,6 +236,57 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 
 closeout comment 至少要列出 latest head SHA、CI/check 結論、unresolved thread count、CodeRabbit 狀態、`chatgpt-codex-connector` 狀態，以及每條 finding 的採納/不採納結果。
 
+## Autonomous Review Closeout Evidence Runbook
+
+這是一頁式 closeout 操作清單。策略規則仍以前面的 `Automated Review Gate` 與 `Review Conversation Closeout Gate` 為準；本段只定義實際跑 PR closeout 時要留下哪些證據。
+
+### 責任分工
+
+- `ops_spark`：讀回 PR head SHA、CI/check 狀態、CodeRabbit 狀態、`chatgpt-codex-connector` comment/reaction、review thread list、resolved/unresolved count、comment URL 與 artifact URL。
+- `controller`：判斷 finding 是否 blocking、是否採納、是否拆 follow-up、是否允許 merge。
+- `controller`：只能在 final readback 後執行 `gh pr merge --match-head-commit <head-sha>`。
+
+### 最小 readback 指令集
+
+closeout 前至少要有等價於下列資訊的讀回；指令可依工具可用性調整，但 evidence 欄位不可少：
+
+```bash
+gh pr view <pr> --json headRefOid,mergeStateStatus,mergeable,state,url
+gh pr checks <pr>
+gh pr view <pr> --json comments,latestReviews
+gh api graphql ... reviewThreads(first:50) { nodes { isResolved isOutdated comments { nodes { url author { login } body } } } }
+```
+
+讀回結果必須整理到 PR `Review conversation closeout` 或 closeout comment，至少包含：
+
+- `latest_head_sha`
+- `ci_check_summary`
+- `coderabbit_status`
+- `codex_connector_status`
+- `unresolved_thread_count`
+- `finding_disposition`：`fixed`、`not adopted`、`converted to follow-up`、`rate limit fallback`、`connector reaction-only` 或 `blocked`
+- `evidence_urls`：review comment、thread、workflow run、artifact、follow-up issue URL
+
+### Reviewer fallback
+
+- CodeRabbit 明確 rate limit：同一張 PR 不再重複要求 CodeRabbit review；改由 controller self-review，並留下 self-review comment、驗證命令與剩餘風險。
+- CodeRabbit status 為 success 但內容是 skipped：不得視為完成，必須讀 comment 或 run configuration 判定是否真的 review。
+- `chatgpt-codex-connector` 若沒有 comment，但在最新 PR comment 留下 reaction，可以記為 `connector reaction-only`。
+- `chatgpt-codex-connector` 若沒有 reaction/comment，才由 controller 留 `@codex review`；若第二次仍無回應，記為 `blocked` 或開 follow-up，不得默默 merge。
+
+### Metadata rerun 規則
+
+- PR body 或 label 類 metadata 修正後，要觸發新的 PR `edited` / `labeled` event，讓 gate 用最新 payload 重跑。
+- 不要只 rerun 舊的 failed workflow run；舊 run 可能重用舊 event payload，導致 sticky comment 被舊狀態覆蓋。
+- Scope Police sticky comment 以最新成功 run 的內容為準；若 pass/fail comment 互相覆蓋，先讀 workflow run started/completed time，再用新的 metadata event 重新觸發。
+
+### Storage boundaries
+
+- Issue comment：保存開工前 delegation plan 與 source-of-truth。
+- PR body：保存實際 worker profile、spawn directive、validation、closeout summary。
+- PR review thread/comment：保存每條 finding 的處置證據。
+- Repo docs：只保存通用流程與模板，不保存單一 PR 的完整 log。
+
 ## Subagent Lifecycle 與 Thread-limit Cleanup
 
 總控必須把 worker 視為有生命週期的資源，而不是只把 spawn 當成背景工作：
