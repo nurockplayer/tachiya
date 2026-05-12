@@ -180,6 +180,12 @@ make logs   # 查看 logs
 
 核心判斷：Claude 需要即時看輸出來決策 → 自己做；純執行 → 交給 Codex
 
+## Autonomous Worker Profiles
+
+若使用者授權 autonomous product work，Claude / Codex 應採用 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md) 的 Worker Profiles、issue-first、review gate、CodeRabbit fallback 與 PR Scope Police 合約。
+
+Autonomous Worker Profiles 的 follow-up 改善以「約 40% infra 本質複雜、約 60% 工作流自己製造摩擦」為基準：infra 複雜度用固定 readback 與 gate 管住；流程摩擦要靠 `ops_spark` routing、review closeout evidence、subagent lifecycle cleanup、issue-first planning 與 follow-up split 降低。
+
 ## Claude Code 設定
 
 `.claude/settings.json` 是共享設定，已 commit 進 repo，**請勿直接修改**。

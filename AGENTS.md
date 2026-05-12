@@ -202,6 +202,8 @@ autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/c
 
 資訊來回、GitHub PR/issue readback、CI/check 狀態讀回、PR body/comment 整理、review closeout evidence 蒐集與 resolve 狀態確認，預設都是 `ops_spark` 工作。總控不得把這類資料搬運當成自己的預設工作；總控只審核 worker 證據是否足以支持後續修正、等待、merge 或 closeout 決策。
 
+Autonomous Worker Profiles 的 follow-up 改善以「約 40% infra 本質複雜、約 60% 工作流自己製造摩擦」為基準：infra 複雜度用固定 readback 與 gate 管住；流程摩擦要靠 `ops_spark` routing、review closeout evidence、subagent lifecycle cleanup、issue-first planning 與 follow-up split 降低。
+
 完整 worker profile、路由規則與 GitHub 操作分工見 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)。
 
 ### Automated Review Gate

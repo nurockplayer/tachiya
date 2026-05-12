@@ -74,6 +74,8 @@ jobs:
                 'Spawn directive',
                 'Trivial/self-only exception reason',
                 'Evidence / verification',
+                'Worker session closeout',
+                'Workflow friction / follow-up split',
                 'Review conversation closeout',
               ]
               const pattern = new RegExp(

@@ -26,10 +26,11 @@ body:
     id: worker_profile
     attributes:
       label: Worker profile
-      description: 列出要指派的 worker profile 名稱，例如 controller、ops_spark、repo_scout、docs_worker。
+      description: 列出要指派的 worker profile、model、reasoning 與 controller_fallback；ops_spark 必須使用 gpt-5.3-codex-spark。
       placeholder: |
+        spawn: ops_spark model=gpt-5.3-codex-spark reasoning=low controller_fallback=not_allowed
+        spawn: docs_worker model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed
         controller: overall review and merge decision
-        repo_scout: scan existing patterns
     validations:
       required: true
 
