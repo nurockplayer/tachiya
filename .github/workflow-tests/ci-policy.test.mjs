@@ -4,6 +4,13 @@ import { test } from "node:test";
 
 const readWorkflow = (name) => readFileSync(new URL(`../workflows/${name}`, import.meta.url), "utf8");
 const readRepoFile = (relativePath) => readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
+const extractWorkflowSection = (workflow, startMarker, endMarker) => {
+  const start = workflow.indexOf(startMarker);
+  assert.notEqual(start, -1, `${startMarker} section missing`);
+  const end = workflow.indexOf(endMarker, start + startMarker.length);
+  assert.notEqual(end, -1, `${endMarker} section missing`);
+  return workflow.slice(start, end);
+};
 const makePrBody = ({ delegationRows = [], sections = ["## Validation\n- node --test .github/workflow-tests/ci-policy.test.mjs"] }) => {
   const delegationSection =
     delegationRows.length === 0
@@ -844,6 +851,8 @@ test("cross-repo contract gate owns Storefront drift checks without duplicating 
 
 test("PostgreSQL migration gate stays path-filtered and secret-free", () => {
   const workflow = readWorkflow("postgres-migration-gate.yml");
+  const pullRequestSection = extractWorkflowSection(workflow, "  pull_request:", "  push:");
+  const pushSection = extractWorkflowSection(workflow, "  push:", "\nconcurrency:");
 
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /schedule:/);
@@ -851,12 +860,20 @@ test("PostgreSQL migration gate stays path-filtered and secret-free", () => {
   assert.match(workflow, /push:/);
   assert.match(workflow, /api\/migrations\/\*\*/);
   assert.match(workflow, /api\/models\/\*\*/);
+  assert.match(pullRequestSection, /api\/tests\/test_migrations\.py/);
+  assert.match(pushSection, /api\/tests\/test_migrations\.py/);
   assert.match(workflow, /services:\s+postgres:/);
   assert.match(workflow, /image: postgres:16/);
   assert.match(workflow, /timeout-minutes: 10/);
   assert.match(workflow, /working-directory: api/);
   assert.match(workflow, /DATABASE_URL: postgresql:\/\/tachiya:tachiya@localhost:5432\/tachiya/);
-  assert.match(workflow, /uv run --group dev alembic upgrade head/);
+  assert.match(workflow, /TACHIYA_MIGRATION_SMOKE_USE_DATABASE_URL: "1"/);
+  assert.match(workflow, /uv run --group dev pytest -o addopts='' --junitxml=postgres-migration-smoke\.xml tests\/test_migrations\.py/);
+  assert.match(workflow, /uses: actions\/upload-artifact@v4/);
+  assert.match(workflow, /name: postgres-migration-smoke/);
+  assert.match(workflow, /path: api\/postgres-migration-smoke\.xml/);
+  assert.match(workflow, /retention-days: 7/);
+  assert.doesNotMatch(workflow, /uv run --group dev alembic upgrade head/);
   assert.doesNotMatch(workflow, /secrets\./);
   assert.doesNotMatch(workflow, /production/i);
 });

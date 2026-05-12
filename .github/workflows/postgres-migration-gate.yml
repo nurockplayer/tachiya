@@ -15,6 +15,7 @@ on:
       - "api/database.py"
       - "api/migrations/**"
       - "api/models/**"
+      - "api/tests/test_migrations.py"
       - "api/pyproject.toml"
       - "api/uv.lock"
       - "docs/testing-and-ci-gates.md"
@@ -29,6 +30,7 @@ on:
       - "api/database.py"
       - "api/migrations/**"
       - "api/models/**"
+      - "api/tests/test_migrations.py"
       - "api/pyproject.toml"
       - "api/uv.lock"
       - "docs/testing-and-ci-gates.md"
@@ -67,6 +69,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://tachiya:tachiya@localhost:5432/tachiya
+      TACHIYA_MIGRATION_SMOKE_USE_DATABASE_URL: "1"
 
     steps:
       - name: Checkout tachiya
@@ -86,5 +89,14 @@ jobs:
       - name: Install API dependencies
         run: uv sync --group dev
 
-      - name: Run Alembic upgrade head on PostgreSQL
-        run: uv run --group dev alembic upgrade head
+      - name: Run PostgreSQL migration rollback smoke
+        run: uv run --group dev pytest -o addopts='' --junitxml=postgres-migration-smoke.xml tests/test_migrations.py
+
+      - name: Upload PostgreSQL migration smoke artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-smoke
+          path: api/postgres-migration-smoke.xml
+          if-no-files-found: ignore
+          retention-days: 7
