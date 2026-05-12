@@ -47,6 +47,27 @@ const assertGate = (name, body, labels, expectedOverrides) => {
 
 const stripTemplateComments = (body) => body.replace(/<!--[\s\S]*?-->/g, "");
 
+const evaluateScopeBudget = ({ filenames = [], diffLines = 0, labels = [] }) => {
+  const bypassed = labels.includes("scope-exception");
+  const hardMaxChangedFiles = 35;
+  const warningDiffLines = 600;
+  const hardMaxDiffLines = 1000;
+  const failures = [];
+  const warnings = [];
+
+  if (!bypassed && filenames.length > hardMaxChangedFiles) {
+    failures.push(`PR changes ${filenames.length} files, which exceeds the hard limit of ${hardMaxChangedFiles}.`);
+  }
+
+  if (!bypassed && diffLines > hardMaxDiffLines) {
+    failures.push(`PR diff size is ${diffLines} lines (+/-), which exceeds the hard limit of ${hardMaxDiffLines}.`);
+  } else if (!bypassed && diffLines > warningDiffLines) {
+    warnings.push(`PR diff size is ${diffLines} lines (+/-), which exceeds the soft limit of ${warningDiffLines}.`);
+  }
+
+  return { failures, warnings };
+};
+
 const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   const bodyForAutonomousGate = stripTemplateComments(body);
   const normalizedLabels = labels.map((label) => (label || "").toLowerCase());
@@ -94,6 +115,8 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       "Spawn directive",
       "Trivial/self-only exception reason",
       "Evidence / verification",
+      "Worker session closeout",
+      "Workflow friction / follow-up split",
       "Review conversation closeout",
     ];
     const pattern = new RegExp(
@@ -263,6 +286,8 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.equal(evaluateAutonomousCloseoutGate({ body: prTemplate, labels: [] }).hasSpawnDirective, false);
 
   assert.match(issueTemplate, /Worker profile/);
+  assert.match(issueTemplate, /controller_fallback/);
+  assert.match(issueTemplate, /gpt-5\.3-codex-spark/);
   assert.match(issueTemplate, /Task/);
   assert.match(issueTemplate, /Model strength/);
   assert.match(issueTemplate, /Evidence \/ verification/);
@@ -273,6 +298,8 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /const bodyForAutonomousGate = body\.replace\(\/<!--\[\\s\\S\]\*\?-->\//);
   assert.match(workflow, /const extractDelegationFieldBody = \(label\) =>/);
   assert.match(workflow, /hasDelegationExecutionLog/);
+  assert.match(workflow, /Worker session closeout/);
+  assert.match(workflow, /Workflow friction \/ follow-up split/);
   assert.match(workflow, /hasMeaningfulDelegationExecutionLog/);
   assert.match(workflow, /hasWorkerProfileMention/);
   assert.match(workflow, /const hasOpsSparkMention = bodyForAutonomousGate\.toLowerCase\(\)\.includes\('ops_spark'\)/);
@@ -306,6 +333,48 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /'head sha'/);
   assert.match(workflow, /'branch'/);
   assert.match(workflow, /scope-exception/);
+  assert.match(prTemplate, /Worker session closeout/);
+  assert.match(prTemplate, /Workflow friction \/ follow-up split/);
+  assert.match(prTemplate, /約 40% infra 複雜 \/ 約 60% 工作流摩擦/);
+  assert.match(prTemplate, /Spawn directive 必須填在欄位同一行/);
+  assert.doesNotMatch(
+    prTemplate,
+    /- Spawn directive:\n\s+- <!--/,
+    "PR template must not put spawn directive examples on a nested bullet that the scope-police parser cannot read",
+  );
+  assert.equal(evaluateAutonomousCloseoutGate({ body: prTemplate, labels: [] }).hasSpawnDirective, false);
+});
+
+test("Autonomous workflow docs cover routing, closeout, lifecycle, and follow-up policies", () => {
+  const workflowDocs = readRepoFile("docs/codex-autonomous-workflow.md");
+  const agents = readRepoFile("AGENTS.md");
+  const claude = readRepoFile("CLAUDE.md");
+
+  for (const pattern of [
+    /## Cost Model 與摩擦預算/,
+    /## Subagent Lifecycle 與 Thread-limit Cleanup/,
+    /## Issue-first 與 Follow-up Split Policy/,
+    /## PR Template 與 Policy-test Hardening/,
+    /### Review Closeout Evidence Matrix/,
+    /ops_spark Routing Hardening/,
+    /約 40% 時間消耗來自 infra 本質複雜，約 60% 來自工作流自己製造摩擦/,
+    /evidence_url/,
+    /state_snapshot/,
+    /blockage_reason/,
+    /next_action/,
+    /readback_at/,
+    /green.*可用 worker slots >= 2/,
+    /yellow.*只剩 1 個可用 worker slot/,
+    /red.*無可用 worker slot/,
+    /worker unavailable/,
+    /follow-up issue/,
+    /closeout comment 至少要列出 latest head SHA/,
+  ]) {
+    assert.match(workflowDocs, pattern);
+  }
+
+  assert.match(agents, /約 40% infra 本質複雜、約 60% 工作流自己製造摩擦/);
+  assert.match(claude, /約 40% infra 本質複雜、約 60% 工作流自己製造摩擦/);
 });
 
 test("PR scope police keeps Tachiya title, body, and size gates", () => {
@@ -319,6 +388,45 @@ test("PR scope police keeps Tachiya title, body, and size gates", () => {
   assert.match(workflow, /Depends on PR/);
   assert.match(workflow, /本 PR 明確不做/);
   assert.match(workflow, /scope-exception/);
+});
+
+test("PR scope police scope budget has warning, hard-fail, and bypass examples", () => {
+  const workflow = readWorkflow("pr-scope-police.yml");
+
+  assert.match(workflow, /const hardMaxChangedFiles = 35/);
+  assert.match(workflow, /const warningDiffLines = 600/);
+  assert.match(workflow, /const hardMaxDiffLines = 1000/);
+  assert.match(workflow, /PR changes \$\{filenames\.length\} files, which exceeds the hard limit/);
+  assert.match(workflow, /PR diff size is \$\{diffLines\} lines \(\+\/-\), which exceeds the soft limit/);
+  assert.match(workflow, /PR diff size is \$\{diffLines\} lines \(\+\/-\), which exceeds the hard limit/);
+
+  assert.deepEqual(evaluateScopeBudget({ filenames: Array.from({ length: 35 }, (_, index) => `docs/${index}.md`), diffLines: 600 }), {
+    failures: [],
+    warnings: [],
+  });
+  assert.deepEqual(evaluateScopeBudget({ filenames: ["docs/a.md"], diffLines: 601 }), {
+    failures: [],
+    warnings: ["PR diff size is 601 lines (+/-), which exceeds the soft limit of 600."],
+  });
+  assert.deepEqual(evaluateScopeBudget({ filenames: ["docs/a.md"], diffLines: 1001 }), {
+    failures: ["PR diff size is 1001 lines (+/-), which exceeds the hard limit of 1000."],
+    warnings: [],
+  });
+  assert.deepEqual(evaluateScopeBudget({ filenames: Array.from({ length: 36 }, (_, index) => `docs/${index}.md`), diffLines: 10 }), {
+    failures: ["PR changes 36 files, which exceeds the hard limit of 35."],
+    warnings: [],
+  });
+  assert.deepEqual(
+    evaluateScopeBudget({
+      filenames: Array.from({ length: 40 }, (_, index) => `docs/${index}.md`),
+      diffLines: 1200,
+      labels: ["scope-exception"],
+    }),
+    {
+      failures: [],
+      warnings: [],
+    },
+  );
 });
 
 test("Autonomous PR closeout gate treats template bullets as meaningful only when filled", () => {

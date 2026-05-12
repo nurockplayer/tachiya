@@ -89,6 +89,17 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 
 profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `controller_fallback=allowed` 且有 `fallback_reason`，不得使用 controller profile 的 GPT-5.5。
 
+## Cost Model 與摩擦預算
+
+Tachiya 的 autonomous workflow 優化先採用工作假設：目前約 40% 時間消耗來自 infra 本質複雜，約 60% 來自工作流自己製造摩擦。這不是精準量測，而是用來決定治理優先序的分類。
+
+| 類型 | 例子 | 處理方式 |
+|---|---|---|
+| infra 本質複雜 | GitHub API / review thread 狀態、CI check rollup、rate limit、跨 repo metadata、不同模型額度 | 接受其存在，用固定 readback 欄位與驗證命令降低不確定性 |
+| 工作流自己製造摩擦 | 忘記先派 worker、總控自己做 routine readback、worker 完成後未 close、PR 後期無限加碼、review finding 沒有 comment/resolve 證據 | 用 routing map、lifecycle checklist、review closeout checklist、follow-up split policy 消除 |
+
+每張 autonomous PR 的 `Delegation Execution Log` 應說明這次是否遇到 60% 類型的流程摩擦，以及已如何避免它重現。若只是 infra 本質複雜，應留下讀回證據；若是流程摩擦，優先修流程或另開 follow-up issue。
+
 ## Routing Rules
 
 依 `Worker Profiles` 表格路由，特別注意：
@@ -96,6 +107,32 @@ profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `con
 - `ops_spark` / `repo_scout` / `docs_worker` 一律顯式使用 `gpt-5.3-codex-spark`，不得繼承 controller 的 `gpt-5.5`。
 - routine readback、PR body/comment、closeout evidence、CI log、simple terminal 都走 `ops_spark`。
 - schema、migration、ledger、金流、權限模型與 merge decision 才保留 `gpt-5.5` high/xhigh。
+
+### ops_spark Routing Hardening
+
+預設一定要交給 `ops_spark` 或同級低成本 worker 的工作：
+
+- issue / PR / label / milestone / branch readback。
+- CI check rollup、failed log 第一輪摘要、required check 名稱比對。
+- CodeRabbit / `chatgpt-codex-connector` review/comment/reaction 狀態讀回。
+- review thread list、resolved/unresolved count、thread URL 蒐集。
+- PR body、issue comment、closeout evidence 草稿。
+- pre-commit checklist 與 post-push readback。
+
+不得預設交給 `ops_spark` 的工作：
+
+- schema、migration、資料一致性、帳務/points ledger、金流、權限模型。
+- 是否接受 review finding 的技術取捨。
+- scope-exception、merge method、guarded merge。
+- 需要跨產品架構取捨的決策。
+
+升級條件：
+
+- `ops_spark` 回報資料互相矛盾、缺權限、rate limit、或無法判定 required gate。
+- finding 涉及 schema / auth / wallet / ledger / migration / production data。
+- PR scope 需要拆分、rebase、merge conflict 或 branch protection 決策。
+
+若 `ops_spark` 額度、工具或模型不可用，總控可以改用同級低成本替代 worker，白名單限制為 `repo_scout`、`docs_worker`。並且必須在 `Delegation Execution Log` 寫明 fallback profile 與替代理由。若低成本 worker 都不可用，總控可以完成必要收斂工作，但必須把 `worker unavailable` 列為 closeout evidence，不得假裝已正常委派。
 
 Spawn 指令為硬規則（建議每個 worker 一筆）：
 
@@ -124,6 +161,14 @@ Spawn 指令為硬規則（建議每個 worker 一筆）：
 - PR head SHA 或 issue/comment URL。
 - CI/check、review、thread/comment 的目前狀態。
 - 缺權限、rate limit、工具限制或需要總控判斷的 blocker。
+
+任何 `ops_spark` / low-cost handoff 的最小欄位為：
+
+- `evidence_url`：PR、issue、workflow run、review thread、comment 或 log URL。
+- `state_snapshot`：讀回當下的 state / conclusion / reviewDecision / head SHA。
+- `blockage_reason`：若 blocked，寫出是權限、rate limit、tool unavailable、CI failure、review finding 或 scope conflict；若未 blocked，填 `none`。
+- `next_action`：建議總控下一步採取 wait / fix / comment / resolve / merge / split follow-up。
+- `readback_at`：讀回時間點或相對時間，避免 stale evidence 被誤用。
 
 總控保留：
 
@@ -176,6 +221,66 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 4. PR closeout 前，review conversation 要求不得是「僅有文字變更描述」，最少要有 comment 或 resolve 證據可被 reviewer/readback 看到。
 5. 總控不得把「留證據並 resolve」這類資訊搬運工作預設留給自己做；只有工具故障、權限不足、或任務小到符合 trivial/self-only exception 時才可自行處理，且必須在 PR log 寫明原因。
 
+### Review Closeout Evidence Matrix
+
+每個 automated review finding 在 merge 前都必須落入下列其中一種狀態：
+
+| 狀態 | 必備證據 | 可 merge 條件 |
+|---|---|---|
+| fixed | 修正 commit、相關驗證命令、finding thread/comment URL、resolved 狀態 | 可 merge |
+| not adopted | 技術理由 comment、剩餘風險、thread/comment URL、resolved 狀態 | 可 merge，但需 reviewer 可讀 |
+| converted to follow-up | follow-up issue URL、此 PR 不做的理由、finding URL | 只有非 blocking finding 可用 |
+| rate limit fallback | CodeRabbit 明確 rate limit 證據、總控 self-review comment、驗證結果 | 可以，但不得重複要求同一張 PR 的 CodeRabbit review |
+| connector reaction-only | `chatgpt-codex-connector` 對 latest head 的 reaction 或明確 review/comment readback | 可以 |
+| blocked | 無法驗證、無法 resolve、finding 仍 actionable | 不可 merge |
+
+closeout comment 至少要列出 latest head SHA、CI/check 結論、unresolved thread count、CodeRabbit 狀態、`chatgpt-codex-connector` 狀態，以及每條 finding 的採納/不採納結果。
+
+## Subagent Lifecycle 與 Thread-limit Cleanup
+
+總控必須把 worker 視為有生命週期的資源，而不是只把 spawn 當成背景工作：
+
+1. spawn 前先確認任務是否真的需要 worker，並保留 thread buffer；同類 routine readback 盡量合併成一個 `ops_spark` 任務。
+2. spawn prompt 必須列出 write scope、禁止事項、驗證命令、回報格式與 closeout 需求。
+3. worker 回報後，總控先讀回結果；若不需追加任務，立即 close worker session。
+4. close 後在 PR `Worker session closeout` 欄位記錄「已讀回結果並 close」，或至少記錄 `close_agent` 的 `retry_count`、`last_error`、`next_retry_eta`、`final_outcome` 與 fallback。
+5. `close_agent` 失敗時，硬性重試規則為：
+   - `MAX_CLOSE_RETRIES=3`。
+   - Backoff 分別為 30 秒、90 秒、180 秒。
+   - 累計超過 5 分鐘即視為 hard cutoff，必須停止再重試。
+6. 若 close 失敗但 worker 已完成且無 active handle，標記 `stale/unavailable`；若仍可能執行中，禁止再派同類 worker，改走 controller fallback 或人工釐清，並在 `Worker session closeout` 記錄 `final_outcome=worker unavailable/stale`。
+
+spawn 前名額檢查採下列警戒線：
+
+- `green`：可用 worker slots >= 2，可正常 spawn。
+- `yellow`：只剩 1 個可用 worker slot，只能 spawn 最必要的 `ops_spark` / reviewer；其他探索或 polish 必須延後或合併。
+- `red`：無可用 worker slot，禁止新 spawn；先 close 已完成 worker、等待 stale handle 釐清，或改成總控 fallback 並在 PR log 寫明 `worker unavailable`。
+- 若無法讀到精準 slot 數，採保守模式：同時 active worker 不超過 2，且每完成一個 worker 都要先 close 再 spawn 下一個。
+
+spawn 前若已知 worker 額度或 thread limit 不足，先選低成本替代 worker；若替代 worker 也不可用，才使用總控 fallback。總控 fallback 必須寫入 PR body 的 `Worker session closeout` 或 `Trivial/self-only exception reason`，避免把資源限制誤記成正常委派。
+
+## Issue-first 與 Follow-up Split Policy
+
+所有 autonomous work 都要先落在 issue scope 內；PR 後期不應把新發現的優化塞回同一張 PR。
+
+- 開工前由 `repo_scout` / `ops_spark` 先收斂 source issue、相關 PR、必跑驗證、review gate 與 scope police 風險。
+- issue body 若缺 delegation plan，先補 issue comment 或在 PR body 明確引用既有 plan；不得用 PR 才第一次定義 scope。
+- PR 後期只修 blocking review finding、CI failure、scope police failure、merge conflict。
+- 新的優化、文件補強、流程 polish、非 blocking reviewer 建議，必須拆成 follow-up issue。
+- 若一張 PR 反覆因新想法加碼，總控應停止擴張，將剩餘優化移出當前 PR。
+
+follow-up issue 至少要包含：背景、當前 PR 不做的理由、建議輸出、完成條件、參考 PR/comment URL。若 follow-up issue 為 `[backend]` 或 `[frontend]` 開發任務，還必須額外補上：Task checklist、Interface/Specification、Reference file paths。這讓人類與後續 agent 都能從 issue 直接接手，不必重新翻整段對話。
+
+## PR Template 與 Policy-test Hardening
+
+PR template、issue template 與 policy test 必須 lockstep 維護：
+
+- PR template 的示例不得是可被 workflow parser 誤判為正式欄位的可執行指令；示例若可能觸發 gate，必須放在 HTML comment 或改成非 executable wording。
+- `.github/workflow-tests/ci-policy.test.mjs` 必須覆蓋 template、autonomous detection、placeholder、spawn directive、worker closeout、workflow friction、scope budget 與 `scope-exception` 不 bypass autonomous gate 的 regression。
+- policy test 至少要有正例與反例，涵蓋 placeholder / spawn / `ops_spark` model / fallback / scope budget。
+- policy test 只鎖住可機器檢查的契約；更大範圍的 router / daemon / CLI profile 自動化必須另開 issue，不放進同一張 governance PR。
+- PR diff 接近 600 行時應優先壓縮或拆分；超過 1000 行時不得靠 `scope-exception` 當常態解法。
+
 ## PR Scope Police Contract
 
 開 PR 前必須先符合 `.github/workflows/pr-scope-police.yml` 的固定格式，避免靠 CI 打回才修：
@@ -196,13 +301,14 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 3. 從 `develop` 切 scoped branch。
 4. 依任務類型指派 worker。
 5. worker 回報變更與驗證；總控審查 diff。
-6. 總控或 worker 補必要修正。
-7. 跑 relevant validation；高風險改動需 full validation。
-8. `ops_spark` 可依總控核准內容開 PR 到 `develop` 或更新 PR body；PR body 包含 Source of truth、Depends on PR、non-goals、validation。
-9. `ops_spark` 做 CI/checks/review 狀態 fresh readback，總控判斷是否需要補修或等待。
-10. 總控用 guarded merge 合併。
-11. `ops_spark` 補 issue evidence comment，確認 issue state / labels / closeout；總控審核 closeout scope。
-12. 更新本機 `develop`，回報 merge commit、驗證與剩餘風險。
+6. 總控讀回 worker 結果；若不需追加任務，立即 close worker session，並在 PR log 記錄 closeout。
+7. 總控或 worker 補必要修正。
+8. 跑 relevant validation；高風險改動需 full validation。
+9. `ops_spark` 可依總控核准內容開 PR 到 `develop` 或更新 PR body；PR body 包含 Source of truth、Depends on PR、non-goals、validation。
+10. `ops_spark` 做 CI/checks/review 狀態 fresh readback，總控判斷是否需要補修或等待。
+11. 總控用 guarded merge 合併。
+12. `ops_spark` 補 issue evidence comment，確認 issue state / labels / closeout；總控審核 closeout scope。
+13. 更新本機 `develop`，回報 merge commit、驗證與剩餘風險。
 
 ## Validation Policy
 
