@@ -69,7 +69,14 @@
       },
       "tachiyaRouterFiles": ["api/routers/coupons.py"],
       "tachiyaRouterChecks": {
-        "api/routers/coupons.py": ["router = APIRouter(prefix=\"/coupons\"", "\"/redeem\"", "redemption_token", "RedeemResponse"]
+        "api/routers/coupons.py": [
+          "router = APIRouter(prefix=\"/coupons\"",
+          "\"/redeem\"",
+          "def list_coupons(",
+          "UserCoupon.status == \"active\"",
+          "redemption_token",
+          "RedeemResponse"
+        ]
       },
       "storefrontConsumerFiles": ["src/checkout/lib/tachiya-coupons.ts"],
       "storefrontConsumerChecks": {
