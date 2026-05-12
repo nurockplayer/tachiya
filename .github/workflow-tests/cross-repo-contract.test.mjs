@@ -195,8 +195,19 @@ function checkRowDocsAndPaths(row) {
     assertFileContains(filePath, content, row.tachiyaRouterChecks[filePath], context);
   }
 
+  if (shouldCheckStorefrontContract) {
+    checkStorefrontRowContract(row);
+  }
+}
+
+function checkStorefrontRowContract(row) {
+  const context = {
+    rowName: row.name,
+    expectedBehavior: row.expectedBehavior,
+    suggestedFile: row.suggestedFile,
+  };
+
   for (const filePath of row.storefrontConsumerFiles) {
-    if (!shouldCheckStorefrontContract) break;
     assert.ok(
       storefrontRoot && existsSync(path.join(storefrontRoot, filePath)),
       `${row.name}: missing storefront consumer file ${filePath}. expected behavior: ${row.expectedBehavior}; suggested file: ${row.suggestedFile}`,
@@ -206,7 +217,6 @@ function checkRowDocsAndPaths(row) {
   }
 
   for (const filePath of row.storefrontTestFiles) {
-    if (!shouldCheckStorefrontContract) break;
     assert.ok(
       storefrontRoot && existsSync(path.join(storefrontRoot, filePath)),
       `${row.name}: missing storefront test file ${filePath}. expected behavior: ${row.expectedBehavior}; suggested file: ${row.suggestedFile}`,
@@ -310,75 +320,14 @@ test(
   { skip: !storefrontRoot && !requireStorefront },
   () => {
     assert.ok(storefrontRoot, "Storefront checkout is required when REQUIRE_STOREFRONT_CONTRACT=1");
+    const rowsByName = validateContractAsset();
 
-    const pointsConsumer = readStorefrontFile("src/lib/tachiya-points.ts");
-    const pointsTests = readStorefrontFile("src/lib/tachiya-points.test.ts");
-    const couponsConsumer = readStorefrontFile("src/checkout/lib/tachiya-coupons.ts");
-    const couponsTests = readStorefrontFile("src/checkout/lib/tachiya-coupons.test.ts");
-    const streamerConsumer = readStorefrontFile("src/lib/tachiya-streamer-catalog.ts");
-    const streamerTests = readStorefrontFile("src/lib/tachiya-streamer-catalog.test.ts");
+    for (const row of rowsByName.values()) {
+      if (row.storefrontConsumerFiles.length === 0 && row.storefrontTestFiles.length === 0) {
+        continue;
+      }
 
-    assertFileContains(
-      "src/lib/tachiya-points.ts",
-      pointsConsumer,
-      ["/points/balance?user_id=", "/points/ledger?user_id=", "X-Tachiya-Internal-Secret", "NEXT_PUBLIC_TACHIYA_API_URL"],
-      {
-        rowName: "points consumer",
-        expectedBehavior: "The points helper should continue to build balance and ledger URLs with the internal secret header.",
-        suggestedFile: "src/lib/tachiya-points.ts",
-      },
-    );
-    assertFileContains(
-      "src/lib/tachiya-points.test.ts",
-      pointsTests,
-      ["points/balance", "points/ledger", "missing-config"],
-      {
-        rowName: "points consumer tests",
-        expectedBehavior: "The points helper tests should continue to cover URL construction and config fallback.",
-        suggestedFile: "src/lib/tachiya-points.test.ts",
-      },
-    );
-
-    assertFileContains(
-      "src/checkout/lib/tachiya-coupons.ts",
-      couponsConsumer,
-      ["tachiya_redemption_token", "/coupons?redemption_token=", "selectActiveTachiyaCoupon"],
-      {
-        rowName: "coupons consumer",
-        expectedBehavior: "The coupons helper should keep using redemption token lookup and active coupon selection.",
-        suggestedFile: "src/checkout/lib/tachiya-coupons.ts",
-      },
-    );
-    assertFileContains(
-      "src/checkout/lib/tachiya-coupons.test.ts",
-      couponsTests,
-      ["redemption_token", "active coupon"],
-      {
-        rowName: "coupons consumer tests",
-        expectedBehavior: "The coupons helper tests should keep covering token resolution and active coupon selection.",
-        suggestedFile: "src/checkout/lib/tachiya-coupons.test.ts",
-      },
-    );
-
-    assertFileContains(
-      "src/lib/tachiya-streamer-catalog.ts",
-      streamerConsumer,
-      ["/streamers?limit=", "/streamers/${encodeURIComponent(slug)}/catalog", "X-Tachiya-Internal-Secret"],
-      {
-        rowName: "streamer consumer",
-        expectedBehavior: "The streamer helper should continue to build list and catalog URLs with the internal secret header.",
-        suggestedFile: "src/lib/tachiya-streamer-catalog.ts",
-      },
-    );
-    assertFileContains(
-      "src/lib/tachiya-streamer-catalog.test.ts",
-      streamerTests,
-      ["streamers?limit=", "/streamers/streamer-one/catalog"],
-      {
-        rowName: "streamer consumer tests",
-        expectedBehavior: "The streamer helper tests should keep covering list and catalog URL construction.",
-        suggestedFile: "src/lib/tachiya-streamer-catalog.test.ts",
-      },
-    );
+      checkStorefrontRowContract(row);
+    }
   },
 );
