@@ -6,6 +6,7 @@ import { test } from "node:test";
 const repoRoot = process.cwd();
 const requireStorefront = process.env.REQUIRE_STOREFRONT_CONTRACT === "1";
 const storefrontRoot = resolveStorefrontRoot();
+const shouldCheckStorefrontContract = Boolean(storefrontRoot || requireStorefront);
 const contractAsset = readContractAsset();
 
 function readRepoFile(relativePath) {
@@ -195,6 +196,7 @@ function checkRowDocsAndPaths(row) {
   }
 
   for (const filePath of row.storefrontConsumerFiles) {
+    if (!shouldCheckStorefrontContract) break;
     assert.ok(
       storefrontRoot && existsSync(path.join(storefrontRoot, filePath)),
       `${row.name}: missing storefront consumer file ${filePath}. expected behavior: ${row.expectedBehavior}; suggested file: ${row.suggestedFile}`,
@@ -204,6 +206,7 @@ function checkRowDocsAndPaths(row) {
   }
 
   for (const filePath of row.storefrontTestFiles) {
+    if (!shouldCheckStorefrontContract) break;
     assert.ok(
       storefrontRoot && existsSync(path.join(storefrontRoot, filePath)),
       `${row.name}: missing storefront test file ${filePath}. expected behavior: ${row.expectedBehavior}; suggested file: ${row.suggestedFile}`,

@@ -64,7 +64,7 @@
       "responseFields": ["coupon array", "voucher_code", "status", "redemption_token"],
       "tachiyaDocsFiles": ["docs/internal-api-contracts.md", "docs/cross-repo-contracts.md"],
       "tachiyaDocsChecks": {
-        "docs/internal-api-contracts.md": ["### `GET /coupons`", "`redemption_token`：必填", "active", "coupon array", "POST /coupons/redeem"],
+        "docs/internal-api-contracts.md": ["### `GET /coupons`", "`redemption_token`：必填", "公開查詢不得列出所有 active coupon", "active", "coupon array", "POST /coupons/redeem"],
         "docs/cross-repo-contracts.md": ["| Coupons |", "GET /coupons?redemption_token=<token>", "src/checkout/lib/tachiya-coupons.ts", "src/checkout/lib/tachiya-coupons.test.ts"]
       },
       "tachiyaRouterFiles": ["api/routers/coupons.py"],
