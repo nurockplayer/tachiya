@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main
+from observability import REQUEST_ID_HEADER
 
 
 def test_health_returns_liveness_status():
@@ -24,6 +25,16 @@ def test_app_uses_configured_cors_allowed_origins():
         "http://localhost:3000",
         "http://localhost:3001",
     )
+
+
+def test_app_exposes_request_id_header_via_cors():
+    cors_middleware = next(
+        middleware
+        for middleware in main.app.user_middleware
+        if middleware.cls.__name__ == "CORSMiddleware"
+    )
+
+    assert REQUEST_ID_HEADER in cors_middleware.kwargs["expose_headers"]
 
 
 def test_cors_preflight_allows_configured_origin():

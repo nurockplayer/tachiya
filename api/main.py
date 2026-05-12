@@ -7,6 +7,8 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from config import get_settings, is_internal_shared_secret_configured
 from database import check_database_ready, create_tables
+from error_handling import register_exception_handlers
+from observability import REQUEST_ID_HEADER, request_id_middleware
 from routers import (
     coupons,
     identity_mappings,
@@ -26,13 +28,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Tachiya API", lifespan=lifespan)
 settings = get_settings()
+app.state.cors_allowed_origins = settings.cors_allowed_origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
+app.middleware("http")(request_id_middleware)
+register_exception_handlers(app)
 
 app.include_router(coupons.router)
 app.include_router(identity_mappings.router)
