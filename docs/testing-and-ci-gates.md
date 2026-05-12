@@ -33,7 +33,8 @@ Root repo 目前另有 cross-repo contract gate：
 
 - [`.github/workflows/cross-repo-contract.yml`](../.github/workflows/cross-repo-contract.yml)
   - scope: Tachiya API contract docs、Tachiya router surface、Storefront develop consumer helper / tests
-  - checks: checkout `nurockplayer/storefront@develop`，執行 `.github/workflow-tests/cross-repo-contract.test.mjs`
+  - checks: checkout `nurockplayer/storefront@develop`，讀取 `.github/workflow-tests/cross-repo-contracts.fixture.json`，再執行 `.github/workflow-tests/cross-repo-contract.test.mjs` 進行 asset-driven static gate
+  - boundary: 這個 gate 只做靜態契約對齊，不是 runtime mock server
 
 Root repo 也有 PostgreSQL migration gate：
 
@@ -164,7 +165,7 @@ Storefront repo 目前已追蹤的核心 workflow：
 
 - Tachiya API contract docs 與 request schema 的更完整 drift check。
 - Points / referral / revenue share 的 end-to-end smoke test。
-- Storefront 與 Tachiya 間的 runtime-level cross-repo contract smoke。
+- Storefront 與 Tachiya 間的 runtime-level cross-repo contract smoke。現有 cross-repo contract gate 已升級成 asset-driven static gate，但仍不是 runtime mock server。
 - PostgreSQL migration gate 目前只跑 upgrade head，尚未涵蓋 rollback / downgrade 與資料回填效能。
 - release 前的 webhook replay / idempotency smoke checklist。
 
