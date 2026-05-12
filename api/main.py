@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Tachiya API", lifespan=lifespan)
 settings = get_settings()
+app.state.cors_allowed_origins = settings.cors_allowed_origins
 
 app.add_middleware(
     CORSMiddleware,

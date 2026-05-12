@@ -24,7 +24,7 @@
 - request middleware 先讀取 incoming `X-Request-ID`；若缺少，建立新的 UUID。
 - request id 會掛在 request state，並回寫到 response header `X-Request-ID`；CORS response 會暴露此 header，讓 browser client 可以讀取。
 - `HTTPException` 交給自訂 handler 記錄 structured event，但 response body 仍維持 `{ "detail": ... }`。
-- 未處理的非 `HTTPException` 500 會交給 generic handler 記錄 structured event，並維持 request id response header。
+- 未處理的非 `HTTPException` 500 會交給 generic handler 記錄 structured event，並維持 request id response header；若 request `Origin` 在 API CORS allowlist 內，500 response 也會保留可讀取 `X-Request-ID` 的 CORS headers。
 - 第一版 structured error event 固定包含：
   - `service`
   - `event_name`

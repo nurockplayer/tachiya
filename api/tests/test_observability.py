@@ -11,7 +11,11 @@ from starlette.requests import Request
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main
-from observability import get_or_create_request_id, log_structured_error_event
+from observability import (
+    REQUEST_ID_HEADER,
+    get_or_create_request_id,
+    log_structured_error_event,
+)
 
 
 TEST_ROUTE_PREFIX = "/__test_observability"
@@ -146,6 +150,32 @@ def test_unhandled_server_error_response_still_has_request_id_header():
 
     assert response.status_code == 500
     assert response.headers["X-Request-ID"]
+
+
+def test_allowed_cross_origin_server_error_exposes_request_id_header():
+    client = _build_app_client(raise_server_exceptions=False)
+
+    response = client.get(
+        f"{TEST_ROUTE_PREFIX}/server-error",
+        headers={"Origin": "http://localhost:3000"},
+    )
+
+    assert response.status_code == 500
+    assert response.headers[REQUEST_ID_HEADER]
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert REQUEST_ID_HEADER in response.headers["access-control-expose-headers"]
+
+
+def test_disallowed_cross_origin_server_error_does_not_allow_origin():
+    client = _build_app_client(raise_server_exceptions=False)
+
+    response = client.get(
+        f"{TEST_ROUTE_PREFIX}/server-error",
+        headers={"Origin": "https://evil.example.com"},
+    )
+
+    assert response.status_code == 500
+    assert "access-control-allow-origin" not in response.headers
 
 
 def test_unhandled_server_error_logs_exception_context(caplog):
