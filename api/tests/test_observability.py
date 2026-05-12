@@ -10,7 +10,7 @@ from starlette.requests import Request
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main
-from observability import log_structured_error_event
+from observability import get_or_create_request_id, log_structured_error_event
 
 
 TEST_ROUTE_PREFIX = "/__test_observability"
@@ -77,6 +77,25 @@ def test_response_echoes_request_id_header():
 
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == "req-from-client"
+
+
+def test_header_request_id_also_populates_request_state():
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/health",
+            "headers": [(b"x-request-id", b"req-from-client")],
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("testclient", 50000),
+        }
+    )
+
+    request_id = get_or_create_request_id(request)
+
+    assert request_id == "req-from-client"
+    assert request.state.request_id == "req-from-client"
 
 
 def test_response_generates_request_id_when_header_missing():

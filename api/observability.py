@@ -43,10 +43,9 @@ def get_or_create_request_id(request: Request) -> str:
         REQUEST_ID_STATE_KEY,
         None,
     )
-    if request_id:
-        return request_id
+    if not request_id:
+        request_id = str(uuid4())
 
-    request_id = str(uuid4())
     setattr(request.state, REQUEST_ID_STATE_KEY, request_id)
     return request_id
 
