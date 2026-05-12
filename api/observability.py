@@ -57,12 +57,21 @@ async def request_id_middleware(request: Request, call_next):
     return response
 
 
+def get_route_path_template(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if isinstance(route_path, str) and route_path:
+        return route_path
+    return request.url.path
+
+
 def build_structured_error_event(
     *,
     request: Request,
     status_code: int,
 ) -> dict[str, str | int]:
-    domain = infer_domain_from_path(request.url.path)
+    path = get_route_path_template(request)
+    domain = infer_domain_from_path(path)
     severity = infer_severity(status_code)
     return {
         "service": SERVICE_NAME,
@@ -73,7 +82,7 @@ def build_structured_error_event(
         "error_code": f"{domain}.http_{status_code}",
         "request_id": get_or_create_request_id(request),
         "status_code": status_code,
-        "path": request.url.path,
+        "path": path,
         "method": request.method,
     }
 

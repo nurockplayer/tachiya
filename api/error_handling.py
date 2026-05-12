@@ -1,8 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from observability import log_structured_error_event
+from observability import (
+    REQUEST_ID_HEADER,
+    get_or_create_request_id,
+    log_structured_error_event,
+)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -13,3 +18,15 @@ def register_exception_handlers(app: FastAPI) -> None:
     ):
         log_structured_error_event(request=request, status_code=exc.status_code)
         return await http_exception_handler(request, exc)
+
+    @app.exception_handler(Exception)
+    async def structured_internal_error_handler(
+        request: Request,
+        exc: Exception,
+    ):
+        log_structured_error_event(request=request, status_code=500)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal Server Error"},
+            headers={REQUEST_ID_HEADER: get_or_create_request_id(request)},
+        )

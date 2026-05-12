@@ -17,13 +17,14 @@
 
 ## Structured Logging 欄位標準
 
-目前 API 已有第一階段 MVP：每個 HTTP request 都會帶 `X-Request-ID`，若 upstream 未提供則由 API 產生 `uuid4`；所有 `HTTPException` 會保留既有 `{ "detail": ... }` response contract，同時記錄 structured error event。後續新增或整理 log 時，欄位命名應延續以下基線。
+目前 API 已有第一階段 MVP：每個 HTTP request 都會帶 `X-Request-ID`，若 upstream 未提供則由 API 產生 `uuid4`；所有 `HTTPException` 會保留既有 `{ "detail": ... }` response contract，同時記錄 structured error event。未處理的非 `HTTPException` 500 會回傳 `{ "detail": "Internal Server Error" }` 並保留同一個 request id header。後續新增或整理 log 時，欄位命名應延續以下基線。
 
 ### 已實作 MVP 行為
 
 - request middleware 先讀取 incoming `X-Request-ID`；若缺少，建立新的 UUID。
-- request id 會掛在 request state，並回寫到 response header `X-Request-ID`。
+- request id 會掛在 request state，並回寫到 response header `X-Request-ID`；CORS response 會暴露此 header，讓 browser client 可以讀取。
 - `HTTPException` 交給自訂 handler 記錄 structured event，但 response body 仍維持 `{ "detail": ... }`。
+- 未處理的非 `HTTPException` 500 會交給 generic handler 記錄 structured event，並維持 request id response header。
 - 第一版 structured error event 固定包含：
   - `service`
   - `event_name`
@@ -33,7 +34,7 @@
   - `error_code`
   - `request_id`
   - `status_code`
-  - `path`
+  - `path`：優先記錄 FastAPI route template，避免把 path params、PII 或高基數外部識別值寫進 log。
   - `method`
 
 ### 必填共用欄位
