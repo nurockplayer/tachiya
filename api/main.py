@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from config import get_settings, is_internal_shared_secret_configured
 from database import check_database_ready, create_tables
 from error_handling import register_exception_handlers
-from observability import request_id_middleware
+from observability import REQUEST_ID_HEADER, request_id_middleware
 from routers import (
     coupons,
     identity_mappings,
@@ -34,6 +34,7 @@ app.add_middleware(
     allow_origins=settings.cors_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[REQUEST_ID_HEADER],
 )
 app.middleware("http")(request_id_middleware)
 register_exception_handlers(app)
