@@ -86,5 +86,5 @@ jobs:
       - name: Install API dependencies
         run: uv sync --group dev
 
-      - name: Run Alembic upgrade head on PostgreSQL
-        run: uv run --group dev alembic upgrade head
+      - name: Run PostgreSQL migration rollback smoke
+        run: uv run --group dev pytest -o addopts='' tests/test_migrations.py

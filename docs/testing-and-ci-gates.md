@@ -41,8 +41,9 @@ Root repo 也有 PostgreSQL migration gate：
 - [`.github/workflows/postgres-migration-gate.yml`](../.github/workflows/postgres-migration-gate.yml)
   - scope: Alembic config、migration versions、SQLAlchemy models、DB bootstrap code、相關 CI docs
   - triggers: `workflow_dispatch`、weekly schedule、以及 path-filtered `pull_request` / `push`
-  - checks: 啟動 PostgreSQL 16 service container，設定非 production `DATABASE_URL`，在 `api/` 執行 `uv run --group dev alembic upgrade head`
-  - 不保護：資料回填效能、rollback/downgrade、production secret / network、跨服務 end-to-end smoke
+  - checks: 啟動 PostgreSQL 16 service container，設定非 production `DATABASE_URL`，在 `api/` 執行 `uv run --group dev pytest -o addopts='' tests/test_migrations.py`
+  - smoke 內容：保留既有 `upgrade head` schema smoke，另加一個 rollback smoke，驗證 `head -> downgrade -1 -> head` 期間 Alembic version table 會切到前一版再回到 head，且最新 migration 建立的 `uq_tachiya_referral_rewards_referee_id` index 會被移除再恢復
+  - 不保護：資料回填效能、多步 downgrade matrix、production secret / network、跨服務 end-to-end smoke
 
 ### Storefront repo
 
@@ -166,7 +167,7 @@ Storefront repo 目前已追蹤的核心 workflow：
 - Tachiya API contract docs 與 request schema 的更完整 drift check。
 - Points / referral / revenue share 的 end-to-end smoke test。
 - Storefront 與 Tachiya 間的 runtime-level cross-repo contract smoke。現有 cross-repo contract gate 已升級成 asset-driven static gate，但仍不是 runtime mock server。
-- PostgreSQL migration gate 目前只跑 upgrade head，尚未涵蓋 rollback / downgrade 與資料回填效能。
+- PostgreSQL migration gate 已涵蓋單步 rollback smoke，但仍未涵蓋多步 downgrade matrix 與資料回填效能。
 - release 前的 webhook replay / idempotency smoke checklist。
 
 ## 實作優先序

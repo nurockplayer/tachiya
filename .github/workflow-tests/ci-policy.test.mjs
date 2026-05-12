@@ -856,7 +856,8 @@ test("PostgreSQL migration gate stays path-filtered and secret-free", () => {
   assert.match(workflow, /timeout-minutes: 10/);
   assert.match(workflow, /working-directory: api/);
   assert.match(workflow, /DATABASE_URL: postgresql:\/\/tachiya:tachiya@localhost:5432\/tachiya/);
-  assert.match(workflow, /uv run --group dev alembic upgrade head/);
+  assert.match(workflow, /uv run --group dev pytest -o addopts='' tests\/test_migrations\.py/);
+  assert.doesNotMatch(workflow, /uv run --group dev alembic upgrade head/);
   assert.doesNotMatch(workflow, /secrets\./);
   assert.doesNotMatch(workflow, /production/i);
 });
