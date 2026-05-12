@@ -24,6 +24,39 @@
 
 這個 gate 是 asset-driven static gate，不是 runtime mock server，也不是完整 integration test。它不打真實金流或真實訂單，只確認 contract docs、Tachiya router surface、Storefront consumer helper、以及 Storefront consumer tests 仍同時存在並含有關鍵欄位 / URL / header。若未來 Storefront 改檔名或 API contract 改 endpoint，必須同一張 PR 更新本文件、fixture、與 sanity test。
 
+## Runtime Smoke Coverage
+
+目前 cross-repo gate 保護的是靜態契約漂移；runtime smoke 仍是下一層檢查。這層的目標不是覆蓋完整購物流程，而是證明 Storefront 在執行時能用測試 fixture 呼叫 Tachiya-owned contract row，並在 auth、schema、空資料與錯誤狀態上產出可讀的失敗訊號。
+
+建議 runtime smoke 拆成兩段落地：
+
+1. Tachiya repo 保有本文件、fixture、router/docs alignment 與 failure report 規格。
+2. Storefront repo 擁有 Playwright 或 route-level runtime smoke，使用 mock Tachiya base URL 驗證 helper 在瀏覽器流程中的實際行為。
+
+最小 smoke row 不應一次全部打完。第一批建議只選：
+
+- Points balance：驗證 `X-Tachiya-Internal-Secret`、`user_id` query、strict integer `balance`，以及 unavailable fallback。
+- Coupons：驗證 `tachiya_redemption_token` 解析、`GET /coupons?redemption_token=...`、只接受 active coupon。
+- Streamer catalog：驗證 slug encode、`saleor_product_ids[]`、missing catalog fallback。
+
+Runtime smoke 的啟動序列應保持可重複：
+
+1. 啟動 Storefront test server，注入 mock Tachiya base URL 與 shared secret。
+2. mock Tachiya 回傳 contract row 對應的 success、empty、unauthorized、schema mismatch fixture。
+3. 執行 Storefront smoke route，確認 UI fallback 或 helper result 符合 contract。
+4. 輸出 JUnit 或 Playwright HTML artifact，失敗訊息必須包含 row name、endpoint、fixture name 與建議修復檔案。
+
+Runtime smoke 不應在 Tachiya PR 裡 checkout Storefront 後啟動完整 Storefront app，除非該 PR 同時更新了 Storefront 對應 workflow 並證明執行時間穩定。Tachiya 這邊只負責 contract row 與 failure vocabulary；Storefront repo 負責把 row 套進使用者可見流程。
+
+## Runtime Smoke Acceptance Criteria
+
+- 每個 smoke row 都要對應 `.github/workflow-tests/cross-repo-contracts.fixture.json` 的 row name。
+- 每個 failure 都要包含 `row name`、`endpoint or pathPattern`、`fixture name`、`expected behavior`、`suggested file`。
+- Mock response 必須同時覆蓋 success 與至少一個 fallback path；只測 happy path 不算完成。
+- Auth-required row 必須驗證 `X-Tachiya-Internal-Secret` 缺失或錯誤時的 fallback。
+- Storefront 端 smoke 必須可用單一指令在 CI 跑，且不得依賴 production secret、真實付款、真實訂單或外部 Twitch/Saleor network。
+- 若 runtime smoke 尚未落地，PR body 必須把它列為 non-goal 或 follow-up，不能把 static gate 說成 end-to-end coverage。
+
 ## Failure Report Format
 
 當 gate 失敗時，先用 row 為單位報告：
@@ -34,6 +67,13 @@
 4. suggested file
 
 如果同一輪有多個 row fail，修復順序請先從 docs / fixture 開始，再修 router path，最後才修 storefront consumer/test path。
+
+Runtime smoke 失敗時也用同一個 row-first 格式，但需額外附上：
+
+1. fixture name
+2. runtime surface，例如 browser route、server action、route handler 或 helper
+3. artifact link，例如 JUnit XML、Playwright trace 或 HTML report
+4. 是否為 Storefront-owned fix、Tachiya-owned contract fix，或跨 repo follow-up
 
 ## Repair Priority
 
