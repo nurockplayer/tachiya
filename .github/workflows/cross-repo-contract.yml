@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/cross-repo-contract.yml"
       - ".github/workflow-tests/cross-repo-contract.test.mjs"
+      - ".github/workflow-tests/cross-repo-contracts.fixture.json"
       - "api/routers/**"
       - "docs/cross-repo-contracts.md"
       - "docs/internal-api-contracts.md"
@@ -18,6 +19,7 @@ on:
     paths:
       - ".github/workflows/cross-repo-contract.yml"
       - ".github/workflow-tests/cross-repo-contract.test.mjs"
+      - ".github/workflow-tests/cross-repo-contracts.fixture.json"
       - "api/routers/**"
       - "docs/cross-repo-contracts.md"
       - "docs/internal-api-contracts.md"

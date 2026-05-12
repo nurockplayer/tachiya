@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "rows": [
+    {
+      "name": "Points balance",
+      "endpoint": "GET /points/balance?user_id=<saleor customer id>",
+      "pathPattern": "/points/balance",
+      "requiredHeaders": ["X-Tachiya-Internal-Secret"],
+      "queryParams": ["user_id"],
+      "responseFields": ["user_id", "balance"],
+      "tachiyaDocsFiles": ["docs/internal-api-contracts.md", "docs/cross-repo-contracts.md"],
+      "tachiyaDocsChecks": {
+        "docs/internal-api-contracts.md": ["### `GET /points/balance`", "`user_id`：Saleor customer id，必填", "Response", "balance", "X-Tachiya-Internal-Secret"],
+        "docs/cross-repo-contracts.md": ["| Points balance |", "GET /points/balance?user_id=<saleor customer id>", "src/lib/tachiya-points.ts", "src/lib/tachiya-points.test.ts"]
+      },
+      "tachiyaRouterFiles": ["api/routers/points.py"],
+      "tachiyaRouterChecks": {
+        "api/routers/points.py": ["router = APIRouter(prefix=\"/points\"", "\"/balance\"", "PointsBalanceResponse"]
+      },
+      "storefrontConsumerFiles": ["src/lib/tachiya-points.ts"],
+      "storefrontConsumerChecks": {
+        "src/lib/tachiya-points.ts": ["/points/balance?user_id=", "X-Tachiya-Internal-Secret", "NEXT_PUBLIC_TACHIYA_API_URL"]
+      },
+      "storefrontTestFiles": ["src/lib/tachiya-points.test.ts"],
+      "storefrontTestChecks": {
+        "src/lib/tachiya-points.test.ts": ["points/balance", "missing-config"]
+      },
+      "expectedBehavior": "Storefront builds the per-user points balance URL and Tachiya returns a strict integer balance payload.",
+      "suggestedFile": "api/routers/points.py"
+    },
+    {
+      "name": "Points ledger",
+      "endpoint": "GET /points/ledger?user_id=<saleor customer id>&limit=1..100",
+      "pathPattern": "/points/ledger",
+      "requiredHeaders": ["X-Tachiya-Internal-Secret"],
+      "queryParams": ["user_id", "limit"],
+      "responseFields": ["user_id", "entries[]", "id", "amount", "entry_type", "source_type", "reference_id", "expires_at", "created_at"],
+      "tachiyaDocsFiles": ["docs/internal-api-contracts.md", "docs/cross-repo-contracts.md"],
+      "tachiyaDocsChecks": {
+        "docs/internal-api-contracts.md": ["### `GET /points/ledger`", "`user_id`：Saleor customer id，必填", "`limit`：預設 `20`，範圍 `1..100`", "entry_type", "source_type", "reference_id", "expires_at", "created_at"],
+        "docs/cross-repo-contracts.md": ["| Points ledger |", "GET /points/ledger?user_id=<saleor customer id>&limit=1..100", "src/lib/tachiya-points.ts", "src/lib/tachiya-points.test.ts"]
+      },
+      "tachiyaRouterFiles": ["api/routers/points.py"],
+      "tachiyaRouterChecks": {
+        "api/routers/points.py": ["router = APIRouter(prefix=\"/points\"", "\"/ledger\"", "PointsLedgerResponse"]
+      },
+      "storefrontConsumerFiles": ["src/lib/tachiya-points.ts"],
+      "storefrontConsumerChecks": {
+        "src/lib/tachiya-points.ts": ["/points/ledger?user_id=", "limit=", "X-Tachiya-Internal-Secret", "NEXT_PUBLIC_TACHIYA_API_URL"]
+      },
+      "storefrontTestFiles": ["src/lib/tachiya-points.test.ts"],
+      "storefrontTestChecks": {
+        "src/lib/tachiya-points.test.ts": ["points/ledger", "limit", "missing-config"]
+      },
+      "expectedBehavior": "Storefront builds the per-user ledger URL and Tachiya returns bounded recent entries for the same user.",
+      "suggestedFile": "api/routers/points.py"
+    },
+    {
+      "name": "Coupons",
+      "endpoint": "GET /coupons?redemption_token=<token>",
+      "pathPattern": "/coupons",
+      "requiredHeaders": [],
+      "queryParams": ["redemption_token"],
+      "responseFields": ["coupon array", "voucher_code", "status"],
+      "tachiyaDocsFiles": ["docs/internal-api-contracts.md", "docs/cross-repo-contracts.md"],
+      "tachiyaDocsChecks": {
+        "docs/internal-api-contracts.md": ["### `GET /coupons`", "`redemption_token`：必填", "公開查詢不得列出所有 active coupon", "active", "coupon array", "POST /coupons/redeem"],
+        "docs/cross-repo-contracts.md": ["| Coupons |", "GET /coupons?redemption_token=<token>", "src/checkout/lib/tachiya-coupons.ts", "src/checkout/lib/tachiya-coupons.test.ts"]
+      },
+      "tachiyaRouterFiles": ["api/routers/coupons.py"],
+      "tachiyaRouterChecks": {
+        "api/routers/coupons.py": [
+          "router = APIRouter(prefix=\"/coupons\"",
+          "\"/redeem\"",
+          "def list_coupons(",
+          "UserCoupon.status == \"active\"",
+          "redemption_token",
+          "RedeemResponse"
+        ]
+      },
+      "storefrontConsumerFiles": ["src/checkout/lib/tachiya-coupons.ts"],
+      "storefrontConsumerChecks": {
+        "src/checkout/lib/tachiya-coupons.ts": ["tachiya_redemption_token", "/coupons?redemption_token=", "selectActiveTachiyaCoupon"]
+      },
+      "storefrontTestFiles": ["src/checkout/lib/tachiya-coupons.test.ts"],
+      "storefrontTestChecks": {
+        "src/checkout/lib/tachiya-coupons.test.ts": ["redemption_token", "active coupon"]
+      },
+      "expectedBehavior": "Storefront resolves a redemption token and selects the first active coupon from the public lookup endpoint.",
+      "suggestedFile": "api/routers/coupons.py"
+    },
+    {
+      "name": "Streamer list",
+      "endpoint": "GET /streamers?limit=1..100",
+      "pathPattern": "/streamers",
+      "requiredHeaders": ["X-Tachiya-Internal-Secret"],
+      "queryParams": ["limit"],
+      "responseFields": ["streamers[]", "slug", "display_name", "saleor_collection_id"],
+      "tachiyaDocsFiles": ["docs/internal-api-contracts.md", "docs/cross-repo-contracts.md"],
+      "tachiyaDocsChecks": {
+        "docs/internal-api-contracts.md": ["### `GET /streamers`", "`limit`：預設 `20`，範圍 `1..100`", "active streamer", "slug", "display_name", "saleor_collection_id"],
+        "docs/cross-repo-contracts.md": ["| Streamer list |", "GET /streamers?limit=1..100", "src/lib/tachiya-streamer-catalog.ts"]
+      },
+      "tachiyaRouterFiles": ["api/routers/streamers.py"],
+      "tachiyaRouterChecks": {
+        "api/routers/streamers.py": ["router = APIRouter(prefix=\"/streamers\"", "StreamerListResponse", "limit: int = Query(default=20, ge=1, le=100)"]
+      },
+      "storefrontConsumerFiles": ["src/lib/tachiya-streamer-catalog.ts"],
+      "storefrontConsumerChecks": {
+        "src/lib/tachiya-streamer-catalog.ts": ["/streamers?limit=", "buildTachiyaStreamerListUrl", "X-Tachiya-Internal-Secret"]
+      },
+      "storefrontTestFiles": ["src/lib/tachiya-streamer-catalog.test.ts"],
+      "storefrontTestChecks": {
+        "src/lib/tachiya-streamer-catalog.test.ts": ["streamers?limit=", "limit=100"]
+      },
+      "expectedBehavior": "Storefront builds the active streamer list URL and Tachiya returns only active streamer summaries.",
+      "suggestedFile": "api/routers/streamers.py"
+    },
+    {
+      "name": "Streamer catalog",
+      "endpoint": "GET /streamers/{slug}/catalog",
+      "pathPattern": "/streamers/{slug}/catalog",
+      "requiredHeaders": ["X-Tachiya-Internal-Secret"],
+      "queryParams": [],
+      "responseFields": ["streamer", "saleor_product_ids[]", "404 streamer catalog not found"],
+      "tachiyaDocsFiles": ["docs/internal-api-contracts.md", "docs/cross-repo-contracts.md"],
+      "tachiyaDocsChecks": {
+        "docs/internal-api-contracts.md": ["### `GET /streamers/{slug}/catalog`", "`404 streamer catalog not found`", "saleor_product_ids", "實況主 catalog 摘要"],
+        "docs/cross-repo-contracts.md": ["| Streamer catalog |", "GET /streamers/{slug}/catalog", "src/lib/tachiya-streamer-catalog.ts", "src/lib/tachiya-streamer-catalog.test.ts"]
+      },
+      "tachiyaRouterFiles": ["api/routers/streamers.py"],
+      "tachiyaRouterChecks": {
+        "api/routers/streamers.py": ["router = APIRouter(prefix=\"/streamers\"", "\"/{slug}/catalog\"", "StreamerCatalogResponse"]
+      },
+      "storefrontConsumerFiles": ["src/lib/tachiya-streamer-catalog.ts"],
+      "storefrontConsumerChecks": {
+        "src/lib/tachiya-streamer-catalog.ts": ["/streamers/${encodeURIComponent(slug)}/catalog", "X-Tachiya-Internal-Secret", "buildTachiyaStreamerCatalogUrl"]
+      },
+      "storefrontTestFiles": ["src/lib/tachiya-streamer-catalog.test.ts"],
+      "storefrontTestChecks": {
+        "src/lib/tachiya-streamer-catalog.test.ts": ["streamer-one/catalog", "streamers?limit="]
+      },
+      "expectedBehavior": "Storefront builds the streamer catalog URL and Tachiya returns the streamer summary plus product ids or a 404 when missing.",
+      "suggestedFile": "api/routers/streamers.py"
+    }
+  ]
+}

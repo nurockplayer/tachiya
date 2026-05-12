@@ -834,6 +834,7 @@ test("cross-repo contract gate owns Storefront drift checks without duplicating 
 
   assert.match(workflow, /repository: nurockplayer\/storefront/);
   assert.match(workflow, /ref: develop/);
+  assert.match(workflow, /\.github\/workflow-tests\/cross-repo-contracts\.fixture\.json/);
   assert.match(workflow, /REQUIRE_STOREFRONT_CONTRACT: "1"/);
   assert.match(workflow, /node --test \.github\/workflow-tests\/cross-repo-contract\.test\.mjs/);
   assert.match(workflow, /timeout-minutes: 10/);
