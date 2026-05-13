@@ -359,9 +359,13 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i;
   const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue);
   const hasPendingThresholdLedgerRef = /(?:^|[\s,;])pending(?:$|[\s,;])/i.test(thresholdLedgerRefValue);
+  const hasReadyPendingThresholdLedgerRef = finalMergeGateReadyFlag === "true" && hasPendingThresholdLedgerRef;
   const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !(finalMergeGateReadyFlag === "true" && hasPendingThresholdLedgerRef);
+  const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedgerRef;
   const hasMeaningfulCalibrationData =
-    calibrationDataLines.some((line) => hasMeaningfulLine(line)) && (hasCalibrationRequiredKeys || hasReadyThresholdLedgerRef);
+    calibrationDataLines.some((line) => hasMeaningfulLine(line)) &&
+    hasCalibrationReadyStateCompatible &&
+    (hasCalibrationRequiredKeys || hasReadyThresholdLedgerRef);
   const directExecutionDecisionValues = new Set(["controller_direct", "trivial_direct", "no_worker"]);
   const directExecutionSignalPattern =
     /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i;
@@ -1559,6 +1563,67 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
       hasCalibrationData: true,
       hasMeaningfulCalibrationData: false,
       hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "ready to merge blocks pending threshold ledger ref even with complete legacy metrics",
+    bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/ready-threshold-legacy",
+        "ready_to_merge=true",
+      ].join("\n"),
+      calibrationData: [
+        "threshold_ledger_ref=pending",
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: true,
       hasDirectExecutionSignal: false,
       hasThresholdExceptionSupport: false,
       hasThresholdFollowUp: true,
