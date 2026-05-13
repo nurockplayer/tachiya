@@ -267,11 +267,9 @@ jobs:
             )
             const specGateEvidenceLines = extractMeaningfulDelegationFieldLines('Spec gate evidence')
             const hasSpecGateEvidence = specGateEvidenceLines.length > 0
-            const hasMeaningfulSpecGateEvidence =
-              specGateEvidenceLines.some((line) => hasMeaningfulSectionLine(line)) &&
-              specGateEvidenceLines.some(
-                (line) => hasMeaningfulSectionLine(line) || isExplicitPendingInitialGate(line),
-              )
+            const hasMeaningfulSpecGateEvidence = specGateEvidenceLines.some((line) =>
+              hasMeaningfulSectionLine(line),
+            )
             const finalMergeGateLines = extractMeaningfulDelegationFieldLines('Final merge gate')
             const hasFinalMergeGate = finalMergeGateLines.length > 0
             const finalMergeGateHasExplicitPendingInitialGate = finalMergeGateLines.some((line) =>

@@ -273,9 +273,7 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   const hasMeaningfulControllerFallbackReason = controllerFallbackReasonLines.some((line) => hasMeaningfulLine(line));
   const specGateEvidenceLines = extractMeaningfulFieldLines("Spec gate evidence");
   const hasSpecGateEvidence = specGateEvidenceLines.length > 0;
-  const hasMeaningfulSpecGateEvidence =
-    specGateEvidenceLines.some((line) => hasMeaningfulLine(line)) &&
-    specGateEvidenceLines.some((line) => hasMeaningfulLine(line) || isExplicitPendingInitialGate(line));
+  const hasMeaningfulSpecGateEvidence = specGateEvidenceLines.some((line) => hasMeaningfulLine(line));
   const finalMergeGateLines = extractMeaningfulFieldLines("Final merge gate");
   const hasFinalMergeGate = finalMergeGateLines.length > 0;
   const finalMergeGateHasExplicitPendingInitialGate = finalMergeGateLines.some((line) => isExplicitPendingInitialGate(line));
