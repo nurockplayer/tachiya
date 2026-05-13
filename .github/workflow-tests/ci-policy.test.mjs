@@ -221,6 +221,24 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
         })
         .filter(Boolean),
     );
+  const extractThresholdLedgerContext = (keyValues) => {
+    const thresholdLedgerRefValue =
+      keyValues.threshold_ledger_ref ?? keyValues.ledger_ref ?? keyValues.threshold_calibration_ref ?? "";
+    const explicitThresholdLedgerStatusValue =
+      keyValues.threshold_ledger_status ??
+      keyValues.ledger_status ??
+      keyValues.threshold_calibration_status ??
+      "";
+    const hasExplicitThresholdLedgerContext =
+      Boolean(thresholdLedgerRefValue) || Boolean(explicitThresholdLedgerStatusValue);
+    const thresholdLedgerStatusValue =
+      explicitThresholdLedgerStatusValue || (hasExplicitThresholdLedgerContext ? keyValues.status ?? "" : "");
+    return {
+      thresholdLedgerRefValue,
+      thresholdLedgerStatusValue,
+      hasExplicitThresholdLedgerContext,
+    };
+  };
   const trivialExceptionMatch = bodyForAutonomousGate.match(
     /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
   );
@@ -353,28 +371,31 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     const value = calibrationDataKeyValues[key];
     return Boolean(value) && hasMeaningfulLine(value);
   });
-  const thresholdLedgerRefValue =
-    calibrationDataKeyValues.threshold_ledger_ref ??
-    calibrationDataKeyValues.ledger_ref ??
-    calibrationDataKeyValues.threshold_calibration_ref ??
-    "";
-  const explicitThresholdLedgerStatusValue =
-    calibrationDataKeyValues.threshold_ledger_status ??
-    calibrationDataKeyValues.ledger_status ??
-    calibrationDataKeyValues.threshold_calibration_status ??
-    "";
-  const hasExplicitThresholdLedgerContext =
-    Boolean(thresholdLedgerRefValue) || Boolean(explicitThresholdLedgerStatusValue);
-  const thresholdLedgerStatusValue =
-    explicitThresholdLedgerStatusValue || (hasExplicitThresholdLedgerContext ? calibrationDataKeyValues.status ?? "" : "");
+  const finalMergeGateLedgerContext = extractThresholdLedgerContext(finalMergeGateKeyValues);
+  const calibrationLedgerContext = extractThresholdLedgerContext(calibrationDataKeyValues);
+  const thresholdLedgerRefValue = calibrationLedgerContext.thresholdLedgerRefValue;
+  const hasExplicitThresholdLedgerContext = calibrationLedgerContext.hasExplicitThresholdLedgerContext;
+  const thresholdLedgerStatusValue = calibrationLedgerContext.thresholdLedgerStatusValue;
   const thresholdLedgerRefPattern =
     /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i;
   const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue);
   const pendingThresholdLedgerPattern = /(?:^|[\s,;])pending(?:$|[\s,;])/i;
   const hasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(thresholdLedgerRefValue);
   const hasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(thresholdLedgerStatusValue);
+  const finalMergeGateHasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(
+    finalMergeGateLedgerContext.thresholdLedgerRefValue,
+  );
+  const finalMergeGateHasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(
+    finalMergeGateLedgerContext.thresholdLedgerStatusValue,
+  );
   const hasReadyPendingThresholdLedger =
-    finalMergeGateReadyFlag === "true" && (hasPendingThresholdLedgerRef || hasPendingThresholdLedgerStatus);
+    finalMergeGateReadyFlag === "true" &&
+    (
+      hasPendingThresholdLedgerRef ||
+      hasPendingThresholdLedgerStatus ||
+      finalMergeGateHasPendingThresholdLedgerRef ||
+      finalMergeGateHasPendingThresholdLedgerStatus
+    );
   const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !hasReadyPendingThresholdLedger;
   const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedger;
   const hasMeaningfulCalibrationData =
@@ -617,11 +638,10 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Threshold decision` field\./);
-  assert.match(workflow, /const hasExplicitThresholdLedgerContext =/);
-  assert.match(
-    workflow,
-    /hasExplicitThresholdLedgerContext \? calibrationDataKeyValues\.status \?\? '' : ''/,
-  );
+  assert.match(workflow, /const extractThresholdLedgerContext = \(keyValues\) =>/);
+  assert.match(workflow, /const finalMergeGateLedgerContext = extractThresholdLedgerContext\(finalMergeGateKeyValues\)/);
+  assert.match(workflow, /const calibrationLedgerContext = extractThresholdLedgerContext\(calibrationDataKeyValues\)/);
+  assert.match(workflow, /const hasExplicitThresholdLedgerContext = calibrationLedgerContext\.hasExplicitThresholdLedgerContext/);
   assert.match(workflow, /Threshold ledger ref\/status: pending — merge blocked until pending ledger is merged\./);
   assert.match(workflow, /Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref\/status\./);
   assert.match(workflow, /threshold_ledger_ref/);
@@ -1727,6 +1747,68 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
     },
   );
 
+  assertGate(
+    "ready to merge blocks pending threshold ledger ref from final merge gate even with #375 calibration ref and complete legacy metrics",
+    bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/final-gate-pending-threshold-ref",
+        "ready_to_merge=true",
+        "threshold_ledger_ref=pending",
+      ].join("\n"),
+      calibrationData: [
+        "threshold_ledger_ref=#375",
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: true,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: true,
+    },
+  );
+
   for (const statusKey of ["threshold_ledger_status", "ledger_status", "threshold_calibration_status"]) {
     assertGate(
       `ready to merge blocks pending ${statusKey} even with #375 ref and complete legacy metrics`,
@@ -1826,9 +1908,39 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
         "spec_gate_status=pass",
         "evidence_urls=https://example.com/pr/ready-generic-status",
         "ready_to_merge=true",
+        "status=pending",
       ].join("\n"),
       calibrationData: [
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    });
+
+    const gate = evaluateAutonomousCloseoutGate({ body, labels: ["codex"] });
+    assert.equal(gate.hasExplicitThresholdLedgerContext, false);
+    assert.equal(gate.hasReadyPendingThresholdLedger, false);
+    assert.equal(gate.hasMeaningfulCalibrationData, true);
+    assert.doesNotMatch(
+      evaluateAutonomousCloseoutFailures({ body, labels: ["codex"] }).join("\n"),
+      /Threshold ledger ref\/status: pending/,
+    );
+  }
+
+  {
+    const body = bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/final-gate-generic-status",
+        "ready_to_merge=true",
         "status=pending",
+      ].join("\n"),
+      calibrationData: [
         "spawn_count=2",
         "ci_rerun_count=1",
         "review_thread_count=3",
