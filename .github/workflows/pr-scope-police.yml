@@ -340,12 +340,16 @@ jobs:
               calibrationDataKeyValues.ledger_ref ??
               calibrationDataKeyValues.threshold_calibration_ref ??
               ''
-            const thresholdLedgerStatusValue =
+            const explicitThresholdLedgerStatusValue =
               calibrationDataKeyValues.threshold_ledger_status ??
               calibrationDataKeyValues.ledger_status ??
               calibrationDataKeyValues.threshold_calibration_status ??
-              calibrationDataKeyValues.status ??
               ''
+            const hasExplicitThresholdLedgerContext =
+              Boolean(thresholdLedgerRefValue) || Boolean(explicitThresholdLedgerStatusValue)
+            const thresholdLedgerStatusValue =
+              explicitThresholdLedgerStatusValue ||
+              (hasExplicitThresholdLedgerContext ? calibrationDataKeyValues.status ?? '' : '')
             const thresholdLedgerRefPattern =
               /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i
             const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue)
@@ -528,7 +532,11 @@ jobs:
                 failures.push('Autonomous PRs must include a meaningful `Threshold decision` field.')
               }
 
-              if (!hasMeaningfulCalibrationData) {
+              if (hasReadyPendingThresholdLedger) {
+                failures.push(
+                  'Threshold ledger ref/status: pending — merge blocked until pending ledger is merged.',
+                )
+              } else if (!hasMeaningfulCalibrationData) {
                 failures.push(
                   'Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref/status.',
                 )
