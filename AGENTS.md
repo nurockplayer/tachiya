@@ -198,6 +198,12 @@ make logs   # 查看 logs
 
 autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md)，先指派 worker，再讀專案資料、寫 plan、開 issue 或發 PR；只有 `trivial/self-only exception` 可以不分派，但必須明寫原因。
 
+- PR body 要從一開始就把 delegation / evidence 主要欄位填完整，不要等 closeout 才一次補。
+- low-cost/routine 工作先走 `ops_spark`、`repo_scout`、`docs_worker`；若升級到 controller fallback，必須在 issue/PR 寫明原因。
+- 使用 `spec-injector` 時，開工前、commit 前、merge 前都要跑 `spec validate --repo .`；不得 commit `.spec-injector/` 或 generated output。
+- 沒有使用 `spec-injector` 時，也要用 PR template 的 `Spec gate evidence` 走 manual checklist。
+- final closeout 只在 merge-ready 且證據穩定時更新一次；每個 actionable finding 都必須 comment/resolve，或留下不採用證據。
+
 可切分的探索、文件、測試、一般實作、GitHub readback、CI log 分析，可以依任務風險委派給 worker/subagent。routine GitHub / terminal / repo 探索優先使用 Spark 或較低推理成本的 worker；schema、migration、ledger、金流、權限模型與 merge decision 必須由總控或高推理 worker 審查。
 
 資訊來回、GitHub PR/issue readback、CI/check 狀態讀回、PR body/comment 整理、review closeout evidence 蒐集與 resolve 狀態確認，預設都是 `ops_spark` 工作。總控不得把這類資料搬運當成自己的預設工作；總控只審核 worker 證據是否足以支持後續修正、等待、merge 或 closeout 決策。

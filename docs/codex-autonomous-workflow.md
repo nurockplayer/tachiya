@@ -53,11 +53,13 @@ Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR�
 
 PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際分工。
 
+- PR 一建立就必須把 execution log 主要欄位填完整，不得先用空白殼或只留一句 placeholder，等 closeout 才一次補齊。
 - 必須列出實際執行的 worker profile 名稱。
 - 必須列出每個 worker 的實際工作結果，不得只寫「已完成」。
 - 必須列出驗證結果與證據來源，包含測試、readback、或 CI 結果。
 - 必須把 issue plan 中的 trivial/self-only exception reason 原樣帶到 PR log；如果沒有例外，就不得亂寫例外。
 - 不得把 execution log 省略成一般摘要；只要是 autonomous PR，就必須看得到 delegation 與驗證的對應關係。
+- closeout 只在 merge-ready 且 evidence 穩定時更新一次最終彙總；在那之前，PR body 只增量補證據，不反覆重寫 final gate 結論。
 
 ## 總控責任
 
@@ -88,6 +90,20 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 | controller / merge decision | `controller` | `gpt-5.5` | `high` / `xhigh` | `N/A (no fallback)` |
 
 profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `controller_fallback=allowed` 且有 `fallback_reason`，不得使用 controller profile 的 GPT-5.5。
+
+### Cost-aware Delegation Threshold
+
+下列情況預設必須先委派 low-cost worker，再由總控審核結果，不得直接吃 controller 高成本推理：
+
+- routine GitHub readback、CI/check 摘要、review thread 計數、PR body/comment 整理
+- 文件整理、規格改寫、驗證摘要、檔案定位與既有 pattern 掃描
+- pre-commit checklist、post-push readback、review closeout evidence 蒐集
+
+只有遇到下列情況，才可以升級到 controller fallback 或高推理 worker，且必須在 issue/PR 明寫 `Controller fallback reason`：
+
+- low-cost worker 無法取得必要資料、工具/額度不可用，或回報互相矛盾的 evidence
+- 決策已牽涉 schema、migration、ledger、auth、跨 repo contract 或 merge gate 判斷
+- 任務雖然表面上是 docs/readback，但實際上已經進入 blocking technical decision
 
 ## Cost Model 與摩擦預算
 
@@ -191,6 +207,29 @@ Spawn 指令為硬規則（建議每個 worker 一筆）：
 
 如果 controller 因工具故障、權限不足、trivial/self-only exception，或任務切片太小而自行完成 pre-commit checklist / post-push readback，PR Delegation Execution Log 必須寫明原因，並列出等價證據：commit SHA、push branch、PR head SHA、CI/check readback 與讀回時間點。
 
+## spec-injector Local-only Gate
+
+如果 repo 有使用 `spec-injector`，autonomous workflow 必須把它當成 local-only gate，而不是可隨意提交的產物來源。
+
+### Required checkpoints
+
+- 開工前：先跑 `spec validate --repo .`，確認本地設定與 template/manual checklist 沒有明顯失配。
+- commit 前：再次跑 `spec validate --repo .`，確認本次修改沒有把 PR template、AGENTS 或 docs 契約弄壞。
+- merge 前：final readback 前再跑一次 `spec validate --repo .`，把結果寫進 PR body 的 `Spec gate evidence` 與 `Final merge gate`。
+- 未來若 repo 接上 `spec workflow-check`，應放在同一條 gate chain，位置介於 `spec validate --repo .` 與 final merge gate 之間。
+
+### Storage / commit boundaries
+
+- 不得 commit `.spec-injector/` 目錄內容、generated output、暫存 prompt/context 檔，除非 source issue 明確授權且 PR scope 也明寫。
+- `spec-injector` 在此流程的預設用途是 local validation、context generation、manual checklist 對照，不是 repo artifact producer。
+- 若 `spec validate --repo .` 失敗，先修 template/docs/checklist 契約，再考慮 commit；不得把失敗狀態直接帶進 merge gate。
+
+### Manual checklist fallback
+
+- 若作者或 reviewer 沒有使用 `spec-injector`，仍必須走同一套欄位契約：以 PR template 的 `Spec gate evidence` 填 manual checklist 結果，至少記錄 `not using spec-injector`、人工檢查範圍、檢查時間點與剩餘風險。
+- manual path 至少要覆蓋：delegation 欄位完整、review closeout 欄位完整、final merge gate 欄位完整、不可提交 `.spec-injector/` 或輸出。
+- `spec workflow-check` 尚未接線前，manual checklist 與 template 欄位就是 non-spec 使用者的正式替代路徑。
+
 ## Automated Review Gate
 
 任何 autonomous PR merge 前，總控必須完成 fresh review readback：
@@ -220,6 +259,7 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
    - head SHA 與最新 conversation 狀態一致
 4. PR closeout 前，review conversation 要求不得是「僅有文字變更描述」，最少要有 comment 或 resolve 證據可被 reviewer/readback 看到。
 5. 總控不得把「留證據並 resolve」這類資訊搬運工作預設留給自己做；只有工具故障、權限不足、或任務小到符合 trivial/self-only exception 時才可自行處理，且必須在 PR log 寫明原因。
+6. 每條 actionable finding 都必須有固定 disposition：`fix`、`not adopted`、`converted to follow-up`、`rate limit fallback`、`connector reaction-only` 或 `blocked`；不得只寫「已看過」而沒有 comment/resolve 或替代證據。
 
 ### Review Closeout Evidence Matrix
 
@@ -235,6 +275,14 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 | blocked | 無法驗證、無法 resolve、finding 仍 actionable | 不可 merge |
 
 closeout comment 至少要列出 latest head SHA、CI/check 結論、unresolved thread count、CodeRabbit 狀態、`chatgpt-codex-connector` 狀態，以及每條 finding 的採納/不採納結果。
+
+final closeout summary 只應在下列條件都穩定後更新一次：
+
+- latest head SHA 已固定，且沒有新的 push/metadata rerun 在排隊
+- CI/check summary、CodeRabbit、`chatgpt-codex-connector` 狀態已對上最新 head
+- unresolved thread count 與 finding disposition 已完成最後一次 readback
+- `Spec gate evidence` 已填入最新 `spec validate --repo .` 或 manual fallback 結果
+- `Final merge gate` 使用 key-value 形式；初始 PR 可用 `pending initial gate` 標記尚未穩定的值，但 `ready_to_merge=true` 或 `merge_ready=true` 時必須把 `latest_head_sha`、`unresolved_thread_count`、`spec_gate_status`、`evidence_urls` 改成實際證據，且 `unresolved_thread_count=0`
 
 ## Autonomous Review Closeout Evidence Runbook
 
@@ -271,6 +319,8 @@ gh api graphql ... reviewThreads(first:50, after: $cursor) {
 - `unresolved_thread_count`
 - `finding_disposition`：`fixed`、`not adopted`、`converted to follow-up`、`rate limit fallback`、`connector reaction-only` 或 `blocked`
 - `evidence_urls`：review comment、thread、workflow run、artifact、follow-up issue URL
+
+若 PR template 有 `Final merge gate` 欄位，以上資訊必須以該欄位為主；closeout comment 只作補充，不取代 PR body 的最終欄位。
 
 ### Reviewer fallback
 

@@ -42,6 +42,16 @@ const buildGateExpected = (overrides = {}) =>
     hasSpawnDirectiveWithModelReasoning: false,
     hasSpawnAllowedWithoutReason: false,
     hasRoutineOpsDelegationWarning: false,
+    hasControllerFallbackReasonField: false,
+    hasMeaningfulControllerFallbackReason: false,
+    hasSpecGateEvidence: false,
+    hasMeaningfulSpecGateEvidence: false,
+    hasFinalMergeGate: false,
+    hasMeaningfulFinalMergeGate: false,
+    hasFinalMergeGateRequiredKeys: false,
+    finalMergeGateReadyFlag: "absent",
+    finalMergeGateHasExplicitPendingInitialGate: false,
+    finalMergeGateReadyWithResolvedThreadsOnly: false,
     hasReviewConversationCloseout: false,
     hasMeaningfulReviewConversationCloseout: false,
     ...withSpawnDefaults({}),
@@ -89,6 +99,31 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     const match = bodyForAutonomousGate.match(pattern);
     return match?.[1] ?? "";
   };
+  const extractDelegationFieldBody = (label) => {
+    const delegatedLabels = [
+      "Source issue delegation plan",
+      "Actual worker profile(s)",
+      "Task",
+      "Model strength",
+      "Spawn directive",
+      "Controller fallback reason",
+      "Trivial/self-only exception reason",
+      "Evidence / verification",
+      "Spec gate evidence",
+      "Final merge gate",
+      "Worker session closeout",
+      "Workflow friction / follow-up split",
+      "Review conversation closeout",
+    ];
+    const pattern = new RegExp(
+      `(?:^|\\n)\\s*-\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:${delegatedLabels
+        .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+        .join("|")})\\s*[：:]|\\n\\s*##\\s|\\n*$)`,
+      "i",
+    );
+    const match = bodyForAutonomousGate.match(pattern);
+    return match?.[1] ?? "";
+  };
   const extractSpawnDirectives = () => {
     const spawnFieldPattern = /(?:^|\n)[^\S\n]*-[^\S\n]*(?:Spawn directive|spawn)[^\S\n]*[：:][^\S\n]*([^\n]+)/gi;
     const spawnValuePattern = (key, line) => {
@@ -113,29 +148,6 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     };
     return [...bodyForAutonomousGate.matchAll(spawnFieldPattern)].map((match) => parseSpawn(match[1] || ""));
   };
-  const extractDelegationFieldBody = (label) => {
-    const delegatedLabels = [
-      "Source issue delegation plan",
-      "Actual worker profile(s)",
-      "Task",
-      "Model strength",
-      "Spawn directive",
-      "Trivial/self-only exception reason",
-      "Evidence / verification",
-      "Worker session closeout",
-      "Workflow friction / follow-up split",
-      "Review conversation closeout",
-    ];
-    const pattern = new RegExp(
-      `(?:^|\\n)\\s*-\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:${delegatedLabels
-        .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-        .join("|")})\\s*[：:]|\\n\\s*##\\s|\\n*$)`,
-      "i",
-    );
-    const match = bodyForAutonomousGate.match(pattern);
-    return match?.[1] ?? "";
-  };
-
   const normalizeLine = (line) =>
     line
       .replace(/^\s*[-*]\s*/, "")
@@ -163,15 +175,31 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     "待補",
   ]);
   const isPlaceholderLine = (line) => placeholderValues.has(normalizePlaceholderValue(line));
+  const hasMeaningfulLine = (line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line);
+  const extractMeaningfulFieldLines = (label) =>
+    extractDelegationFieldBody(label)
+      .split("\n")
+      .map(normalizeLine)
+      .filter(Boolean);
+  const hasMeaningfulDelegationField = (label) => extractMeaningfulFieldLines(label).some((line) => hasMeaningfulLine(line));
+  const pendingInitialGatePattern =
+    /\b(?:pending|awaiting)\s+(?:initial|first)\s+(?:spec|merge|review|ci|gate|readback)\b|\binitial gate pending\b|待(?:補|跑|初次|首次).{0,8}(?:gate|讀回|驗證|證據)/i;
+  const isExplicitPendingInitialGate = (value) => pendingInitialGatePattern.test(value);
+  const parseKeyValueLines = (lines) =>
+    Object.fromEntries(
+      lines
+        .map((line) => {
+          const match = line.match(/^([A-Za-z0-9_.-]+)\s*[=:]\s*(.+)$/);
+          if (!match) return null;
+          return [match[1].trim().toLowerCase(), match[2].trim()];
+        })
+        .filter(Boolean),
+    );
   const trivialExceptionMatch = bodyForAutonomousGate.match(
     /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
   );
   const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim();
-  const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody("Trivial/self-only exception reason")
-    .split("\n")
-    .map(normalizeLine)
-    .filter(Boolean)
-    .some((line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line));
+  const hasMeaningfulTrivialExceptionField = hasMeaningfulDelegationField("Trivial/self-only exception reason");
   const hasTrivialExceptionReason =
     hasMeaningfulTrivialExceptionField ||
     (Boolean(trivialExceptionReason) && !placeholderValues.has(normalizePlaceholderValue(normalizeLine(trivialExceptionReason))));
@@ -181,15 +209,12 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     "Task",
     "Model strength",
     "Spawn directive",
+    "Controller fallback reason",
+    "Spec gate evidence",
+    "Final merge gate",
     "Trivial/self-only exception reason",
   ];
-  const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
-    extractDelegationFieldBody(label)
-      .split("\n")
-      .map(normalizeLine)
-      .filter(Boolean)
-      .some((line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
-  );
+  const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) => hasMeaningfulDelegationField(label));
   const spawnDirectives = extractSpawnDirectives();
   const hasSpawnDirective = spawnDirectives.length > 0;
   const hasSpawnModel = spawnDirectives.some((spawn) => spawn.model && !isPlaceholderLine(spawn.model));
@@ -243,6 +268,39 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     bodyForAutonomousGate.toLowerCase().includes(keyword.toLowerCase()),
   );
   const hasRoutineOpsDelegationWarning = autonomousDetected && hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason;
+  const controllerFallbackReasonLines = extractMeaningfulFieldLines("Controller fallback reason");
+  const hasControllerFallbackReasonField = controllerFallbackReasonLines.length > 0;
+  const hasMeaningfulControllerFallbackReason = controllerFallbackReasonLines.some((line) => hasMeaningfulLine(line));
+  const specGateEvidenceLines = extractMeaningfulFieldLines("Spec gate evidence");
+  const hasSpecGateEvidence = specGateEvidenceLines.length > 0;
+  const hasMeaningfulSpecGateEvidence =
+    specGateEvidenceLines.some((line) => hasMeaningfulLine(line)) &&
+    specGateEvidenceLines.some((line) => hasMeaningfulLine(line) || isExplicitPendingInitialGate(line));
+  const finalMergeGateLines = extractMeaningfulFieldLines("Final merge gate");
+  const hasFinalMergeGate = finalMergeGateLines.length > 0;
+  const finalMergeGateHasExplicitPendingInitialGate = finalMergeGateLines.some((line) => isExplicitPendingInitialGate(line));
+  const finalMergeGateKeyValues = parseKeyValueLines(finalMergeGateLines);
+  const finalMergeGateRequiredKeys = [
+    "latest_head_sha",
+    "unresolved_thread_count",
+    "spec_gate_status",
+    "evidence_urls",
+  ];
+  const hasFinalMergeGateRequiredKeys = finalMergeGateRequiredKeys.every((key) => {
+    const value = finalMergeGateKeyValues[key];
+    return Boolean(value) && (hasMeaningfulLine(value) || isExplicitPendingInitialGate(value));
+  });
+  const readyValue = finalMergeGateKeyValues.ready_to_merge ?? finalMergeGateKeyValues.merge_ready ?? "";
+  const finalMergeGateReadyFlag =
+    !readyValue ? "absent" : /^true$/i.test(readyValue) ? "true" : /^false$/i.test(readyValue) ? "false" : "other";
+  const unresolvedThreadCountValue = finalMergeGateKeyValues.unresolved_thread_count ?? "";
+  const finalMergeGateReadyWithResolvedThreadsOnly =
+    finalMergeGateReadyFlag !== "true" ||
+    (/^0$/i.test(unresolvedThreadCountValue) && !finalMergeGateHasExplicitPendingInitialGate);
+  const hasMeaningfulFinalMergeGate =
+    finalMergeGateLines.some((line) => hasMeaningfulLine(line)) &&
+    (finalMergeGateHasExplicitPendingInitialGate || hasFinalMergeGateRequiredKeys) &&
+    finalMergeGateReadyWithResolvedThreadsOnly;
   const reviewConversationCloseoutLines = extractSectionBody("Review conversation closeout")
     .split("\n")
     .map(normalizeLine)
@@ -266,6 +324,16 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     hasSpawnDirectiveWithModelReasoning,
     hasSpawnAllowedWithoutReason,
     hasRoutineOpsDelegationWarning,
+    hasControllerFallbackReasonField,
+    hasMeaningfulControllerFallbackReason,
+    hasSpecGateEvidence,
+    hasMeaningfulSpecGateEvidence,
+    hasFinalMergeGate,
+    hasMeaningfulFinalMergeGate,
+    hasFinalMergeGateRequiredKeys,
+    finalMergeGateReadyFlag,
+    finalMergeGateHasExplicitPendingInitialGate,
+    finalMergeGateReadyWithResolvedThreadsOnly,
     hasReviewConversationCloseout,
     hasMeaningfulReviewConversationCloseout,
   };
@@ -305,6 +373,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /const bodyForAutonomousGate = body\.replace\(\/<!--\[\\s\\S\]\*\?-->\//);
   assert.match(workflow, /const extractDelegationFieldBody = \(label\) =>/);
   assert.match(workflow, /hasDelegationExecutionLog/);
+  assert.match(workflow, /Controller fallback reason/);
+  assert.match(workflow, /Spec gate evidence/);
+  assert.match(workflow, /Final merge gate/);
   assert.match(workflow, /Worker session closeout/);
   assert.match(workflow, /Workflow friction \/ follow-up split/);
   assert.match(workflow, /hasMeaningfulDelegationExecutionLog/);
@@ -312,7 +383,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /const hasOpsSparkMention = bodyForAutonomousGate\.toLowerCase\(\)\.includes\('ops_spark'\)/);
   assert.match(workflow, /const routineOpsKeywords = \[/);
   assert.match(workflow, /hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason/);
-  assert.match(workflow, /const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody\('Trivial\/self-only exception reason'\)/);
+  assert.match(workflow, /const hasMeaningfulTrivialExceptionField = hasMeaningfulDelegationField\('Trivial\/self-only exception reason'\)/);
   assert.match(workflow, /Routine ops delegation hint: \$\{hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason \? 'missing ops_spark' : 'ok'\}/);
   assert.match(workflow, /spawnDirectives\.length > 0 &&/);
   assert.match(workflow, /spawnDirectives\.every\(/);
@@ -321,6 +392,16 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.doesNotMatch(workflow, /isPlaceholderLine\(spawn\.fallbackReason\)/);
   assert.match(workflow, /hasTrivialExceptionReason/);
   assert.match(workflow, /const normalizePlaceholderValue = \(value\) =>/);
+  assert.match(workflow, /pending initial gate/i);
+  assert.match(workflow, /latest_head_sha/);
+  assert.match(workflow, /unresolved_thread_count/);
+  assert.match(workflow, /spec_gate_status/);
+  assert.match(workflow, /evidence_urls/);
+  assert.match(workflow, /ready_to_merge/);
+  assert.match(workflow, /merge_ready/);
+  assert.match(workflow, /- Controller fallback reason: \$\{.+\}/);
+  assert.match(workflow, /- Spec gate evidence: \$\{.+\}/);
+  assert.match(workflow, /- Final merge gate: \$\{.+\}/);
   assert.match(workflow, /- Review conversation closeout present: \$\{hasReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /- Review conversation closeout meaningful: \$\{hasMeaningfulReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /hasMeaningfulReviewConversationCloseout/);
@@ -331,6 +412,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.doesNotMatch(workflow, /Scope police bypassed by scope-exception label\.'\)\n\s+return/);
   assert.match(workflow, /Autonomous PRs must include a `Delegation Execution Log` section\./);
   assert.match(workflow, /Autonomous PRs must name at least one worker profile or give an explicit trivial\/self-only exception reason\./);
+  assert.match(workflow, /Autonomous PRs must include a meaningful `Spec gate evidence` field\./);
+  assert.match(workflow, /Autonomous PRs must include a meaningful `Final merge gate` field\./);
+  assert.match(workflow, /Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
   assert.match(workflow, /Autonomous PRs with routine readback\/comment\/closeout or commit-push checklist work should delegate that slice to `ops_spark`/);
   assert.match(workflow, /'commit'/);
@@ -487,6 +571,16 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
     hasOpsSparkMention: false,
     hasRoutineOpsWork: true,
     hasRoutineOpsDelegationWarning: false,
+    hasControllerFallbackReasonField: false,
+    hasMeaningfulControllerFallbackReason: false,
+    hasSpecGateEvidence: false,
+    hasMeaningfulSpecGateEvidence: false,
+    hasFinalMergeGate: false,
+    hasMeaningfulFinalMergeGate: false,
+    hasFinalMergeGateRequiredKeys: false,
+    finalMergeGateReadyFlag: "absent",
+    finalMergeGateHasExplicitPendingInitialGate: false,
+    finalMergeGateReadyWithResolvedThreadsOnly: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: false,
   };
@@ -610,6 +704,16 @@ test("Autonomous PR closeout gate treats template bullets as meaningful only whe
         hasOpsSparkMention: false,
         hasRoutineOpsWork: false,
         hasRoutineOpsDelegationWarning: false,
+        hasControllerFallbackReasonField: false,
+        hasMeaningfulControllerFallbackReason: false,
+        hasSpecGateEvidence: false,
+        hasMeaningfulSpecGateEvidence: false,
+        hasFinalMergeGate: false,
+        hasMeaningfulFinalMergeGate: false,
+        hasFinalMergeGateRequiredKeys: false,
+        finalMergeGateReadyFlag: "absent",
+        finalMergeGateHasExplicitPendingInitialGate: false,
+        finalMergeGateReadyWithResolvedThreadsOnly: true,
         hasReviewConversationCloseout: false,
         hasMeaningfulReviewConversationCloseout: false,
       },
@@ -668,6 +772,16 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
     hasSpawnDirective: true,
     hasSpawnControllerFallback: true,
     hasSpawnDirectiveWithModelReasoning: true,
+    hasControllerFallbackReasonField: false,
+    hasMeaningfulControllerFallbackReason: false,
+    hasSpecGateEvidence: false,
+    hasMeaningfulSpecGateEvidence: false,
+    hasFinalMergeGate: false,
+    hasMeaningfulFinalMergeGate: false,
+    hasFinalMergeGateRequiredKeys: false,
+    finalMergeGateReadyFlag: "absent",
+    finalMergeGateHasExplicitPendingInitialGate: false,
+    finalMergeGateReadyWithResolvedThreadsOnly: true,
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
   };
@@ -744,6 +858,159 @@ test("Autonomous PR closeout gate enforces spawn model/reasoning rules", () => {
       : item;
     assertGate(name, body, labels, expected);
   }
+});
+
+test("Autonomous PR spec gate and final merge gate require meaningful evidence", () => {
+  const bodyWithAutonomousGates = ({
+    specGateEvidence = "pending initial spec gate: waiting for first CI readback",
+    finalMergeGate = [
+      "latest_head_sha=pending initial gate",
+      "unresolved_thread_count=pending initial gate",
+      "spec_gate_status=pending initial gate",
+      "evidence_urls=pending initial gate",
+    ].join("\n"),
+    reviewConversationCloseout = "已建立 closeout tracking，等待第一輪 reviewer / bot feedback",
+  } = {}) =>
+    makePrBody({
+      delegationRows: [
+        { label: "Source issue delegation plan", value: "#123" },
+        { label: "Actual worker profile(s)", value: "ops_spark" },
+        { label: "Task", value: "ops_spark: CI readback and PR evidence upkeep" },
+        {
+          label: "Spawn directive",
+          value: "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed",
+        },
+        { label: "Spec gate evidence", value: specGateEvidence },
+        { label: "Final merge gate", value: finalMergeGate },
+        { label: "Review conversation closeout", value: reviewConversationCloseout },
+      ],
+    });
+
+  assertGate("missing spec gate evidence", bodyWithAutonomousGates({ specGateEvidence: "n/a" }), ["codex"], {
+    autonomousDetected: true,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasOpsSparkMention: true,
+    hasRoutineOpsWork: true,
+    hasSpawnDirective: true,
+    hasSpawnModel: true,
+    hasSpawnReasoning: true,
+    hasSpawnControllerFallback: true,
+    hasSpawnDirectiveWithModelReasoning: true,
+    hasRoutineOpsDelegationWarning: false,
+    hasSpecGateEvidence: true,
+    hasMeaningfulSpecGateEvidence: false,
+    hasFinalMergeGate: true,
+    hasMeaningfulFinalMergeGate: true,
+    hasFinalMergeGateRequiredKeys: true,
+    finalMergeGateReadyFlag: "absent",
+    finalMergeGateHasExplicitPendingInitialGate: true,
+    finalMergeGateReadyWithResolvedThreadsOnly: true,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: true,
+  });
+
+  assertGate("missing final merge gate evidence", bodyWithAutonomousGates({ finalMergeGate: "n/a" }), ["codex"], {
+    autonomousDetected: true,
+    hasDelegationExecutionLog: true,
+    hasMeaningfulDelegationExecutionLog: true,
+    hasOpsSparkMention: true,
+    hasRoutineOpsWork: true,
+    hasSpawnDirective: true,
+    hasSpawnModel: true,
+    hasSpawnReasoning: true,
+    hasSpawnControllerFallback: true,
+    hasSpawnDirectiveWithModelReasoning: true,
+    hasRoutineOpsDelegationWarning: false,
+    hasSpecGateEvidence: true,
+    hasMeaningfulSpecGateEvidence: true,
+    hasFinalMergeGate: true,
+    hasMeaningfulFinalMergeGate: false,
+    hasFinalMergeGateRequiredKeys: false,
+    finalMergeGateReadyFlag: "absent",
+    finalMergeGateHasExplicitPendingInitialGate: false,
+    finalMergeGateReadyWithResolvedThreadsOnly: true,
+    hasReviewConversationCloseout: true,
+    hasMeaningfulReviewConversationCloseout: true,
+  });
+
+  assertGate(
+    "ready gate fails when unresolved threads are non-zero",
+    bodyWithAutonomousGates({
+      specGateEvidence: "spec validate=pass; evidence_url=https://example.com/spec/1",
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=2",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/1",
+        "ready_to_merge=true",
+      ].join("\n"),
+      reviewConversationCloseout: "已整理 open thread，仍待兩則 reviewer finding closeout",
+    }),
+    ["auto-ready"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: false,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: false,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    },
+  );
+
+  assertGate(
+    "ready gate passes when unresolved threads are zero",
+    bodyWithAutonomousGates({
+      specGateEvidence: "spec validate=pass; evidence_url=https://example.com/spec/2",
+      finalMergeGate: [
+        "latest_head_sha=def5678",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/2,https://example.com/check/2",
+        "merge_ready=true",
+      ].join("\n"),
+      reviewConversationCloseout: "所有 actionable finding 已 comment/resolve，readback 與 head 一致",
+    }),
+    ["auto-ready"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    },
+  );
 });
 
 test("Autonomous PR routine ops work warns when ops_spark is missing", () => {

@@ -72,8 +72,11 @@ jobs:
                 'Task',
                 'Model strength',
                 'Spawn directive',
+                'Controller fallback reason',
                 'Trivial/self-only exception reason',
                 'Evidence / verification',
+                'Spec gate evidence',
+                'Final merge gate',
                 'Worker session closeout',
                 'Workflow friction / follow-up split',
                 'Review conversation closeout',
@@ -117,6 +120,28 @@ jobs:
               '待補',
             ])
             const isPlaceholderCloseoutLine = (line) => placeholderValues.has(normalizePlaceholderValue(line))
+            const hasMeaningfulSectionLine = (line) =>
+              !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)
+            const extractMeaningfulDelegationFieldLines = (label) =>
+              extractDelegationFieldBody(label)
+                .split('\n')
+                .map(normalizeSectionLine)
+                .filter(Boolean)
+            const hasMeaningfulDelegationField = (label) =>
+              extractMeaningfulDelegationFieldLines(label).some((line) => hasMeaningfulSectionLine(line))
+            const pendingInitialGatePattern =
+              /\b(?:pending|awaiting)\s+(?:initial|first)\s+(?:spec|merge|review|ci|gate|readback)\b|\binitial gate pending\b|待(?:補|跑|初次|首次).{0,8}(?:gate|讀回|驗證|證據)/i
+            const isExplicitPendingInitialGate = (value) => pendingInitialGatePattern.test(value)
+            const parseKeyValueLines = (lines) =>
+              Object.fromEntries(
+                lines
+                  .map((line) => {
+                    const match = line.match(/^([A-Za-z0-9_.-]+)\s*[=:]\s*(.+)$/)
+                    if (!match) return null
+                    return [match[1].trim().toLowerCase(), match[2].trim()]
+                  })
+                  .filter(Boolean),
+              )
             const extractSpawnDirectives = () => {
               const spawnFieldPattern = /(?:^|\n)[^\S\n]*-[^\S\n]*(?:Spawn directive|spawn)[^\S\n]*[：:][^\S\n]*([^\n]+)/gi
               const spawnValuePattern = (key, line) => {
@@ -165,14 +190,13 @@ jobs:
               'Task',
               'Model strength',
               'Spawn directive',
+              'Controller fallback reason',
+              'Spec gate evidence',
+              'Final merge gate',
               'Trivial/self-only exception reason',
             ]
             const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
-              extractDelegationFieldBody(label)
-                .split('\n')
-                .map(normalizeSectionLine)
-                .filter(Boolean)
-                .some((line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line)),
+              hasMeaningfulDelegationField(label),
             )
             const hasSpawnReasoning = spawnDirectives.some(
               (spawn) =>
@@ -231,15 +255,56 @@ jobs:
               /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
             )
             const trivialExceptionReason = trivialExceptionMatch?.[1]?.trim()
-            const hasMeaningfulTrivialExceptionField = extractDelegationFieldBody('Trivial/self-only exception reason')
-              .split('\n')
-              .map(normalizeSectionLine)
-              .filter(Boolean)
-              .some((line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line))
+            const hasMeaningfulTrivialExceptionField = hasMeaningfulDelegationField('Trivial/self-only exception reason')
             const hasTrivialExceptionReason =
               hasMeaningfulTrivialExceptionField ||
               (Boolean(trivialExceptionReason) &&
                 !placeholderValues.has(normalizePlaceholderValue(normalizeSectionLine(trivialExceptionReason))))
+            const controllerFallbackReasonLines = extractMeaningfulDelegationFieldLines('Controller fallback reason')
+            const hasControllerFallbackReasonField = controllerFallbackReasonLines.length > 0
+            const hasMeaningfulControllerFallbackReason = controllerFallbackReasonLines.some((line) =>
+              hasMeaningfulSectionLine(line),
+            )
+            const specGateEvidenceLines = extractMeaningfulDelegationFieldLines('Spec gate evidence')
+            const hasSpecGateEvidence = specGateEvidenceLines.length > 0
+            const hasMeaningfulSpecGateEvidence =
+              specGateEvidenceLines.some((line) => hasMeaningfulSectionLine(line)) &&
+              specGateEvidenceLines.some(
+                (line) => hasMeaningfulSectionLine(line) || isExplicitPendingInitialGate(line),
+              )
+            const finalMergeGateLines = extractMeaningfulDelegationFieldLines('Final merge gate')
+            const hasFinalMergeGate = finalMergeGateLines.length > 0
+            const finalMergeGateHasExplicitPendingInitialGate = finalMergeGateLines.some((line) =>
+              isExplicitPendingInitialGate(line),
+            )
+            const finalMergeGateKeyValues = parseKeyValueLines(finalMergeGateLines)
+            const finalMergeGateRequiredKeys = [
+              'latest_head_sha',
+              'unresolved_thread_count',
+              'spec_gate_status',
+              'evidence_urls',
+            ]
+            const hasFinalMergeGateRequiredKeys = finalMergeGateRequiredKeys.every((key) => {
+              const value = finalMergeGateKeyValues[key]
+              return Boolean(value) && (hasMeaningfulSectionLine(value) || isExplicitPendingInitialGate(value))
+            })
+            const finalMergeGateReadyValue =
+              finalMergeGateKeyValues.ready_to_merge ?? finalMergeGateKeyValues.merge_ready ?? ''
+            const finalMergeGateReadyFlag = !finalMergeGateReadyValue
+              ? 'absent'
+              : /^true$/i.test(finalMergeGateReadyValue)
+                ? 'true'
+                : /^false$/i.test(finalMergeGateReadyValue)
+                  ? 'false'
+                  : 'other'
+            const finalMergeGateReadyWithResolvedThreadsOnly =
+              finalMergeGateReadyFlag !== 'true' ||
+              (/^0$/i.test(finalMergeGateKeyValues.unresolved_thread_count ?? '') &&
+                !finalMergeGateHasExplicitPendingInitialGate)
+            const hasMeaningfulFinalMergeGate =
+              finalMergeGateLines.some((line) => hasMeaningfulSectionLine(line)) &&
+              (finalMergeGateHasExplicitPendingInitialGate || hasFinalMergeGateRequiredKeys) &&
+              finalMergeGateReadyWithResolvedThreadsOnly
             const routineOpsKeywords = [
               'readback',
               'ci status',
@@ -345,6 +410,20 @@ jobs:
                 )
               }
 
+              if (!hasMeaningfulSpecGateEvidence) {
+                failures.push('Autonomous PRs must include a meaningful `Spec gate evidence` field.')
+              }
+
+              if (!hasMeaningfulFinalMergeGate) {
+                failures.push('Autonomous PRs must include a meaningful `Final merge gate` field.')
+              }
+
+              if (!finalMergeGateReadyWithResolvedThreadsOnly) {
+                failures.push(
+                  'Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders.',
+                )
+              }
+
               if (!hasMeaningfulReviewConversationCloseout) {
                 failures.push('Autonomous PRs must include a meaningful `Review conversation closeout` field.')
               }
@@ -426,7 +505,24 @@ jobs:
             summaryLines.push(`- Spawn model present: ${hasSpawnModel ? 'yes' : 'no'}`)
             summaryLines.push(`- Spawn reasoning present: ${hasSpawnReasoning ? 'yes' : 'no'}`)
             summaryLines.push(`- Spawn controller_fallback present: ${hasSpawnControllerFallback ? 'yes' : 'no'}`)
+            summaryLines.push(
+              `- Controller fallback reason: ${!hasControllerFallbackReasonField ? 'missing' : hasMeaningfulControllerFallbackReason ? 'meaningful' : 'placeholder'}`,
+            )
             summaryLines.push(`- Routine ops delegation hint: ${hasRoutineOpsWork && !hasOpsSparkMention && !hasTrivialExceptionReason ? 'missing ops_spark' : 'ok'}`)
+            summaryLines.push(
+              `- Spec gate evidence: ${!hasSpecGateEvidence ? 'missing' : hasMeaningfulSpecGateEvidence ? 'meaningful' : 'placeholder'}`,
+            )
+            summaryLines.push(
+              `- Final merge gate: ${!hasFinalMergeGate ? 'missing' : hasMeaningfulFinalMergeGate ? 'meaningful' : 'invalid'}`,
+            )
+            summaryLines.push(`- Final merge gate required keys: ${hasFinalMergeGateRequiredKeys ? 'present' : 'missing'}`)
+            summaryLines.push(`- Final merge gate ready flag: ${finalMergeGateReadyFlag}`)
+            summaryLines.push(
+              `- Final merge gate pending-initial-gate marker: ${finalMergeGateHasExplicitPendingInitialGate ? 'yes' : 'no'}`,
+            )
+            summaryLines.push(
+              `- Final merge gate ready-thread rule: ${finalMergeGateReadyWithResolvedThreadsOnly ? 'ok' : 'blocked'}`,
+            )
             summaryLines.push(`- Review conversation closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push(`- Review conversation closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')

@@ -16,6 +16,8 @@ Depends on PR: <!-- `none` 或 `#123` -->
   - <!-- 例：controller / docs_worker / ops_spark；routine readback / CI status / PR comment 整理 / review closeout evidence 預設要列出 ops_spark -->
 <!-- autonomous PR 的 Spawn directive 必須填在欄位同一行；多個 worker 請重複此欄位。格式：profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed|allowed>。非 autonomous human PR 可填 n/a。 -->
 - Spawn directive:
+- Controller fallback reason:
+  - <!-- 若有任何 worker 使用 controller_fallback=allowed，必填原因；否則填 n/a -->
 - Task:
   - <!-- 每個 worker 實際負責的切片；請把 GitHub readback、CI status、PR body/comment cleanup、review closeout evidence、pre-commit checklist、post-push readback 拆成獨立 ops_spark slice -->
 - Model strength:
@@ -24,12 +26,16 @@ Depends on PR: <!-- `none` 或 `#123` -->
   - <!-- 若無例外請填 n/a -->
 - Evidence / verification:
   - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；commit SHA；push branch；PR head SHA；CI/check/review/thread readback 摘要；若 git write 由 controller 執行，記錄原因與 ops_spark checklist/readback -->
+- Spec gate evidence:
+  - <!-- 請填 start-of-work / pre-commit / pre-merge 的 `spec validate --repo .` 結果；若未使用 spec-injector，填 `not using spec-injector`，並補 manual checklist 範圍、檢查時間點、剩餘風險。不得提交 `.spec-injector/` 或 generated output。未來若接上 `spec workflow-check`，也請記在此欄。 -->
 - Worker session closeout:
   - <!-- 例：已讀回 worker 結果，不需追加任務的 worker session 已 close；若 close_agent 失敗，列出 handle、重試次數與 fallback 紀錄 -->
 - Workflow friction / follow-up split:
   - <!-- autonomous PR 請說明本次約 40% infra 複雜 / 約 60% 工作流摩擦中，哪些已由 routing / closeout / lifecycle / follow-up issue 收斂；非 autonomous PR 可填 n/a -->
 - Review conversation closeout:
   - <!-- autonomous: 請填 latest_head_sha、ci_check_summary、coderabbit_status、codex_connector_status、unresolved_thread_count、finding_disposition、evidence_urls；若 metadata rerun，請註明是否用新的 PR edited/labeled event，不要只 rerun 舊 payload。非 autonomous human PR 填 n/a -->
+- Final merge gate:
+  - <!-- 只在 merge-ready 且 evidence 穩定時更新一次。初始 PR 請先用 key=value 填 `pending initial gate`，例如 latest_head_sha=pending initial gate、unresolved_thread_count=pending initial gate、spec_gate_status=pending initial gate、evidence_urls=pending initial gate。最終 closeout 請改成 latest_head_sha、ci_check_summary、coderabbit_status、codex_connector_status、unresolved_thread_count、finding_disposition、evidence_urls、spec_gate_status、worker_sessions_closed、pr_body_pending_status，並加 ready_to_merge=true 或 merge_ready=true；ready 時 unresolved_thread_count 必須是 0，且不得留下 pending initial gate。不要反覆覆寫 final 結論。 -->
 
 ## Validation
 - [ ] 本地測試過
