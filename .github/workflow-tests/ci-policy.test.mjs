@@ -182,9 +182,18 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       .map(normalizeLine)
       .filter(Boolean);
   const hasMeaningfulDelegationField = (label) => extractMeaningfulFieldLines(label).some((line) => hasMeaningfulLine(line));
-  const pendingInitialGatePattern =
-    /\b(?:pending|awaiting)\s+(?:initial|first)\s+(?:spec|merge|review|ci|gate|readback)\b|\binitial gate pending\b|待(?:補|跑|初次|首次).{0,8}(?:gate|讀回|驗證|證據)/i;
-  const isExplicitPendingInitialGate = (value) => pendingInitialGatePattern.test(value);
+  const normalizePendingInitialGateValue = (value) => value.trim().toLowerCase().replace(/\s+/g, " ");
+  const explicitPendingInitialGateValues = new Set([
+    "pending initial gate",
+    "pending initial spec gate: waiting for first ci readback",
+    "awaiting initial ci readback",
+  ]);
+  const explicitPendingInitialGateKeyPattern =
+    /^(?:latest_head_sha|unresolved_thread_count|spec_gate_status|evidence_urls)\s*[=:]\s*pending initial gate$/i;
+  const isExplicitPendingInitialGate = (value) => {
+    const normalized = normalizePendingInitialGateValue(value);
+    return explicitPendingInitialGateValues.has(normalized) || explicitPendingInitialGateKeyPattern.test(normalized);
+  };
   const parseKeyValueLines = (lines) =>
     Object.fromEntries(
       lines
@@ -1044,6 +1053,85 @@ test("Autonomous PR spec gate and final merge gate require meaningful evidence",
       finalMergeGateReadyFlag: "true",
       finalMergeGateHasExplicitPendingInitialGate: false,
       finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    },
+  );
+
+  assertGate(
+    "ready gate ignores cleared pending marker status text",
+    bodyWithAutonomousGates({
+      specGateEvidence: "spec validate=pass; evidence_url=https://example.com/spec/3",
+      finalMergeGate: [
+        "latest_head_sha=ghi9012",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/3",
+        "ready_to_merge=true",
+        "pr_body_pending_status=no pending initial gate remains in final closeout",
+      ].join("\n"),
+      reviewConversationCloseout: "final closeout 已清除 pending marker，threads 與 readback 皆完成",
+    }),
+    ["auto-ready"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+    },
+  );
+
+  assertGate(
+    "ready gate still fails with explicit pending initial gate placeholder",
+    bodyWithAutonomousGates({
+      specGateEvidence: "spec validate=pass; evidence_url=https://example.com/spec/4",
+      finalMergeGate: [
+        "latest_head_sha=pending initial gate",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/4",
+        "ready_to_merge=true",
+      ].join("\n"),
+      reviewConversationCloseout: "CI pass 但 final closeout 尚未補最新 head readback",
+    }),
+    ["auto-ready"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: false,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: true,
+      finalMergeGateReadyWithResolvedThreadsOnly: false,
       hasReviewConversationCloseout: true,
       hasMeaningfulReviewConversationCloseout: true,
     },

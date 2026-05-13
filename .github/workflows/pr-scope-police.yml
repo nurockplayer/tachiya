@@ -129,9 +129,18 @@ jobs:
                 .filter(Boolean)
             const hasMeaningfulDelegationField = (label) =>
               extractMeaningfulDelegationFieldLines(label).some((line) => hasMeaningfulSectionLine(line))
-            const pendingInitialGatePattern =
-              /\b(?:pending|awaiting)\s+(?:initial|first)\s+(?:spec|merge|review|ci|gate|readback)\b|\binitial gate pending\b|待(?:補|跑|初次|首次).{0,8}(?:gate|讀回|驗證|證據)/i
-            const isExplicitPendingInitialGate = (value) => pendingInitialGatePattern.test(value)
+            const normalizePendingInitialGateValue = (value) => value.trim().toLowerCase().replace(/\s+/g, ' ')
+            const explicitPendingInitialGateValues = new Set([
+              'pending initial gate',
+              'pending initial spec gate: waiting for first ci readback',
+              'awaiting initial ci readback',
+            ])
+            const explicitPendingInitialGateKeyPattern =
+              /^(?:latest_head_sha|unresolved_thread_count|spec_gate_status|evidence_urls)\s*[=:]\s*pending initial gate$/i
+            const isExplicitPendingInitialGate = (value) => {
+              const normalized = normalizePendingInitialGateValue(value)
+              return explicitPendingInitialGateValues.has(normalized) || explicitPendingInitialGateKeyPattern.test(normalized)
+            }
             const parseKeyValueLines = (lines) =>
               Object.fromEntries(
                 lines
