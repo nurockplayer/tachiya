@@ -366,15 +366,21 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   const hasThresholdFollowUp = thresholdFollowUpLines.length > 0;
   const hasMeaningfulThresholdFollowUp = thresholdFollowUpLines.some((line) => hasMeaningfulLine(line));
   const thresholdFollowUpKeyValues = parseKeyValueLines(thresholdFollowUpLines);
-  const thresholdFollowUpValue = thresholdFollowUpLines.join(" ").toLowerCase();
+  const normalizedThresholdFollowUpStatus = normalizePlaceholderValue(thresholdFollowUpKeyValues.status ?? "");
+  const normalizedThresholdFollowUpNeeded = normalizePlaceholderValue(thresholdFollowUpKeyValues.threshold_followup_needed ?? "");
+  const normalizedCalibrationThresholdFollowUpNeeded = normalizePlaceholderValue(
+    calibrationDataKeyValues.threshold_followup_needed ?? "",
+  );
+  const isThresholdFollowUpNeededValue = (value) => /^(yes|true|needed)$/i.test(value);
   const thresholdFollowUpNeedsEvidence =
-    normalizePlaceholderValue(thresholdFollowUpKeyValues.status ?? "") === "open_followup" ||
-    /^(yes|true|needed)$/i.test(normalizePlaceholderValue(thresholdFollowUpKeyValues.threshold_followup_needed ?? "")) ||
-    /(?:^|\b)(yes|true|needed)(?:\b|$)/i.test(thresholdFollowUpValue);
-  const hasThresholdFollowUpEvidence = thresholdFollowUpLines.some((line) => /https?:\/\/\S+|#\d+\b/i.test(line));
-  const thresholdFollowUpStatus = !hasThresholdFollowUp
+    normalizedThresholdFollowUpStatus === "open_followup" ||
+    isThresholdFollowUpNeededValue(normalizedThresholdFollowUpNeeded) ||
+    isThresholdFollowUpNeededValue(normalizedCalibrationThresholdFollowUpNeeded);
+  const thresholdFollowUpEvidenceLines = [...thresholdFollowUpLines, ...calibrationDataLines];
+  const hasThresholdFollowUpEvidence = thresholdFollowUpEvidenceLines.some((line) => /https?:\/\/\S+|#\d+\b/i.test(line));
+  const thresholdFollowUpStatus = !hasThresholdFollowUp && !thresholdFollowUpNeedsEvidence
     ? "absent"
-    : !hasMeaningfulThresholdFollowUp
+    : !hasMeaningfulThresholdFollowUp && !thresholdFollowUpNeedsEvidence
       ? "placeholder"
       : !thresholdFollowUpNeedsEvidence
         ? "not-needed"
@@ -509,7 +515,10 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs must include a meaningful `Threshold decision` field\./);
   assert.match(workflow, /Autonomous PRs must include meaningful `Calibration data` with `spawn_count`, `ci_rerun_count`, `review_thread_count`, `rework_reason`, `threshold_decision`, and `threshold_followup_needed`\./);
   assert.match(workflow, /Autonomous PRs that signal direct execution via `controller_direct`, `trivial_direct`, `no_worker`, `decision=\.\.\.`, or `threshold_decision=\.\.\.` must include a meaningful trivial\/self-only exception or Controller fallback reason\./);
-  assert.match(workflow, /Autonomous PRs with `Threshold follow-up` set to `status=open_followup` or `threshold_followup_needed=yes\|true\|needed` must include issue or PR evidence such as `#123` or a URL\./);
+  assert.match(
+    workflow,
+    /Autonomous PRs with `Threshold follow-up` or `Calibration data` indicating `status=open_followup` or `threshold_followup_needed=yes\|true\|needed` must include issue or PR evidence such as `#123` or a URL\./,
+  );
   assert.match(workflow, /Autonomous PRs with routine readback\/comment\/closeout or commit-push checklist work should delegate that slice to `ops_spark`/);
   assert.match(workflow, /'commit'/);
   assert.match(workflow, /'push'/);
@@ -1598,6 +1607,165 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
       hasMeaningfulThresholdFollowUp: true,
       thresholdFollowUpStatus: "linked",
       hasThresholdFollowUpEvidence: true,
+    },
+  );
+
+  assertGate(
+    "threshold follow-up trigger can come from calibration data when evidence lives in threshold follow-up",
+    bodyWithThresholdGate({
+      calibrationData: [
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=yes",
+      ].join("\n"),
+      thresholdFollowUp: "status=no_change\nfollowup_issue=#370",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: true,
+      hasCalibrationRequiredKeys: true,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "linked",
+      hasThresholdFollowUpEvidence: true,
+    },
+  );
+
+  assertGate(
+    "threshold follow-up trigger from calibration data still fails without evidence",
+    bodyWithThresholdGate({
+      calibrationData: [
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=true",
+      ].join("\n"),
+      thresholdFollowUp: "status=no_change\nfollowup_issue=none",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: true,
+      hasCalibrationRequiredKeys: true,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "missing-evidence",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "threshold follow-up does not need evidence when calibration says no and status stays no_change",
+    bodyWithThresholdGate({
+      calibrationData: [
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=false",
+      ].join("\n"),
+      thresholdFollowUp: "status=no_change\nthreshold_followup_needed=no\nfollowup_issue=none",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: true,
+      hasCalibrationRequiredKeys: true,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
     },
   );
 

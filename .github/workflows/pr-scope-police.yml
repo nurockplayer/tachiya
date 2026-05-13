@@ -352,15 +352,25 @@ jobs:
             const hasThresholdFollowUp = thresholdFollowUpLines.length > 0
             const hasMeaningfulThresholdFollowUp = thresholdFollowUpLines.some((line) => hasMeaningfulSectionLine(line))
             const thresholdFollowUpKeyValues = parseKeyValueLines(thresholdFollowUpLines)
-            const thresholdFollowUpValue = thresholdFollowUpLines.join(' ').toLowerCase()
+            const normalizedThresholdFollowUpStatus = normalizePlaceholderValue(thresholdFollowUpKeyValues.status ?? '')
+            const normalizedThresholdFollowUpNeeded = normalizePlaceholderValue(
+              thresholdFollowUpKeyValues.threshold_followup_needed ?? '',
+            )
+            const normalizedCalibrationThresholdFollowUpNeeded = normalizePlaceholderValue(
+              calibrationDataKeyValues.threshold_followup_needed ?? '',
+            )
+            const isThresholdFollowUpNeededValue = (value) => /^(yes|true|needed)$/i.test(value)
             const thresholdFollowUpNeedsEvidence =
-              normalizePlaceholderValue(thresholdFollowUpKeyValues.status ?? '') === 'open_followup' ||
-              /^(yes|true|needed)$/i.test(normalizePlaceholderValue(thresholdFollowUpKeyValues.threshold_followup_needed ?? '')) ||
-              /(?:^|\b)(yes|true|needed)(?:\b|$)/i.test(thresholdFollowUpValue)
-            const hasThresholdFollowUpEvidence = thresholdFollowUpLines.some((line) => /https?:\/\/\S+|#\d+\b/i.test(line))
-            const thresholdFollowUpStatus = !hasThresholdFollowUp
+              normalizedThresholdFollowUpStatus === 'open_followup' ||
+              isThresholdFollowUpNeededValue(normalizedThresholdFollowUpNeeded) ||
+              isThresholdFollowUpNeededValue(normalizedCalibrationThresholdFollowUpNeeded)
+            const thresholdFollowUpEvidenceLines = [...thresholdFollowUpLines, ...calibrationDataLines]
+            const hasThresholdFollowUpEvidence = thresholdFollowUpEvidenceLines.some((line) =>
+              /https?:\/\/\S+|#\d+\b/i.test(line),
+            )
+            const thresholdFollowUpStatus = !hasThresholdFollowUp && !thresholdFollowUpNeedsEvidence
               ? 'absent'
-              : !hasMeaningfulThresholdFollowUp
+              : !hasMeaningfulThresholdFollowUp && !thresholdFollowUpNeedsEvidence
                 ? 'placeholder'
                 : !thresholdFollowUpNeedsEvidence
                   ? 'not-needed'
@@ -508,7 +518,7 @@ jobs:
 
               if (thresholdFollowUpNeedsEvidence && !hasThresholdFollowUpEvidence) {
                 failures.push(
-                  'Autonomous PRs with `Threshold follow-up` set to `status=open_followup` or `threshold_followup_needed=yes|true|needed` must include issue or PR evidence such as `#123` or a URL.',
+                  'Autonomous PRs with `Threshold follow-up` or `Calibration data` indicating `status=open_followup` or `threshold_followup_needed=yes|true|needed` must include issue or PR evidence such as `#123` or a URL.',
                 )
               }
 
