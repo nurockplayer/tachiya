@@ -165,14 +165,15 @@ jobs:
               const hasField = lines.length > 0
               const hasMeaningfulField = lines.some((line) => hasMeaningfulSectionLine(line))
               const joined = lines.join('\n')
+              const hasReadyRef = evidenceRefPattern.test(joined) || evidenceRefFallbackPattern.test(joined)
               const status = !hasField
                 ? 'missing'
                 : !hasMeaningfulField
                   ? 'placeholder'
-                  : evidenceRefPendingPattern.test(joined)
-                    ? 'pending'
-                    : evidenceRefPattern.test(joined) || evidenceRefFallbackPattern.test(joined)
-                      ? 'ready'
+                  : hasReadyRef
+                    ? 'ready'
+                    : evidenceRefPendingPattern.test(joined)
+                      ? 'pending'
                       : 'invalid'
               return { hasField, hasMeaningfulField, status }
             }

@@ -241,14 +241,15 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     const hasField = lines.length > 0;
     const hasMeaningfulField = lines.some((line) => hasMeaningfulLine(line));
     const joined = lines.join("\n");
+    const hasReadyRef = evidenceRefPattern.test(joined) || evidenceRefFallbackPattern.test(joined);
     const status = !hasField
       ? "missing"
       : !hasMeaningfulField
         ? "placeholder"
-        : evidenceRefPendingPattern.test(joined)
-          ? "pending"
-          : evidenceRefPattern.test(joined) || evidenceRefFallbackPattern.test(joined)
-            ? "ready"
+        : hasReadyRef
+          ? "ready"
+          : evidenceRefPendingPattern.test(joined)
+            ? "pending"
             : "invalid";
     return { hasField, hasMeaningfulField, status };
   };
@@ -2486,6 +2487,24 @@ test("AWP review triage refs gate covers autonomous and non-autonomous paths", (
     });
 
   assert.deepEqual(evaluateAutonomousCloseoutFailures({ body: baseBody(), labels: ["codex"] }), []);
+
+  assert.equal(
+    evaluateAutonomousCloseoutGate({
+      body: baseBody({ reviewTriageRef: "pending initial gate: waiting for first CodeRabbit triage readback" }),
+      labels: ["codex"],
+    }).reviewTriageRefStatus,
+    "pending",
+  );
+
+  assert.equal(
+    evaluateAutonomousCloseoutGate({
+      body: baseBody({
+        reviewTriageRef: "fallback=manual-self-review pending until closeout evidence lands",
+      }),
+      labels: ["codex"],
+    }).reviewTriageRefStatus,
+    "ready",
+  );
 
   assert.deepEqual(
     evaluateAutonomousCloseoutFailures({
