@@ -340,12 +340,15 @@ jobs:
               calibrationDataKeyValues.ledger_ref ??
               calibrationDataKeyValues.threshold_calibration_ref ??
               ''
-            const hasThresholdLedgerRef = /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375\b|not_needed|pending)/i.test(
-              thresholdLedgerRefValue,
-            )
+            const thresholdLedgerRefPattern =
+              /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i
+            const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue)
+            const hasPendingThresholdLedgerRef = /(?:^|[\s,;])pending(?:$|[\s,;])/i.test(thresholdLedgerRefValue)
+            const hasReadyThresholdLedgerRef =
+              hasThresholdLedgerRef && !(finalMergeGateReadyFlag === 'true' && hasPendingThresholdLedgerRef)
             const hasMeaningfulCalibrationData =
               calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) &&
-              (hasCalibrationRequiredKeys || hasThresholdLedgerRef)
+              (hasCalibrationRequiredKeys || hasReadyThresholdLedgerRef)
             const directExecutionDecisionValues = new Set(['controller_direct', 'trivial_direct', 'no_worker'])
             const directExecutionSignalPattern =
               /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i

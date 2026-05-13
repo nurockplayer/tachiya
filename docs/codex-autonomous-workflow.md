@@ -45,9 +45,9 @@ Start Dialog 必須在正式讀碼、拆 task、開 issue、寫 PR body 或實�
 |---|---|---|
 | Source issue / source of truth | GitHub issue、PR、或明確文件 ref，例如 `#375`、`#376` | 沒有 source of truth，或 source 不涵蓋本次 scope |
 | Autonomous PR | `yes` / `no`；若 `yes`，必須走 delegation gate | 標成 autonomous 但沒有 delegation plan |
-| Worker routing plan | 至少一筆 `profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed|allowed>` | routine readback / PR metadata / CI closeout 沒有安排 `ops_spark` 或同級 worker |
+| Worker routing plan | 至少一筆 `profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed\|allowed>` | routine readback / PR metadata / CI closeout 沒有安排 `ops_spark` 或同級 worker |
 | Spawn directives | 每個 worker 一筆 spawn directive；若不 spawn，必須填 `Trivial/self-only exception reason` | 缺 model、reasoning、controller_fallback，或 fallback allowed 但沒有 reason |
-| controller_fallback_reason | `n/a`，或 `fallback_reason=<category>: <why>; impact=<decision>; evidence=<url|sha|command>` | controller 取代 worker 但沒有可審核原因 |
+| controller_fallback_reason | `n/a`，或 `fallback_reason=<category>: <why>; impact=<decision>; evidence=<url\|sha\|command>` | controller 取代 worker 但沒有可審核原因 |
 | spec_gate_status | `spec_validate_pass`、`manual_checklist`、`not_using_spec`、`blocked` | `blocked`、未知、或說使用 spec 但沒有 local-only evidence |
 | spec_evidence_ref | issue comment、PR comment、local note summary；只放 status/ref，不放 private output | ref 缺失，或要求提交 `.spec-injector/` / generated output |
 | threshold ledger plan | `will_comment_#375`、`not_needed`、`blocked`，並說明是否會在 #375 留 comment | 需要 calibration 但沒有 #375 ledger plan，或試圖把 metrics 改塞 PR body |
@@ -107,7 +107,7 @@ Merge Gate Dialog 是最後一道 merge 前檢查。任何欄位為 `pending`、
 | unresolved_thread_count | `0` | 非 0、unknown、或未讀完整 pagination |
 | spec_gate_status | `spec_validate_pass`、`manual_checklist`、`not_using_spec` | `blocked`、pending、unknown |
 | spec_evidence_ref | PR comment、issue comment、local note summary；只放 status/ref | 缺 ref，或 ref 指向不可公開/private output |
-| threshold_ledger_ref | #375 issue/comment URL、`not_needed`，或明確 pending blocker | 需要 ledger 但沒有 #375 ref |
+| threshold_ledger_ref | #375 issue/comment URL、`not_needed`，或明確 pending blocker；若 `ready_to_merge=true` 不可再填 `pending` | 需要 ledger 但沒有 #375 ref，或 merge gate ready 後仍是 pending |
 | final PR body update | `updated_once_after_stable_evidence` 或 `not_needed` | final gate 反覆更新、仍有 pending placeholder |
 
 Final merge gate 建議輸出：
@@ -260,16 +260,23 @@ Threshold calibration v2 的目的不是把所有工作都升級成高推理，�
 
 #### 6. Calibration data fields
 
-每張 autonomous PR 都必須在 `Calibration data` 用 key=value 記錄下列欄位：
+新 autonomous PR 的 `Calibration data` 以 key=value 記錄精簡 contract 即可：
 
-- `spawn_count`：本 PR 實際開了幾個 worker / subagent。
-- `ci_rerun_count`：因 CI、metadata rerun、或 required check 再跑的次數。
-- `review_thread_count`：closeout 時仍需處理或已處理的 review thread 總數。
-- `rework_reason`：若有重做、補派 worker、或重寫 PR body/comment，寫最主要原因；無則填 `none`。
-- `threshold_decision`：本次最後採用的 threshold 層級，例如 `controller_direct`、`ops_spark_required`、`worker_5_4_required`、`worker_5_5_required`。
-- `threshold_followup_needed`：若本次顯示 threshold 規則仍太鬆或太緊，填 `yes`；否則填 `no`。
+- `threshold_ledger_ref`：指向 `#375` 的 issue/comment URL、`#375`、或 `not_needed`。若 final merge gate 已 `ready_to_merge=true` / `merge_ready=true`，不得再填 `pending`。
+- `status`：此筆 calibration 狀態，例如 `logged`、`open_followup`、`not_needed`。
 
-若是 manual / human PR，這些欄位可填 `n/a`；但只要是 autonomous PR，就不得留空。
+完整 calibration metrics 以 `#375` ledger comment 為主，不要求每張新 PR 都重複貼進 PR body。
+
+下列 legacy metrics 僅供相容舊 PR 或過渡期使用，非新 PR 必填：
+
+- `spawn_count`
+- `ci_rerun_count`
+- `review_thread_count`
+- `rework_reason`
+- `threshold_decision`
+- `threshold_followup_needed`
+
+若是 manual / human PR，`Calibration data` 可填 `n/a` 或省略；若是 autonomous PR，至少要有可判讀的 `threshold_ledger_ref` / `status`，或保留 legacy metrics 相容格式。
 
 #### 7. Calibration review cadence
 

@@ -355,11 +355,13 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     calibrationDataKeyValues.ledger_ref ??
     calibrationDataKeyValues.threshold_calibration_ref ??
     "";
-  const hasThresholdLedgerRef = /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375\b|not_needed|pending)/i.test(
-    thresholdLedgerRefValue,
-  );
+  const thresholdLedgerRefPattern =
+    /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i;
+  const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue);
+  const hasPendingThresholdLedgerRef = /(?:^|[\s,;])pending(?:$|[\s,;])/i.test(thresholdLedgerRefValue);
+  const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !(finalMergeGateReadyFlag === "true" && hasPendingThresholdLedgerRef);
   const hasMeaningfulCalibrationData =
-    calibrationDataLines.some((line) => hasMeaningfulLine(line)) && (hasCalibrationRequiredKeys || hasThresholdLedgerRef);
+    calibrationDataLines.some((line) => hasMeaningfulLine(line)) && (hasCalibrationRequiredKeys || hasReadyThresholdLedgerRef);
   const directExecutionDecisionValues = new Set(["controller_direct", "trivial_direct", "no_worker"]);
   const directExecutionSignalPattern =
     /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i;
@@ -1271,6 +1273,13 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
       "threshold_followup_needed=no",
     ].join("\n"),
     thresholdFollowUp = "status=no_change\nthreshold_followup_needed=no\nfollowup_issue=none",
+    finalMergeGate = [
+      "latest_head_sha=abc1234",
+      "unresolved_thread_count=0",
+      "spec_gate_status=pass",
+      "evidence_urls=https://example.com/pr/370",
+      "ready_to_merge=false",
+    ].join("\n"),
     controllerFallbackReason,
     trivialExceptionReason,
   } = {}) =>
@@ -1289,16 +1298,7 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
         { label: "Calibration data", value: calibrationData },
         { label: "Threshold follow-up", value: thresholdFollowUp },
         { label: "Spec gate evidence", value: "spec validate=not using spec-injector; manual gate evidence refreshed" },
-        {
-          label: "Final merge gate",
-          value: [
-            "latest_head_sha=abc1234",
-            "unresolved_thread_count=0",
-            "spec_gate_status=pass",
-            "evidence_urls=https://example.com/pr/370",
-            "ready_to_merge=false",
-          ].join("\n"),
-        },
+        { label: "Final merge gate", value: finalMergeGate },
         { label: "Review conversation closeout", value: "threshold gate regression covered; no unresolved automated finding" },
       ],
     });
@@ -1451,6 +1451,105 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
       hasMeaningfulFinalMergeGate: true,
       hasFinalMergeGateRequiredKeys: true,
       finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "threshold ledger ref rejects depending substring",
+    bodyWithThresholdGate({
+      calibrationData: "threshold_ledger_ref=depending_on_closeout",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "ready to merge blocks pending threshold ledger ref",
+    bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/ready-threshold",
+        "ready_to_merge=true",
+      ].join("\n"),
+      calibrationData: "threshold_ledger_ref=pending",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
       finalMergeGateHasExplicitPendingInitialGate: false,
       finalMergeGateReadyWithResolvedThreadsOnly: true,
       hasReviewConversationCloseout: true,
