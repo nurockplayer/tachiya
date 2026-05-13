@@ -414,6 +414,7 @@ Autonomous worker 開工前應先確認目前環境拿到的 `spec-injector` 版
 
 ```bash
 export SPEC_INJECTOR_DIR="${SPEC_INJECTOR_DIR:-$HOME/dev/spec-injector}"
+TARGET_REPO_DIR="$PWD"
 
 spec_has_awp_gates() {
   command -v spec >/dev/null 2>&1 &&
@@ -430,13 +431,16 @@ else
   fi
 
   git -C "$SPEC_INJECTOR_DIR" pull --ff-only
-  cd "$SPEC_INJECTOR_DIR"
-  pnpm install --frozen-lockfile
-  pnpm build
+  (
+    cd "$SPEC_INJECTOR_DIR"
+    pnpm install --frozen-lockfile
+    pnpm build
+  )
 
   SPEC_CMD="node $SPEC_INJECTOR_DIR/dist/cli/index.js"
 fi
 
+cd "$TARGET_REPO_DIR"
 $SPEC_CMD workflow-check --help
 ```
 
