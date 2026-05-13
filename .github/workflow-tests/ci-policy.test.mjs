@@ -352,19 +352,11 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   });
   const hasMeaningfulCalibrationData = calibrationDataLines.some((line) => hasMeaningfulLine(line)) && hasCalibrationRequiredKeys;
   const directExecutionDecisionValues = new Set(["controller_direct", "trivial_direct", "no_worker"]);
+  const directExecutionSignalPattern =
+    /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i;
   const isDirectExecutionSignalLine = (line) => {
-    const keyValueMatch = line.match(/^([A-Za-z0-9_.-]+)\s*[=:]\s*(.+)$/);
-    if (keyValueMatch) {
-      const key = keyValueMatch[1].trim().toLowerCase();
-      const value = keyValueMatch[2].trim().toLowerCase();
-      if (directExecutionDecisionValues.has(key) && value === "true") {
-        return true;
-      }
-      if (["threshold_decision", "decision"].includes(key) && directExecutionDecisionValues.has(value)) {
-        return true;
-      }
-    }
-    return directExecutionDecisionValues.has(line.trim().toLowerCase());
+    const normalizedLine = line.trim().toLowerCase();
+    return directExecutionDecisionValues.has(normalizedLine) || directExecutionSignalPattern.test(normalizedLine);
   };
   const hasDirectExecutionSignal = [...thresholdDecisionLines, ...calibrationDataLines].some((line) =>
     isDirectExecutionSignalLine(line),
@@ -1448,6 +1440,78 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
       hasThresholdFollowUpEvidence: false,
     },
   );
+
+  for (const [name, thresholdDecision, calibrationData] of [
+    [
+      "direct execution signal accepts decision equals format",
+      "decision=controller_direct\nroute=controller-only",
+      [
+        "spawn_count=0",
+        "ci_rerun_count=0",
+        "review_thread_count=0",
+        "rework_reason=single-shot controller decision",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    ],
+    [
+      "direct execution signal accepts threshold_decision equals format",
+      "route=controller-only",
+      [
+        "spawn_count=0",
+        "ci_rerun_count=0",
+        "review_thread_count=0",
+        "rework_reason=single-shot controller decision",
+        "threshold_decision=controller_direct",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    ],
+    [
+      "direct execution signal accepts decision colon format",
+      "decision: controller_direct\nroute=controller-only",
+      [
+        "spawn_count=0",
+        "ci_rerun_count=0",
+        "review_thread_count=0",
+        "rework_reason=single-shot controller decision",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    ],
+    [
+      "direct execution signal accepts threshold_decision colon format",
+      "route=controller-only",
+      [
+        "spawn_count=0",
+        "ci_rerun_count=0",
+        "review_thread_count=0",
+        "rework_reason=single-shot controller decision",
+        "threshold_decision: trivial_direct",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    ],
+    [
+      "direct execution signal survives same-line rationale",
+      "decision=controller_direct; rationale=single-shot controller decision",
+      [
+        "spawn_count=0",
+        "ci_rerun_count=0",
+        "review_thread_count=0",
+        "rework_reason=single-shot controller decision",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    ],
+  ]) {
+    assert.equal(
+      evaluateAutonomousCloseoutGate({
+        body: bodyWithThresholdGate({ thresholdDecision, calibrationData }),
+        labels: ["codex"],
+      }).hasDirectExecutionSignal,
+      true,
+      name,
+    );
+  }
 
   assertGate(
     "threshold follow-up open_followup requires linked evidence",

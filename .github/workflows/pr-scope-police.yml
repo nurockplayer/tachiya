@@ -338,19 +338,11 @@ jobs:
             const hasMeaningfulCalibrationData =
               calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) && hasCalibrationRequiredKeys
             const directExecutionDecisionValues = new Set(['controller_direct', 'trivial_direct', 'no_worker'])
+            const directExecutionSignalPattern =
+              /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i
             const isDirectExecutionSignalLine = (line) => {
-              const keyValueMatch = line.match(/^([A-Za-z0-9_.-]+)\s*[=:]\s*(.+)$/)
-              if (keyValueMatch) {
-                const key = keyValueMatch[1].trim().toLowerCase()
-                const value = keyValueMatch[2].trim().toLowerCase()
-                if (directExecutionDecisionValues.has(key) && value === 'true') {
-                  return true
-                }
-                if (['threshold_decision', 'decision'].includes(key) && directExecutionDecisionValues.has(value)) {
-                  return true
-                }
-              }
-              return directExecutionDecisionValues.has(line.trim().toLowerCase())
+              const normalizedLine = line.trim().toLowerCase()
+              return directExecutionDecisionValues.has(normalizedLine) || directExecutionSignalPattern.test(normalizedLine)
             }
             const hasDirectExecutionSignal = [...thresholdDecisionLines, ...calibrationDataLines].some((line) =>
               isDirectExecutionSignalLine(line),
