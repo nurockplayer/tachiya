@@ -26,6 +26,104 @@
 - trivial/self-only exception 只有在工作範圍單一、沒有跨檔脈絡、沒有 CI / schema / API / PR 連動風險時才成立。
 - 任何例外都必須同時寫進 Issue Delegation Plan 與 PR Delegation Execution Log。
 
+## Autonomous Workflow Dialog
+
+Autonomous Workflow Dialog 是給 Codex / Claude / reviewer 使用的 agent-facing checklist，不是 runtime UI，也不是要在產品裡實作的對話框。它的目標是在三個容易漏證據的時點，強制先問完必要欄位，再繼續開工、closeout 或 merge。
+
+本段只定義最小可用流程：
+
+- `spec workflow-check` 尚未由 spec-injector 提供前，只接受 local-only `spec validate --repo .`、manual checklist、或 `not_using_spec` 記錄。
+- spec evidence 只保存 `status + ref`；不得把完整 private context、generated output、或 `.spec-injector/` 內容提交到 repo。
+- threshold calibration 的量測資料放在 #375 ledger comment，不塞進 PR body；PR body 只引用 #375 issue/comment URL 或寫明 pending/not applicable。
+- Scope Police 只檢查 evidence ref/status 是否存在，不解析 #375 comment，也不解析完整 spec evidence body。
+
+### Start Dialog（開工前）
+
+Start Dialog 必須在正式讀碼、拆 task、開 issue、寫 PR body 或實作前完成。若缺少 source of truth、worker routing plan、或 spec/threshold 證據路徑，必須停止開工。
+
+| 欄位 | 可接受答案 | 何時停止 |
+|---|---|---|
+| Source issue / source of truth | GitHub issue、PR、或明確文件 ref，例如 `#375`、`#376` | 沒有 source of truth，或 source 不涵蓋本次 scope |
+| Autonomous PR | `yes` / `no`；若 `yes`，必須走 delegation gate | 標成 autonomous 但沒有 delegation plan |
+| Worker routing plan | 至少一筆 `profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed|allowed>` | routine readback / PR metadata / CI closeout 沒有安排 `ops_spark` 或同級 worker |
+| Spawn directives | 每個 worker 一筆 spawn directive；若不 spawn，必須填 `Trivial/self-only exception reason` | 缺 model、reasoning、controller_fallback，或 fallback allowed 但沒有 reason |
+| controller_fallback_reason | `n/a`，或 `fallback_reason=<category>: <why>; impact=<decision>; evidence=<url|sha|command>` | controller 取代 worker 但沒有可審核原因 |
+| spec_gate_status | `spec_validate_pass`、`manual_checklist`、`not_using_spec`、`blocked` | `blocked`、未知、或說使用 spec 但沒有 local-only evidence |
+| spec_evidence_ref | issue comment、PR comment、local note summary；只放 status/ref，不放 private output | ref 缺失，或要求提交 `.spec-injector/` / generated output |
+| threshold ledger plan | `will_comment_#375`、`not_needed`、`blocked`，並說明是否會在 #375 留 comment | 需要 calibration 但沒有 #375 ledger plan，或試圖把 metrics 改塞 PR body |
+
+Start Dialog 建議輸出：
+
+```text
+source_of_truth=#375,#376
+autonomous_pr=yes
+spawn=profile=ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed
+controller_fallback_reason=n/a
+spec_gate_status=spec_validate_pass
+spec_evidence_ref=local note: spec validate --repo . pass at <time>
+threshold_ledger_plan=will_comment_#375
+stop_reason=none
+```
+
+### Closeout Dialog（PR ready / review 後）
+
+Closeout Dialog 在 PR ready、review finding 修完、或準備進 final merge gate 前執行。若 CI、review、thread 或 worker closeout 有任何 pending/unknown，必須停止 closeout，先補 readback、修正、留言或拆 follow-up。
+
+| 欄位 | 可接受答案 | 何時停止 |
+|---|---|---|
+| latest head SHA | 最新 PR `headRefOid` | SHA 讀不到，或和驗證紀錄不一致 |
+| CI / Scope Police 狀態 | required checks pass；pending/fail 必須列 blocker | required check fail/pending 且沒有明確等待或修正計劃 |
+| CodeRabbit 狀態 | reviewed、rate limit fallback+self-review、或明確 skipped 並有替代證據 | 只有 status success 但實際 comment 是 skipped，或 rate limit 後仍反覆重叫 |
+| chatgpt-codex-connector 狀態 | comment/review、reaction-only、或已要求 `@codex review` | 沒 comment/reaction 且未要求 review |
+| unresolved review threads count | `0`，或列出每條 thread 的 disposition | unresolved thread 未處理 |
+| finding disposition | `fixed`、`not adopted with rationale`、`converted to follow-up`、`blocked` | finding 只寫「已看過」但沒有 comment/resolve/follow-up |
+| worker session closeout | worker 已讀回且不需要追加任務；已 close 或記錄 close failure | worker 仍可能執行中，或 close failure 沒記錄 |
+| threshold ledger comment | `#375 comment URL`、`pending until final closeout`、`not needed` | closeout 需要 calibration 但沒有 ledger ref 或 pending reason |
+
+Closeout Dialog 建議輸出：
+
+```text
+latest_head_sha=<sha>
+ci_check_summary=pass
+scope_police=pass
+coderabbit_status=reviewed|rate_limit_fallback|skipped_with_self_review
+codex_connector_status=reviewed|reaction-only|requested
+unresolved_thread_count=0
+finding_disposition=fixed|not_adopted_with_rationale|converted_to_follow_up|blocked
+worker_session_closeout=closed
+threshold_ledger_ref=#375 comment URL
+stop_reason=none
+```
+
+### Merge Gate Dialog（merge 前）
+
+Merge Gate Dialog 是最後一道 merge 前檢查。任何欄位為 `pending`、`unknown`、`missing`、或 `blocked`，都必須停止 merge；總控不得用「應該沒問題」取代 fresh readback。
+
+| 欄位 | 可接受答案 | 何時停止 |
+|---|---|---|
+| ready_to_merge | `true` / `false` | 不是 `true` 就停止 |
+| latest head SHA | 最新 PR head SHA，且 match 本地/PR body final evidence | SHA 缺失或不一致 |
+| required checks | `pass`；可列出 skipped non-required checks | required check fail/pending |
+| unresolved_thread_count | `0` | 非 0、unknown、或未讀完整 pagination |
+| spec_gate_status | `spec_validate_pass`、`manual_checklist`、`not_using_spec` | `blocked`、pending、unknown |
+| spec_evidence_ref | PR comment、issue comment、local note summary；只放 status/ref | 缺 ref，或 ref 指向不可公開/private output |
+| threshold_ledger_ref | #375 issue/comment URL、`not_needed`，或明確 pending blocker | 需要 ledger 但沒有 #375 ref |
+| final PR body update | `updated_once_after_stable_evidence` 或 `not_needed` | final gate 反覆更新、仍有 pending placeholder |
+
+Final merge gate 建議輸出：
+
+```text
+ready_to_merge=true
+latest_head_sha=<sha>
+required_checks=pass
+unresolved_thread_count=0
+spec_gate_status=spec_validate_pass
+spec_evidence_ref=PR body Spec gate evidence
+threshold_ledger_ref=https://github.com/nurockplayer/tachiya/issues/375#issuecomment-...
+final_pr_body_update=updated_once_after_stable_evidence
+stop_reason=none
+```
+
 ## Issue Delegation Plan
 
 Issue body 必須先寫出 delegation plan，然後才可以進入實作或 PR。

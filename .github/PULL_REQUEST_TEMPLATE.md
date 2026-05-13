@@ -27,18 +27,13 @@ Depends on PR: <!-- `none` 或 `#123` -->
 - Threshold decision:
   - <!-- autonomous 例：decision=ops_spark_required; rationale=routine readback and PR body cleanup; escalated_to=none。manual/human PR 填 n/a -->
 - Calibration data:
-  - <!-- autonomous 例：spawn_count=2 -->
-  - <!-- autonomous 例：ci_rerun_count=1 -->
-  - <!-- autonomous 例：review_thread_count=0 -->
-  - <!-- autonomous 例：rework_reason=none -->
-  - <!-- autonomous 例：threshold_decision=ops_spark_required -->
-  - <!-- autonomous 例：threshold_followup_needed=no。manual/human PR 填 n/a -->
+  - <!-- autonomous 請只填 #375 ledger ref/status，例如 threshold_ledger_ref=#375 pending until closeout，或 threshold_ledger_ref=https://github.com/nurockplayer/tachiya/issues/375#issuecomment-...。不要把 threshold metrics 展開塞進 PR body；metrics 請留在 #375 ledger comment。manual/human PR 填 n/a -->
 - Threshold follow-up:
   - <!-- autonomous 例：status=no_change; next_review_after_prs=3; followup_issue=none。若需要調整，例：status=open_followup; next_review_after_prs=3; followup_issue=#370。manual/human PR 填 n/a -->
 - Evidence / verification:
   - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；commit SHA；push branch；PR head SHA；CI/check/review/thread readback 摘要；若 git write 由 controller 執行，記錄原因與 ops_spark checklist/readback -->
 - Spec gate evidence:
-  - <!-- 請填 start-of-work / pre-commit / pre-merge 的 `spec validate --repo .` 結果；若未使用 spec-injector，填 `not using spec-injector`，並補 manual checklist 範圍、檢查時間點、剩餘風險。不得提交 `.spec-injector/` 或 generated output。未來若接上 `spec workflow-check`，也請記在此欄。 -->
+  - <!-- status + ref only。請填 start-of-work / pre-commit / pre-merge 的 `spec validate --repo .` 狀態與 evidence ref；若未使用 spec-injector，填 `not_using_spec` 或 `manual_checklist`，並補 issue comment / PR comment / local note summary。不得提交 `.spec-injector/`、generated output 或 private context。未來若接上 `spec workflow-check`，只引用 evidence ref。 -->
 - Worker session closeout:
   - <!-- 例：已讀回 worker 結果，不需追加任務的 worker session 已 close；若 close_agent 失敗，列出 handle、重試次數與 fallback 紀錄 -->
 - Workflow friction / follow-up split:

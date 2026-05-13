@@ -335,8 +335,17 @@ jobs:
               const value = calibrationDataKeyValues[key]
               return Boolean(value) && hasMeaningfulSectionLine(value)
             })
+            const thresholdLedgerRefValue =
+              calibrationDataKeyValues.threshold_ledger_ref ??
+              calibrationDataKeyValues.ledger_ref ??
+              calibrationDataKeyValues.threshold_calibration_ref ??
+              ''
+            const hasThresholdLedgerRef = /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375\b|not_needed|pending)/i.test(
+              thresholdLedgerRefValue,
+            )
             const hasMeaningfulCalibrationData =
-              calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) && hasCalibrationRequiredKeys
+              calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) &&
+              (hasCalibrationRequiredKeys || hasThresholdLedgerRef)
             const directExecutionDecisionValues = new Set(['controller_direct', 'trivial_direct', 'no_worker'])
             const directExecutionSignalPattern =
               /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i
@@ -506,7 +515,7 @@ jobs:
 
               if (!hasMeaningfulCalibrationData) {
                 failures.push(
-                  'Autonomous PRs must include meaningful `Calibration data` with `spawn_count`, `ci_rerun_count`, `review_thread_count`, `rework_reason`, `threshold_decision`, and `threshold_followup_needed`.',
+                  'Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref/status.',
                 )
               }
 
@@ -626,6 +635,7 @@ jobs:
               `- Calibration data: ${!hasCalibrationData ? 'missing' : hasMeaningfulCalibrationData ? 'meaningful' : 'invalid'}`,
             )
             summaryLines.push(`- Calibration required keys: ${hasCalibrationRequiredKeys ? 'present' : 'missing'}`)
+            summaryLines.push(`- Threshold ledger ref/status: ${hasThresholdLedgerRef ? 'present' : 'missing'}`)
             summaryLines.push(`- Threshold direct-execution signal: ${hasDirectExecutionSignal ? 'yes' : 'no'}`)
             summaryLines.push(
               `- Threshold exception support: ${hasThresholdExceptionSupport ? 'yes' : 'no'}`,

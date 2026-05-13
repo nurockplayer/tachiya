@@ -350,7 +350,16 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     const value = calibrationDataKeyValues[key];
     return Boolean(value) && hasMeaningfulLine(value);
   });
-  const hasMeaningfulCalibrationData = calibrationDataLines.some((line) => hasMeaningfulLine(line)) && hasCalibrationRequiredKeys;
+  const thresholdLedgerRefValue =
+    calibrationDataKeyValues.threshold_ledger_ref ??
+    calibrationDataKeyValues.ledger_ref ??
+    calibrationDataKeyValues.threshold_calibration_ref ??
+    "";
+  const hasThresholdLedgerRef = /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375\b|not_needed|pending)/i.test(
+    thresholdLedgerRefValue,
+  );
+  const hasMeaningfulCalibrationData =
+    calibrationDataLines.some((line) => hasMeaningfulLine(line)) && (hasCalibrationRequiredKeys || hasThresholdLedgerRef);
   const directExecutionDecisionValues = new Set(["controller_direct", "trivial_direct", "no_worker"]);
   const directExecutionSignalPattern =
     /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i;
@@ -498,6 +507,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /- Review conversation closeout meaningful: \$\{hasMeaningfulReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /- Threshold decision: \$\{.+\}/);
   assert.match(workflow, /- Calibration data: \$\{.+\}/);
+  assert.match(workflow, /- Threshold ledger ref\/status: \$\{hasThresholdLedgerRef \? 'present' : 'missing'\}/);
   assert.match(workflow, /- Threshold follow-up: \$\{.+\}/);
   assert.match(workflow, /hasMeaningfulReviewConversationCloseout/);
   assert.match(workflow, /const reviewConversationCloseoutBody = extractDelegationFieldBody\('Review conversation closeout'\)/);
@@ -513,7 +523,8 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Threshold decision` field\./);
-  assert.match(workflow, /Autonomous PRs must include meaningful `Calibration data` with `spawn_count`, `ci_rerun_count`, `review_thread_count`, `rework_reason`, `threshold_decision`, and `threshold_followup_needed`\./);
+  assert.match(workflow, /Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref\/status\./);
+  assert.match(workflow, /threshold_ledger_ref/);
   assert.match(workflow, /Autonomous PRs that signal direct execution via `controller_direct`, `trivial_direct`, `no_worker`, `decision=\.\.\.`, or `threshold_decision=\.\.\.` must include a meaningful trivial\/self-only exception or Controller fallback reason\./);
   assert.match(
     workflow,
@@ -528,6 +539,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /'branch'/);
   assert.match(workflow, /scope-exception/);
   assert.match(prTemplate, /Worker session closeout/);
+  assert.match(prTemplate, /threshold_ledger_ref=#375/);
+  assert.match(prTemplate, /不要把 threshold metrics 展開塞進 PR body/);
+  assert.match(prTemplate, /status \+ ref only/);
   assert.match(prTemplate, /Workflow friction \/ follow-up split/);
   assert.match(prTemplate, /latest_head_sha/);
   assert.match(prTemplate, /ci_check_summary/);
@@ -555,6 +569,18 @@ test("Autonomous workflow docs cover routing, closeout, lifecycle, and follow-up
 
   for (const pattern of [
     /## Cost Model 與摩擦預算/,
+    /## Autonomous Workflow Dialog/,
+    /### Start Dialog（開工前）/,
+    /### Closeout Dialog（PR ready \/ review 後）/,
+    /### Merge Gate Dialog（merge 前）/,
+    /spec_validate_pass/,
+    /manual_checklist/,
+    /not_using_spec/,
+    /threshold ledger plan/,
+    /#375 ledger comment/,
+    /#376/,
+    /status \+ ref/,
+    /Scope Police 只檢查 evidence ref\/status 是否存在/,
     /## Subagent Lifecycle 與 Thread-limit Cleanup/,
     /## Issue-first 與 Follow-up Split Policy/,
     /## PR Template 與 Policy-test Hardening/,
@@ -1233,7 +1259,7 @@ test("Autonomous PR spec gate and final merge gate require meaningful evidence",
   );
 });
 
-test("Autonomous PR threshold calibration gate requires decision, calibration keys, and follow-up evidence", () => {
+test("Autonomous PR threshold calibration gate accepts #375 ledger refs and follow-up evidence", () => {
   const bodyWithThresholdGate = ({
     thresholdDecision = "route=ops_spark-first; controller_direct=false",
     calibrationData = [
@@ -1315,6 +1341,52 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
     thresholdFollowUpStatus: "not-needed",
     hasThresholdFollowUpEvidence: false,
   });
+
+  assertGate(
+    "threshold ledger ref passes without expanding metrics in PR body",
+    bodyWithThresholdGate({
+      calibrationData: "threshold_ledger_ref=#375 pending until final closeout",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: true,
+      hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: true,
+    },
+  );
 
   assertGate("missing threshold decision is blocked", bodyWithThresholdGate({ thresholdDecision: "n/a" }), ["codex"], {
     autonomousDetected: true,
