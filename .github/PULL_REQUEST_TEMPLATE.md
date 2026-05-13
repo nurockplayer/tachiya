@@ -33,7 +33,7 @@ Depends on PR: <!-- `none` 或 `#123` -->
 - Evidence / verification:
   - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；commit SHA；push branch；PR head SHA；CI/check/review/thread readback 摘要；若 git write 由 controller 執行，記錄原因與 ops_spark checklist/readback -->
 - Spec gate evidence:
-  - <!-- status + ref only。請填 start-of-work / pre-commit / pre-merge 的 `spec validate --repo .` 狀態與 evidence ref；若未使用 spec-injector，填 `not_using_spec` 或 `manual_checklist`，並補 issue comment / PR comment / local note summary。不得提交 `.spec-injector/`、generated output 或 private context。未來若接上 `spec workflow-check`，只引用 evidence ref。 -->
+  - <!-- status + ref only。請填 start-of-work / pre-commit / pre-merge 的 `spec validate --repo .` 與 `spec workflow-check` 狀態/證據 ref；若未使用 spec-injector 或 workflow-check 不可用，填 `not_using_spec` / `manual_checklist` 與 issue comment / PR comment / local note summary。不得提交 `.spec-injector/`、generated output 或 private context。 -->
 - review_triage_ref:
   - <!-- autonomous: 短 ref only，填 review triage evidence，例如 PR comment / issue comment / spec-injector output ref；若暫未完成可填 pending，若不需要 triage split 可填 fallback=no_additional_triage_needed。non-autonomous / manual PR 可填 n/a -->
 - root_cause_gate_ref:

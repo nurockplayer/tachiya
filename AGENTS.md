@@ -201,7 +201,7 @@ autonomous work 一開始必須先看 [docs/codex-autonomous-workflow.md](docs/c
 - PR body 要從一開始就把 delegation / evidence 主要欄位填完整，不要等 closeout 才一次補。
 - low-cost/routine 工作先走 `ops_spark`、`repo_scout`、`docs_worker`；若升級到 controller fallback，必須在 issue/PR 寫明原因。
 - threshold calibration v2 的 authoritative 規則、`controller_fallback reason` 格式、`Calibration data` 欄位、以及「至少每 3 張 autonomous PR 回看一次 threshold」都以 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md) 為準；`AGENTS.md` 不重複展開細節。
-- 使用 `spec-injector` 時，開工前、commit 前、merge 前都要跑 `spec validate --repo .`；不得 commit `.spec-injector/` 或 generated output。
+- 使用 `spec-injector` 時，開工前、commit 前、merge 前都要跑 `spec validate --repo .` 與 current `spec workflow-check` gate；bootstrap、fallback runner 與 status/ref evidence 規則以 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md) 為準；不得 commit `.spec-injector/` 或 generated output。
 - 沒有使用 `spec-injector` 時，也要用 PR template 的 `Spec gate evidence` 走 manual checklist。
 - final closeout 只在 merge-ready 且證據穩定時更新一次；每個 actionable finding 都必須 comment/resolve，或留下不採用證據。
 

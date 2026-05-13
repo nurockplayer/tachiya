@@ -32,7 +32,7 @@ Autonomous Workflow Dialog 是給 Codex / Claude / reviewer 使用的 agent-faci
 
 本段只定義最小可用流程：
 
-- `spec workflow-check` 尚未由 spec-injector 提供前，只接受 local-only `spec validate --repo .`、manual checklist、或 `not_using_spec` 記錄。
+- `spec workflow-check` 已可作為 current local gate；使用時只保存 `status + ref`，未使用或工具不可用時才走 manual checklist / `not_using_spec` fallback。
 - spec evidence 只保存 `status + ref`；不得把完整 private context、generated output、或 `.spec-injector/` 內容提交到 repo。
 - threshold calibration 的量測資料放在 #375 ledger comment，不塞進 PR body；PR body 只引用 #375 issue/comment URL 或寫明 pending/not applicable。
 - Scope Police 只檢查 evidence ref/status 是否存在，不解析 #375 comment，也不解析完整 spec evidence body。
@@ -49,7 +49,7 @@ Start Dialog 必須在正式讀碼、拆 task、開 issue、寫 PR body 或實�
 | Worker routing plan | 至少一筆 `profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed\|allowed>` | routine readback / PR metadata / CI closeout 沒有安排 `ops_spark` 或同級 worker |
 | Spawn directives | 每個 worker 一筆 spawn directive；若不 spawn，必須填 `Trivial/self-only exception reason` | 缺 model、reasoning、controller_fallback，或 fallback allowed 但沒有 reason |
 | controller_fallback_reason | `n/a`，或 `fallback_reason=<category>: <why>; impact=<decision>; evidence=<url\|sha\|command>` | controller 取代 worker 但沒有可審核原因 |
-| spec_gate_status | `spec_validate_pass`、`manual_checklist`、`not_using_spec`、`blocked` | `blocked`、未知、或說使用 spec 但沒有 local-only evidence |
+| spec_gate_status | `workflow_check_pass`、`spec_validate_pass`、`manual_checklist`、`not_using_spec`、`blocked` | `blocked`、未知、或說使用 spec 但沒有 local-only evidence |
 | spec_evidence_ref | issue comment、PR comment、local note summary；只放 status/ref，不放 private output | ref 缺失，或要求提交 `.spec-injector/` / generated output |
 | threshold ledger plan | `will_comment_#375`、`not_needed`、`blocked`，並說明是否會在 #375 留 comment | 需要 calibration 但沒有 #375 ledger plan，或試圖把 metrics 改塞 PR body |
 
@@ -61,7 +61,7 @@ autonomous_pr=yes
 spawn=profile=ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed
 controller_fallback_reason=n/a
 spec_gate_status=spec_validate_pass
-spec_evidence_ref=local note: spec validate --repo . pass at <time>
+spec_evidence_ref=workflow-check:start:issue-<number> or local note: spec validate --repo . pass at <time>
 threshold_ledger_plan=will_comment_#375
 stop_reason=none
 ```
@@ -406,12 +406,48 @@ Spawn 指令為硬規則（建議每個 worker 一筆）：
 
 AWP review triage / root-cause gate 的 source issue 也以 spec-injector 為主：`Erick52106/spec-injector#232`、`Erick52106/spec-injector#233`、`Erick52106/spec-injector#234`、`Erick52106/spec-injector#235`。tachiya 只保留 template / docs / Scope Police 的薄接線，不在本 repo 複製完整 checker。
 
+### Bootstrap contract
+
+Autonomous worker 開工前應先確認目前環境拿到的 `spec-injector` 版本支援 `Erick52106/spec-injector#242` 的 workflow gate。canonical source 是 `https://github.com/Erick52106/spec-injector`。
+
+優先使用現有 `spec`；若沒有新版能力，再用 local fallback runner，不要求全域 `pnpm link`：
+
+```bash
+export SPEC_INJECTOR_DIR="${SPEC_INJECTOR_DIR:-$HOME/dev/spec-injector}"
+
+spec_has_awp_gates() {
+  command -v spec >/dev/null 2>&1 &&
+  spec workflow-check --help 2>/dev/null | grep -q -- "--finding-disposition" &&
+  spec workflow-check --help 2>/dev/null | grep -q -- "--threshold-evidence" &&
+  spec workflow-check --help 2>/dev/null | grep -q -- "--pr"
+}
+
+if spec_has_awp_gates; then
+  SPEC_CMD="spec"
+else
+  if [ ! -d "$SPEC_INJECTOR_DIR/.git" ]; then
+    git clone https://github.com/Erick52106/spec-injector.git "$SPEC_INJECTOR_DIR"
+  fi
+
+  git -C "$SPEC_INJECTOR_DIR" pull --ff-only
+  cd "$SPEC_INJECTOR_DIR"
+  pnpm install --frozen-lockfile
+  pnpm build
+
+  SPEC_CMD="node $SPEC_INJECTOR_DIR/dist/cli/index.js"
+fi
+
+$SPEC_CMD workflow-check --help
+```
+
+若 clone、pull、install、build 或 capability check 失敗，必須停止 autonomous 開工並回報 `tool/bootstrap blocker`。不得改用舊版 `spec` 假裝通過，也不得把 `.spec-injector/`、generated output、routing JSON、threshold JSON、finding disposition JSON 或 private context commit 進 repo。
+
 ### Required checkpoints
 
-- 開工前：先跑 `spec validate --repo .`，確認本地設定與 template/manual checklist 沒有明顯失配。
-- commit 前：再次跑 `spec validate --repo .`，確認本次修改沒有把 PR template、AGENTS 或 docs 契約弄壞。
-- merge 前：final readback 前再跑一次 `spec validate --repo .`，把結果寫進 PR body 的 `Spec gate evidence` 與 `Final merge gate`。
-- 未來若 repo 接上 `spec workflow-check`，應放在同一條 gate chain，位置介於 `spec validate --repo .` 與 final merge gate 之間。
+- 開工前：先跑 `spec validate --repo .`，再跑 `$SPEC_CMD workflow-check --repo . --phase start --issue <issue-number-or-url>`。start gate 用於 bounded context、Hybrid AWP routing 與 fallback 判定。
+- commit 前：再次跑 `spec validate --repo .`，再跑 `$SPEC_CMD workflow-check --repo . --phase commit --pr-body <path> [--routing-evidence <json>]`。commit gate 用於 staged artifact、安全邊界、Spec gate status/ref 與 routing evidence alignment。
+- review / closeout 後：若有 automated/human findings，使用 `$SPEC_CMD workflow-check --repo . --phase merge --pr-body <path> [--finding-disposition <json>] [--threshold-evidence <json>]` 驗證 finding disposition 與 threshold evidence 只以 status/ref 進入 PR body。
+- merge 前：final readback 前再跑一次 `spec validate --repo .`，再跑 `$SPEC_CMD workflow-check --repo . --phase merge --pr-body <path> --head-sha <sha> [--routing-evidence <json>] [--finding-disposition <json>] [--threshold-evidence <json>]`。需要 GitHub readback 時，可另外跑 `$SPEC_CMD workflow-check --repo . --phase merge --pr <number-or-url> --format json`。結果寫進 PR body 的 `Spec gate evidence` 與 `Final merge gate`。
 
 ### Storage / commit boundaries
 
@@ -423,7 +459,7 @@ AWP review triage / root-cause gate 的 source issue 也以 spec-injector 為主
 
 - 若作者或 reviewer 沒有使用 `spec-injector`，仍必須走同一套欄位契約：以 PR template 的 `Spec gate evidence` 填 manual checklist 結果，至少記錄 `not using spec-injector`、人工檢查範圍、檢查時間點與剩餘風險。
 - manual path 至少要覆蓋：delegation 欄位完整、review closeout 欄位完整、final merge gate 欄位完整、不可提交 `.spec-injector/` 或輸出。
-- `spec workflow-check` 尚未接線前，manual checklist 與 template 欄位就是 non-spec 使用者的正式替代路徑。
+- 未使用 `spec-injector`、`workflow-check` 不可用、或工具 bootstrap 被 blocker 擋住時，manual checklist 與 template 欄位就是正式替代路徑；不得把 manual fallback 寫成 fake pass。
 
 ## Automated Review Gate
 
@@ -488,7 +524,7 @@ final closeout summary 只應在下列條件都穩定後更新一次：
 - latest head SHA 已固定，且沒有新的 push/metadata rerun 在排隊
 - CI/check summary、CodeRabbit、`chatgpt-codex-connector` 狀態已對上最新 head
 - unresolved thread count 與 finding disposition 已完成最後一次 readback
-- `Spec gate evidence` 已填入最新 `spec validate --repo .` 或 manual fallback 結果
+- `Spec gate evidence` 已填入最新 `spec validate --repo .` 加 `spec workflow-check` status/ref，或明確 manual fallback 結果
 - `Final merge gate` 使用 key-value 形式；初始 PR 可用 `pending initial gate` 標記尚未穩定的值，但 `ready_to_merge=true` 或 `merge_ready=true` 時必須把 `latest_head_sha`、`unresolved_thread_count`、`spec_gate_status`、`evidence_urls` 改成實際證據，且 `unresolved_thread_count=0`
 
 ## Autonomous Review Closeout Evidence Runbook
