@@ -340,15 +340,23 @@ jobs:
               calibrationDataKeyValues.ledger_ref ??
               calibrationDataKeyValues.threshold_calibration_ref ??
               ''
+            const thresholdLedgerStatusValue =
+              calibrationDataKeyValues.threshold_ledger_status ??
+              calibrationDataKeyValues.ledger_status ??
+              calibrationDataKeyValues.threshold_calibration_status ??
+              calibrationDataKeyValues.status ??
+              ''
             const thresholdLedgerRefPattern =
               /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i
             const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue)
-            const hasPendingThresholdLedgerRef = /(?:^|[\s,;])pending(?:$|[\s,;])/i.test(thresholdLedgerRefValue)
-            const hasReadyPendingThresholdLedgerRef =
-              finalMergeGateReadyFlag === 'true' && hasPendingThresholdLedgerRef
-            const hasReadyThresholdLedgerRef =
-              hasThresholdLedgerRef && !(finalMergeGateReadyFlag === 'true' && hasPendingThresholdLedgerRef)
-            const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedgerRef
+            const pendingThresholdLedgerPattern = /(?:^|[\s,;])pending(?:$|[\s,;])/i
+            const hasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(thresholdLedgerRefValue)
+            const hasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(thresholdLedgerStatusValue)
+            const hasReadyPendingThresholdLedger =
+              finalMergeGateReadyFlag === 'true' &&
+              (hasPendingThresholdLedgerRef || hasPendingThresholdLedgerStatus)
+            const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !hasReadyPendingThresholdLedger
+            const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedger
             const hasMeaningfulCalibrationData =
               calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) &&
               hasCalibrationReadyStateCompatible &&

@@ -355,13 +355,22 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     calibrationDataKeyValues.ledger_ref ??
     calibrationDataKeyValues.threshold_calibration_ref ??
     "";
+  const thresholdLedgerStatusValue =
+    calibrationDataKeyValues.threshold_ledger_status ??
+    calibrationDataKeyValues.ledger_status ??
+    calibrationDataKeyValues.threshold_calibration_status ??
+    calibrationDataKeyValues.status ??
+    "";
   const thresholdLedgerRefPattern =
     /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i;
   const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue);
-  const hasPendingThresholdLedgerRef = /(?:^|[\s,;])pending(?:$|[\s,;])/i.test(thresholdLedgerRefValue);
-  const hasReadyPendingThresholdLedgerRef = finalMergeGateReadyFlag === "true" && hasPendingThresholdLedgerRef;
-  const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !(finalMergeGateReadyFlag === "true" && hasPendingThresholdLedgerRef);
-  const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedgerRef;
+  const pendingThresholdLedgerPattern = /(?:^|[\s,;])pending(?:$|[\s,;])/i;
+  const hasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(thresholdLedgerRefValue);
+  const hasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(thresholdLedgerStatusValue);
+  const hasReadyPendingThresholdLedger =
+    finalMergeGateReadyFlag === "true" && (hasPendingThresholdLedgerRef || hasPendingThresholdLedgerStatus);
+  const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !hasReadyPendingThresholdLedger;
+  const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedger;
   const hasMeaningfulCalibrationData =
     calibrationDataLines.some((line) => hasMeaningfulLine(line)) &&
     hasCalibrationReadyStateCompatible &&
@@ -1632,6 +1641,75 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
       hasThresholdFollowUpEvidence: false,
     },
   );
+
+  for (const statusKey of [
+    "threshold_ledger_status",
+    "ledger_status",
+    "threshold_calibration_status",
+    "status",
+  ]) {
+    assertGate(
+      `ready to merge blocks pending ${statusKey} even with #375 ref and complete legacy metrics`,
+      bodyWithThresholdGate({
+        finalMergeGate: [
+          "latest_head_sha=abc1234",
+          "unresolved_thread_count=0",
+          "spec_gate_status=pass",
+          "evidence_urls=https://example.com/pr/ready-threshold-status",
+          "ready_to_merge=true",
+        ].join("\n"),
+        calibrationData: [
+          "threshold_ledger_ref=#375",
+          `${statusKey}=pending`,
+          "spawn_count=2",
+          "ci_rerun_count=1",
+          "review_thread_count=3",
+          "rework_reason=parser follow-up after automated review",
+          "threshold_decision=ops_spark_required",
+          "threshold_followup_needed=no",
+        ].join("\n"),
+      }),
+      ["codex"],
+      {
+        autonomousDetected: true,
+        hasDelegationExecutionLog: true,
+        hasMeaningfulDelegationExecutionLog: true,
+        hasTrivialExceptionReason: false,
+        hasOpsSparkMention: true,
+        hasRoutineOpsWork: true,
+        hasSpawnDirective: true,
+        hasSpawnModel: true,
+        hasSpawnReasoning: true,
+        hasSpawnControllerFallback: true,
+        hasSpawnDirectiveWithModelReasoning: true,
+        hasSpawnAllowedWithoutReason: false,
+        hasRoutineOpsDelegationWarning: false,
+        hasControllerFallbackReasonField: false,
+        hasMeaningfulControllerFallbackReason: false,
+        hasSpecGateEvidence: true,
+        hasMeaningfulSpecGateEvidence: true,
+        hasFinalMergeGate: true,
+        hasMeaningfulFinalMergeGate: true,
+        hasFinalMergeGateRequiredKeys: true,
+        finalMergeGateReadyFlag: "true",
+        finalMergeGateHasExplicitPendingInitialGate: false,
+        finalMergeGateReadyWithResolvedThreadsOnly: true,
+        hasReviewConversationCloseout: true,
+        hasMeaningfulReviewConversationCloseout: true,
+        hasThresholdDecision: true,
+        hasMeaningfulThresholdDecision: true,
+        hasCalibrationData: true,
+        hasMeaningfulCalibrationData: false,
+        hasCalibrationRequiredKeys: true,
+        hasDirectExecutionSignal: false,
+        hasThresholdExceptionSupport: false,
+        hasThresholdFollowUp: true,
+        hasMeaningfulThresholdFollowUp: true,
+        thresholdFollowUpStatus: "not-needed",
+        hasThresholdFollowUpEvidence: true,
+      },
+    );
+  }
 
   assertGate(
     "controller-direct threshold path requires exception support",
