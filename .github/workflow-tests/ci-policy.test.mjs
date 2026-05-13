@@ -301,7 +301,7 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     finalMergeGateLines.some((line) => hasMeaningfulLine(line)) &&
     (finalMergeGateHasExplicitPendingInitialGate || hasFinalMergeGateRequiredKeys) &&
     finalMergeGateReadyWithResolvedThreadsOnly;
-  const reviewConversationCloseoutLines = extractSectionBody("Review conversation closeout")
+  const reviewConversationCloseoutLines = extractDelegationFieldBody("Review conversation closeout")
     .split("\n")
     .map(normalizeLine)
     .filter(Boolean);
@@ -405,6 +405,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /- Review conversation closeout present: \$\{hasReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /- Review conversation closeout meaningful: \$\{hasMeaningfulReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /hasMeaningfulReviewConversationCloseout/);
+  assert.match(workflow, /const reviewConversationCloseoutBody = extractDelegationFieldBody\('Review conversation closeout'\)/);
   assert.match(workflow, /const placeholderValues = new Set\(\[/);
   assert.match(workflow, /placeholderValues\.has\(normalizePlaceholderValue\(normalizeSectionLine\(trivialExceptionReason\)\)\)/);
   assert.ok(workflow.includes("Self-review\\s*\\/\\s*exception reason"));
@@ -933,6 +934,44 @@ test("Autonomous PR spec gate and final merge gate require meaningful evidence",
     hasReviewConversationCloseout: true,
     hasMeaningfulReviewConversationCloseout: true,
   });
+
+  assertGate(
+    "review closeout parser does not consume final merge gate evidence",
+    bodyWithAutonomousGates({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/closeout",
+        "ready_to_merge=true",
+      ].join("\n"),
+      reviewConversationCloseout: "n/a",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasRoutineOpsDelegationWarning: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: false,
+    },
+  );
 
   assertGate(
     "ready gate fails when unresolved threads are non-zero",

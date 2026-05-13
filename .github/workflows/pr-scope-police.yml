@@ -226,7 +226,7 @@ jobs:
                 (!spawn.fallbackReason || isPlaceholderCloseoutLine(spawn.fallbackReason)),
             )
             const autonomousDetected = hasAutonomousLabel || hasMeaningfulDelegationExecutionLog
-            const reviewConversationCloseoutBody = extractSectionBody('Review conversation closeout')
+            const reviewConversationCloseoutBody = extractDelegationFieldBody('Review conversation closeout')
             const reviewConversationCloseoutLines = reviewConversationCloseoutBody
               .split('\n')
               .map(normalizeSectionLine)
