@@ -1,0 +1,58 @@
+name: ci/policy
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - master
+    paths:
+      - "AGENTS.md"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/policy-ci.yml"
+      - ".github/workflows/pr-scope-police.yml"
+      - ".github/workflow-tests/ci-policy.test.mjs"
+      - "CLAUDE.md"
+      - "docs/codex-autonomous-workflow.md"
+  push:
+    branches:
+      - develop
+      - master
+    paths:
+      - "AGENTS.md"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/policy-ci.yml"
+      - ".github/workflows/pr-scope-police.yml"
+      - ".github/workflow-tests/ci-policy.test.mjs"
+      - "CLAUDE.md"
+      - "docs/codex-autonomous-workflow.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-policy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  workflow-policy:
+    name: Workflow policy regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout tachiya
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check whitespace errors
+        run: git diff --check
+
+      - name: Run workflow policy tests
+        run: node --test .github/workflow-tests/ci-policy.test.mjs

@@ -2663,6 +2663,28 @@ test("API CI keeps lint, timeout, and compile-scope hardening", () => {
   assert.doesNotMatch(workflow, /weekly-release-pr\.yml/);
 });
 
+test("Policy CI makes AWP and template policy changes remotely visible", () => {
+  const workflow = readWorkflow("policy-ci.yml");
+
+  assert.match(workflow, /name: ci\/policy/);
+  assert.match(workflow, /pull_request:/);
+  assert.match(workflow, /push:/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /AGENTS\.md/);
+  assert.match(workflow, /CLAUDE\.md/);
+  assert.match(workflow, /\.github\/PULL_REQUEST_TEMPLATE\.md/);
+  assert.match(workflow, /\.github\/ISSUE_TEMPLATE\/\*\*/);
+  assert.match(workflow, /\.github\/workflows\/policy-ci\.yml/);
+  assert.match(workflow, /\.github\/workflows\/pr-scope-police\.yml/);
+  assert.match(workflow, /\.github\/workflow-tests\/ci-policy\.test\.mjs/);
+  assert.match(workflow, /docs\/codex-autonomous-workflow\.md/);
+  assert.match(workflow, /git diff --check/);
+  assert.match(workflow, /node --test \.github\/workflow-tests\/ci-policy\.test\.mjs/);
+  assert.match(workflow, /timeout-minutes: 5/);
+  assert.doesNotMatch(workflow, /uv run/);
+  assert.doesNotMatch(workflow, /docker\/build-push-action/);
+});
+
 test("cross-repo contract gate owns Storefront drift checks without duplicating Storefront CI", () => {
   const workflow = readWorkflow("cross-repo-contract.yml");
 
