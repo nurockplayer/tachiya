@@ -76,6 +76,9 @@ jobs:
                 'Trivial/self-only exception reason',
                 'Evidence / verification',
                 'Spec gate evidence',
+                'review_triage_ref',
+                'root_cause_gate_ref',
+                'finding_disposition_ref',
                 'Final merge gate',
                 'Worker session closeout',
                 'Workflow friction / follow-up split',
@@ -154,6 +157,25 @@ jobs:
                   })
                   .filter(Boolean),
               )
+            const evidenceRefPendingPattern = /\b(?:pending|unknown|missing|blocked)\b/i
+            const evidenceRefPattern = /#\d+\b|https?:\/\/\S+/i
+            const evidenceRefFallbackPattern = /\bfallback\s*=/i
+            const evaluateEvidenceRefField = (label) => {
+              const lines = extractMeaningfulDelegationFieldLines(label)
+              const hasField = lines.length > 0
+              const hasMeaningfulField = lines.some((line) => hasMeaningfulSectionLine(line))
+              const joined = lines.join('\n')
+              const status = !hasField
+                ? 'missing'
+                : !hasMeaningfulField
+                  ? 'placeholder'
+                  : evidenceRefPendingPattern.test(joined)
+                    ? 'pending'
+                    : evidenceRefPattern.test(joined) || evidenceRefFallbackPattern.test(joined)
+                      ? 'ready'
+                      : 'invalid'
+              return { hasField, hasMeaningfulField, status }
+            }
             const extractThresholdLedgerContext = (keyValues) => {
               const thresholdLedgerRefValue =
                 keyValues.threshold_ledger_ref ?? keyValues.ledger_ref ?? keyValues.threshold_calibration_ref ?? ''
@@ -267,6 +289,9 @@ jobs:
             const hasMeaningfulReviewConversationCloseout = reviewConversationCloseoutLines.some(
               (line) => !isPlaceholderCloseoutLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line),
             )
+            const reviewTriageRef = evaluateEvidenceRefField('review_triage_ref')
+            const rootCauseGateRef = evaluateEvidenceRefField('root_cause_gate_ref')
+            const findingDispositionRef = evaluateEvidenceRefField('finding_disposition_ref')
             const workerProfileNames = [
               'controller',
               'ops_spark',
@@ -547,6 +572,25 @@ jobs:
                 failures.push('Autonomous PRs must include a meaningful `Review conversation closeout` field.')
               }
 
+              const reviewEvidenceFields = [
+                ['review_triage_ref', reviewTriageRef.status],
+                ['root_cause_gate_ref', rootCauseGateRef.status],
+                ['finding_disposition_ref', findingDispositionRef.status],
+              ]
+              for (const [label, status] of reviewEvidenceFields) {
+                if (status === 'missing' || status === 'placeholder' || status === 'invalid') {
+                  failures.push(
+                    `Autonomous PRs must include \`${label}\` with a short evidence ref or explicit \`fallback=\` marker.`,
+                  )
+                }
+              }
+
+              if (finalMergeGateReadyFlag === 'true' && reviewEvidenceFields.some(([, status]) => status !== 'ready')) {
+                failures.push(
+                  'Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` cannot leave `review_triage_ref`, `root_cause_gate_ref`, or `finding_disposition_ref` as pending/unknown/missing/blocked.',
+                )
+              }
+
               if (!hasMeaningfulThresholdDecision) {
                 failures.push('Autonomous PRs must include a meaningful `Threshold decision` field.')
               }
@@ -670,6 +714,9 @@ jobs:
             )
             summaryLines.push(`- Review conversation closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push(`- Review conversation closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
+            summaryLines.push(`- review_triage_ref: ${reviewTriageRef.status}`)
+            summaryLines.push(`- root_cause_gate_ref: ${rootCauseGateRef.status}`)
+            summaryLines.push(`- finding_disposition_ref: ${findingDispositionRef.status}`)
             summaryLines.push(
               `- Threshold decision: ${!hasThresholdDecision ? 'missing' : hasMeaningfulThresholdDecision ? 'meaningful' : 'placeholder'}`,
             )
