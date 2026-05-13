@@ -36,6 +36,7 @@ Autonomous Workflow Dialog 是給 Codex / Claude / reviewer 使用的 agent-faci
 - spec evidence 只保存 `status + ref`；不得把完整 private context、generated output、或 `.spec-injector/` 內容提交到 repo。
 - threshold calibration 的量測資料放在 #375 ledger comment，不塞進 PR body；PR body 只引用 #375 issue/comment URL 或寫明 pending/not applicable。
 - Scope Police 只檢查 evidence ref/status 是否存在，不解析 #375 comment，也不解析完整 spec evidence body。
+- AWP review triage / root-cause gate 在 tachiya 只做 thin wiring：PR body 只放短 evidence ref，不在本 repo 內重做 full parser/checker。schema/checker source of truth 在 `Erick52106/spec-injector#232`、`Erick52106/spec-injector#233`、`Erick52106/spec-injector#234`、`Erick52106/spec-injector#235`。
 
 ### Start Dialog（開工前）
 
@@ -77,6 +78,9 @@ Closeout Dialog 在 PR ready、review finding 修完、或準備進 final merge 
 | chatgpt-codex-connector 狀態 | comment/review、reaction-only、或已要求 `@codex review` | 沒 comment/reaction 且未要求 review |
 | unresolved review threads count | `0`，或列出每條 thread 的 disposition | unresolved thread 未處理 |
 | finding disposition | `fixed`、`not adopted with rationale`、`converted to follow-up`、`blocked` | finding 只寫「已看過」但沒有 comment/resolve/follow-up |
+| review_triage_ref | PR comment、issue comment、spec-injector output ref，或 `fallback=<reason>` | autonomous PR 缺 triage ref/fallback |
+| root_cause_gate_ref | PR comment、issue comment、spec-injector output ref，或 `fallback=<reason>` | duplicate/root-cause gate 缺 ref/fallback |
+| finding_disposition_ref | `adopted=<ref>`、`partial=<ref>`、`rejected=<ref>`、`deferred=<ref>`，或 `fallback=<reason>` | 沒有 disposition evidence ref/fallback |
 | worker session closeout | worker 已讀回且不需要追加任務；已 close 或記錄 close failure | worker 仍可能執行中，或 close failure 沒記錄 |
 | threshold ledger comment | `#375 comment URL`、`pending until final closeout`、`not needed` | closeout 需要 calibration 但沒有 ledger ref 或 pending reason |
 
@@ -92,6 +96,9 @@ unresolved_thread_count=0
 finding_disposition=fixed|not_adopted_with_rationale|converted_to_follow_up|blocked
 worker_session_closeout=closed
 threshold_ledger_ref=#375 comment URL
+review_triage_ref=https://github.com/.../pull/123#issuecomment-...
+root_cause_gate_ref=https://github.com/.../issues/378#issuecomment-...
+finding_disposition_ref=adopted=https://github.com/.../pull/123#discussion_r...
 stop_reason=none
 ```
 
@@ -108,6 +115,7 @@ Merge Gate Dialog 是最後一道 merge 前檢查。任何欄位為 `pending`、
 | spec_gate_status | `spec_validate_pass`、`manual_checklist`、`not_using_spec` | `blocked`、pending、unknown |
 | spec_evidence_ref | PR comment、issue comment、local note summary；只放 status/ref | 缺 ref，或 ref 指向不可公開/private output |
 | threshold_ledger_ref | #375 issue/comment URL、`not_needed`，或明確 pending blocker；若 `ready_to_merge=true` 不可再填 `pending` | 需要 ledger 但沒有 #375 ref，或 merge gate ready 後仍是 pending |
+| review_triage_ref / root_cause_gate_ref / finding_disposition_ref | evidence ref 或 `fallback=<reason>`；若 `ready_to_merge=true` 不可再填 `pending`、`unknown`、`missing`、`blocked` | merge gate ready 後仍是 pending/unknown/missing/blocked |
 | final PR body update | `updated_once_after_stable_evidence` 或 `not_needed` | final gate 反覆更新、仍有 pending placeholder |
 
 Final merge gate 建議輸出：
@@ -120,6 +128,9 @@ unresolved_thread_count=0
 spec_gate_status=spec_validate_pass
 spec_evidence_ref=PR body Spec gate evidence
 threshold_ledger_ref=https://github.com/nurockplayer/tachiya/issues/375#issuecomment-...
+review_triage_ref=https://github.com/.../pull/123#issuecomment-...
+root_cause_gate_ref=https://github.com/.../issues/378#issuecomment-...
+finding_disposition_ref=adopted=https://github.com/.../pull/123#discussion_r...
 final_pr_body_update=updated_once_after_stable_evidence
 stop_reason=none
 ```
@@ -393,6 +404,8 @@ Spawn 指令為硬規則（建議每個 worker 一筆）：
 
 如果 repo 有使用 `spec-injector`，autonomous workflow 必須把它當成 local-only gate，而不是可隨意提交的產物來源。
 
+AWP review triage / root-cause gate 的 source issue 也以 spec-injector 為主：`Erick52106/spec-injector#232`、`Erick52106/spec-injector#233`、`Erick52106/spec-injector#234`、`Erick52106/spec-injector#235`。tachiya 只保留 template / docs / Scope Police 的薄接線，不在本 repo 複製完整 checker。
+
 ### Required checkpoints
 
 - 開工前：先跑 `spec validate --repo .`，確認本地設定與 template/manual checklist 沒有明顯失配。
@@ -425,6 +438,15 @@ Spawn 指令為硬規則（建議每個 worker 一筆）：
 5. GitHub 允許時，將已處理的 review thread/comment resolve；routine comment/resolve/readback 由 `ops_spark` 執行或整理，總控負責判斷處置是否足夠。
 6. 若 push 過新 commit，merge 前由 `ops_spark` 重新讀回 head SHA 與 automated review 狀態。
 
+review comments 必須先做 necessity assessment，不可因 reviewer 是 CodeRabbit、Codex 或 human 就盲目採用。triage 時至少要確認：
+
+- 這個 finding 是否真的指向當前 PR 的 scope、不是已被後續 commit 消掉的舊 head、也不是 template/parser 誤讀。
+- review batch 必須綁定 reviewed head SHA；新 commit push 後，舊 finding 只能作為背景，不可直接拿來當最新 merge gate 結論。
+- CodeRabbit、Codex、human 的 duplicate finding 要 collapse 成同一個 root cause，不要為同一個症狀連續疊 patch。
+- repeated same-concept edge case 代表需要 root-cause / state-model assessment，不是再補第三個局部 if/regex。
+- parser / gate / workflow follow-up 優先用 matrix-first / table-driven tests 收斂；tachiya 只保留 thin wiring，完整 schema/checker 追到 `Erick52106/spec-injector#232`、`Erick52106/spec-injector#233`、`Erick52106/spec-injector#234`、`Erick52106/spec-injector#235`。
+- 如果 follow-up patch budget 已經吃掉原 PR 約 25-30% 以上，必須重新判斷是 split/follow-up issue，還是當前 PR 仍應繼續承接。
+
 CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".*"]`，讓 PR target branch 不限 default branch 都能觸發 auto review。
 
 ## Review Conversation Closeout Gate
@@ -442,6 +464,7 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 4. PR closeout 前，review conversation 要求不得是「僅有文字變更描述」，最少要有 comment 或 resolve 證據可被 reviewer/readback 看到。
 5. 總控不得把「留證據並 resolve」這類資訊搬運工作預設留給自己做；只有工具故障、權限不足、或任務小到符合 trivial/self-only exception 時才可自行處理，且必須在 PR log 寫明原因。
 6. 每條 actionable finding 都必須有固定 disposition：`fix`、`not adopted`、`converted to follow-up`、`rate limit fallback`、`connector reaction-only` 或 `blocked`；不得只寫「已看過」而沒有 comment/resolve 或替代證據。
+7. PR body 的 `review_triage_ref`、`root_cause_gate_ref`、`finding_disposition_ref` 只放短 evidence ref 或 `fallback=<reason>`，不要把 full matrix、統計表、或完整 comment body 再複製進 template。
 
 ### Review Closeout Evidence Matrix
 
@@ -457,6 +480,8 @@ CodeRabbit 由 `.coderabbit.yaml` 設定 `reviews.auto_review.base_branches: [".
 | blocked | 無法驗證、無法 resolve、finding 仍 actionable | 不可 merge |
 
 closeout comment 至少要列出 latest head SHA、CI/check 結論、unresolved thread count、CodeRabbit 狀態、`chatgpt-codex-connector` 狀態，以及每條 finding 的採納/不採納結果。
+
+最終 closeout 必須能把每個 finding 收斂到 `adopted`、`partial`、`rejected`、`deferred` 其中之一，並且各自有 evidence ref。若因 source issue / upstream checker 尚未完成而暫緩，`deferred` 也必須附對應 issue/comment ref。
 
 final closeout summary 只應在下列條件都穩定後更新一次：
 

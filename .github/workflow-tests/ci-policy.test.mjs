@@ -73,6 +73,15 @@ const assertGate = (name, body, labels, expectedOverrides) => {
   const actual = evaluateAutonomousCloseoutGate({ body, labels });
   delete actual.hasExplicitThresholdLedgerContext;
   delete actual.hasReadyPendingThresholdLedger;
+  delete actual.hasReviewTriageRef;
+  delete actual.hasMeaningfulReviewTriageRef;
+  delete actual.reviewTriageRefStatus;
+  delete actual.hasRootCauseGateRef;
+  delete actual.hasMeaningfulRootCauseGateRef;
+  delete actual.rootCauseGateRefStatus;
+  delete actual.hasFindingDispositionRef;
+  delete actual.hasMeaningfulFindingDispositionRef;
+  delete actual.findingDispositionRefStatus;
   assert.deepEqual(actual, buildGateExpected(expectedOverrides), name);
 };
 
@@ -124,6 +133,9 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
       "Trivial/self-only exception reason",
       "Evidence / verification",
       "Spec gate evidence",
+      "review_triage_ref",
+      "root_cause_gate_ref",
+      "finding_disposition_ref",
       "Final merge gate",
       "Worker session closeout",
       "Workflow friction / follow-up split",
@@ -221,6 +233,26 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
         })
         .filter(Boolean),
     );
+  const evidenceRefPendingPattern = /\b(?:pending|unknown|missing|blocked)\b/i;
+  const evidenceRefPattern = /#\d+\b|https?:\/\/\S+/i;
+  const evidenceRefFallbackPattern = /\bfallback\s*=/i;
+  const evaluateEvidenceRefField = (label) => {
+    const lines = extractMeaningfulFieldLines(label);
+    const hasField = lines.length > 0;
+    const hasMeaningfulField = lines.some((line) => hasMeaningfulLine(line));
+    const joined = lines.join("\n");
+    const hasReadyRef = evidenceRefPattern.test(joined) || evidenceRefFallbackPattern.test(joined);
+    const status = !hasField
+      ? "missing"
+      : !hasMeaningfulField
+        ? "placeholder"
+        : hasReadyRef
+          ? "ready"
+          : evidenceRefPendingPattern.test(joined)
+            ? "pending"
+            : "invalid";
+    return { hasField, hasMeaningfulField, status };
+  };
   const extractThresholdLedgerContext = (keyValues) => {
     const thresholdLedgerRefValue =
       keyValues.threshold_ledger_ref ?? keyValues.ledger_ref ?? keyValues.threshold_calibration_ref ?? "";
@@ -353,6 +385,9 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
   const hasMeaningfulReviewConversationCloseout = reviewConversationCloseoutLines.some(
     (line) => !isPlaceholderLine(line) && /[A-Za-z0-9\u4e00-\u9fff]/.test(line),
   );
+  const reviewTriageRef = evaluateEvidenceRefField("review_triage_ref");
+  const rootCauseGateRef = evaluateEvidenceRefField("root_cause_gate_ref");
+  const findingDispositionRef = evaluateEvidenceRefField("finding_disposition_ref");
   const thresholdDecisionLines = extractMeaningfulFieldLines("Threshold decision");
   const hasThresholdDecision = thresholdDecisionLines.length > 0;
   const hasMeaningfulThresholdDecision = thresholdDecisionLines.some((line) => hasMeaningfulLine(line));
@@ -465,6 +500,15 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     finalMergeGateReadyWithResolvedThreadsOnly,
     hasReviewConversationCloseout,
     hasMeaningfulReviewConversationCloseout,
+    hasReviewTriageRef: reviewTriageRef.hasField,
+    hasMeaningfulReviewTriageRef: reviewTriageRef.hasMeaningfulField,
+    reviewTriageRefStatus: reviewTriageRef.status,
+    hasRootCauseGateRef: rootCauseGateRef.hasField,
+    hasMeaningfulRootCauseGateRef: rootCauseGateRef.hasMeaningfulField,
+    rootCauseGateRefStatus: rootCauseGateRef.status,
+    hasFindingDispositionRef: findingDispositionRef.hasField,
+    hasMeaningfulFindingDispositionRef: findingDispositionRef.hasMeaningfulField,
+    findingDispositionRefStatus: findingDispositionRef.status,
     hasThresholdDecision,
     hasMeaningfulThresholdDecision,
     hasCalibrationData,
@@ -515,6 +559,25 @@ const evaluateAutonomousCloseoutFailures = ({ body, labels = [] }) => {
 
   if (!gate.hasMeaningfulReviewConversationCloseout) {
     failures.push("Autonomous PRs must include a meaningful `Review conversation closeout` field.");
+  }
+
+  const reviewEvidenceFields = [
+    ["review_triage_ref", gate.reviewTriageRefStatus],
+    ["root_cause_gate_ref", gate.rootCauseGateRefStatus],
+    ["finding_disposition_ref", gate.findingDispositionRefStatus],
+  ];
+  for (const [label, status] of reviewEvidenceFields) {
+    if (status === "missing" || status === "placeholder" || status === "invalid") {
+      failures.push(
+        `Autonomous PRs must include \`${label}\` with a short evidence ref or explicit \`fallback=\` marker.`,
+      );
+    }
+  }
+
+  if (gate.finalMergeGateReadyFlag === "true" && reviewEvidenceFields.some(([, status]) => status !== "ready")) {
+    failures.push(
+      "Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` cannot leave `review_triage_ref`, `root_cause_gate_ref`, or `finding_disposition_ref` as pending/unknown/missing/blocked.",
+    );
   }
 
   if (!gate.hasMeaningfulThresholdDecision) {
@@ -568,7 +631,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   const issueConfig = readRepoFile(".github/ISSUE_TEMPLATE/config.yml");
   const workflow = readWorkflow("pr-scope-police.yml");
 
-  for (const pattern of [/Source of truth/, /Depends on PR/, /本 PR 明確不做/, /Delegation Execution Log/, /Spawn directive/, /model=/, /reasoning=/, /controller_fallback=/, /Validation/]) {
+  for (const pattern of [/Source of truth/, /Depends on PR/, /本 PR 明確不做/, /Delegation Execution Log/, /Spawn directive/, /model=/, /reasoning=/, /controller_fallback=/, /review_triage_ref/, /root_cause_gate_ref/, /finding_disposition_ref/, /Validation/]) {
     assert.match(prTemplate, pattern);
   }
   assert.equal(evaluateAutonomousCloseoutGate({ body: prTemplate, labels: [] }).hasSpawnDirective, false);
@@ -588,6 +651,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /hasDelegationExecutionLog/);
   assert.match(workflow, /Controller fallback reason/);
   assert.match(workflow, /Spec gate evidence/);
+  assert.match(workflow, /review_triage_ref/);
+  assert.match(workflow, /root_cause_gate_ref/);
+  assert.match(workflow, /finding_disposition_ref/);
   assert.match(workflow, /Final merge gate/);
   assert.match(workflow, /Worker session closeout/);
   assert.match(workflow, /Workflow friction \/ follow-up split/);
@@ -620,6 +686,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /- Final merge gate: \$\{.+\}/);
   assert.match(workflow, /- Review conversation closeout present: \$\{hasReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /- Review conversation closeout meaningful: \$\{hasMeaningfulReviewConversationCloseout \? 'yes' : 'no'\}/);
+  assert.match(workflow, /- review_triage_ref: \$\{reviewTriageRef\.status\}/);
+  assert.match(workflow, /- root_cause_gate_ref: \$\{rootCauseGateRef\.status\}/);
+  assert.match(workflow, /- finding_disposition_ref: \$\{findingDispositionRef\.status\}/);
   assert.match(workflow, /- Threshold decision: \$\{.+\}/);
   assert.match(workflow, /- Calibration data: \$\{.+\}/);
   assert.match(workflow, /- Threshold ledger ref\/status: \$\{hasThresholdLedgerRef \? 'present' : 'missing'\}/);
@@ -637,6 +706,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs must include a meaningful `Final merge gate` field\./);
   assert.match(workflow, /Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
+  assert.match(workflow, /const reviewEvidenceFields = \[/);
+  assert.match(workflow, /short evidence ref or explicit \\`fallback=\\` marker\./);
+  assert.match(workflow, /Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` cannot leave `review_triage_ref`, `root_cause_gate_ref`, or `finding_disposition_ref` as pending\/unknown\/missing\/blocked\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Threshold decision` field\./);
   assert.match(workflow, /const extractThresholdLedgerContext = \(keyValues\) =>/);
   assert.match(workflow, /const finalMergeGateLedgerContext = extractThresholdLedgerContext\(finalMergeGateKeyValues\)/);
@@ -663,6 +735,10 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(prTemplate, /不要把 threshold metrics 展開塞進 PR body/);
   assert.match(prTemplate, /status \+ ref only/);
   assert.match(prTemplate, /Workflow friction \/ follow-up split/);
+  assert.match(prTemplate, /review_triage_ref/);
+  assert.match(prTemplate, /root_cause_gate_ref/);
+  assert.match(prTemplate, /finding_disposition_ref/);
+  assert.match(prTemplate, /fallback=/);
   assert.match(prTemplate, /latest_head_sha/);
   assert.match(prTemplate, /ci_check_summary/);
   assert.match(prTemplate, /coderabbit_status/);
@@ -701,6 +777,17 @@ test("Autonomous workflow docs cover routing, closeout, lifecycle, and follow-up
     /#376/,
     /status \+ ref/,
     /Scope Police 只檢查 evidence ref\/status 是否存在/,
+    /review comments 必須先做 necessity assessment/,
+    /review batch.*reviewed head SHA/,
+    /CodeRabbit.*Codex.*human.*duplicate finding.*collapse.*root cause/i,
+    /same-concept edge case.*root-cause \/ state-model assessment/i,
+    /matrix-first \/ table-driven tests/,
+    /patch budget.*25-30%/,
+    /adopted.*partial.*rejected.*deferred/,
+    /spec-injector#232/,
+    /spec-injector#233/,
+    /spec-injector#234/,
+    /spec-injector#235/,
     /## Subagent Lifecycle 與 Thread-limit Cleanup/,
     /## Issue-first 與 Follow-up Split Policy/,
     /## PR Template 與 Policy-test Hardening/,
@@ -1130,6 +1217,9 @@ test("Autonomous PR spec gate and final merge gate require meaningful evidence",
           value: "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed",
         },
         { label: "Spec gate evidence", value: specGateEvidence },
+        { label: "review_triage_ref", value: "https://example.com/review-triage/123" },
+        { label: "root_cause_gate_ref", value: "https://example.com/root-cause/123" },
+        { label: "finding_disposition_ref", value: "adopted=https://example.com/finding/123" },
         { label: "Final merge gate", value: finalMergeGate },
         { label: "Review conversation closeout", value: reviewConversationCloseout },
       ],
@@ -1416,6 +1506,9 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
         { label: "Calibration data", value: calibrationData },
         { label: "Threshold follow-up", value: thresholdFollowUp },
         { label: "Spec gate evidence", value: "spec validate=not using spec-injector; manual gate evidence refreshed" },
+        { label: "review_triage_ref", value: "https://example.com/review-triage/370" },
+        { label: "root_cause_gate_ref", value: "https://example.com/root-cause/370" },
+        { label: "finding_disposition_ref", value: "adopted=https://example.com/finding/370" },
         { label: "Final merge gate", value: finalMergeGate },
         { label: "Review conversation closeout", value: "threshold gate regression covered; no unresolved automated finding" },
       ],
@@ -2356,6 +2449,101 @@ test("Autonomous PR threshold calibration gate accepts #375 ledger refs and foll
       thresholdFollowUpStatus: "absent",
       hasThresholdFollowUpEvidence: false,
     },
+  );
+});
+
+test("AWP review triage refs gate covers autonomous and non-autonomous paths", () => {
+  const baseBody = ({
+    reviewTriageRef = "https://example.com/review-triage/378",
+    rootCauseGateRef = "https://example.com/root-cause/378",
+    findingDispositionRef = "adopted=https://example.com/finding/378",
+    finalMergeGate = [
+      "latest_head_sha=abc1234",
+      "unresolved_thread_count=0",
+      "spec_gate_status=pass",
+      "evidence_urls=https://example.com/pr/378",
+      "ready_to_merge=false",
+    ].join("\n"),
+  } = {}) =>
+    makePrBody({
+      delegationRows: [
+        { label: "Source issue delegation plan", value: "#378" },
+        { label: "Actual worker profile(s)", value: "ops_spark" },
+        { label: "Task", value: "ops_spark: review triage evidence upkeep" },
+        {
+          label: "Spawn directive",
+          value: "spawn: ops_spark model=gpt-5.3-codex-spark reasoning=medium controller_fallback=not_allowed",
+        },
+        { label: "Spec gate evidence", value: "manual_checklist; evidence_url=https://example.com/spec/378" },
+        { label: "review_triage_ref", value: reviewTriageRef },
+        { label: "root_cause_gate_ref", value: rootCauseGateRef },
+        { label: "finding_disposition_ref", value: findingDispositionRef },
+        { label: "Review conversation closeout", value: "latest_head_sha=abc1234; unresolved_thread_count=0" },
+        { label: "Threshold decision", value: "decision=ops_spark_required" },
+        { label: "Calibration data", value: "threshold_ledger_ref=#375\nthreshold_ledger_status=ready" },
+        { label: "Threshold follow-up", value: "status=no_change\nfollowup_issue=none" },
+        { label: "Final merge gate", value: finalMergeGate },
+      ],
+    });
+
+  assert.deepEqual(evaluateAutonomousCloseoutFailures({ body: baseBody(), labels: ["codex"] }), []);
+
+  assert.equal(
+    evaluateAutonomousCloseoutGate({
+      body: baseBody({ reviewTriageRef: "pending initial gate: waiting for first CodeRabbit triage readback" }),
+      labels: ["codex"],
+    }).reviewTriageRefStatus,
+    "pending",
+  );
+
+  assert.equal(
+    evaluateAutonomousCloseoutGate({
+      body: baseBody({
+        reviewTriageRef: "fallback=manual-self-review pending until closeout evidence lands",
+      }),
+      labels: ["codex"],
+    }).reviewTriageRefStatus,
+    "ready",
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutFailures({
+      body: baseBody({ reviewTriageRef: "n/a", rootCauseGateRef: "n/a", findingDispositionRef: "n/a" }),
+      labels: ["codex"],
+    }),
+    [
+      "Autonomous PRs must include `review_triage_ref` with a short evidence ref or explicit `fallback=` marker.",
+      "Autonomous PRs must include `root_cause_gate_ref` with a short evidence ref or explicit `fallback=` marker.",
+      "Autonomous PRs must include `finding_disposition_ref` with a short evidence ref or explicit `fallback=` marker.",
+    ],
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutFailures({
+      body: baseBody({
+        reviewTriageRef: "pending",
+        finalMergeGate: [
+          "latest_head_sha=abc1234",
+          "unresolved_thread_count=0",
+          "spec_gate_status=pass",
+          "evidence_urls=https://example.com/pr/378",
+          "ready_to_merge=true",
+        ].join("\n"),
+      }),
+      labels: ["codex"],
+    }),
+    [
+      "Autonomous PRs must include `review_triage_ref` with a short evidence ref or explicit `fallback=` marker.",
+      "Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` cannot leave `review_triage_ref`, `root_cause_gate_ref`, or `finding_disposition_ref` as pending/unknown/missing/blocked.",
+    ],
+  );
+
+  assert.deepEqual(
+    evaluateAutonomousCloseoutFailures({
+      body: makePrBody({ delegationRows: [], sections: ["## Notes\n- manual docs-only PR without AWP refs"] }),
+      labels: [],
+    }),
+    [],
   );
 });
 
