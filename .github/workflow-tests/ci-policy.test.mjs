@@ -70,7 +70,10 @@ const buildGateExpected = (overrides = {}) =>
   });
 
 const assertGate = (name, body, labels, expectedOverrides) => {
-  assert.deepEqual(evaluateAutonomousCloseoutGate({ body, labels }), buildGateExpected(expectedOverrides), name);
+  const actual = evaluateAutonomousCloseoutGate({ body, labels });
+  delete actual.hasExplicitThresholdLedgerContext;
+  delete actual.hasReadyPendingThresholdLedger;
+  assert.deepEqual(actual, buildGateExpected(expectedOverrides), name);
 };
 
 const stripTemplateComments = (body) => body.replace(/<!--[\s\S]*?-->/g, "");
@@ -218,6 +221,24 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
         })
         .filter(Boolean),
     );
+  const extractThresholdLedgerContext = (keyValues) => {
+    const thresholdLedgerRefValue =
+      keyValues.threshold_ledger_ref ?? keyValues.ledger_ref ?? keyValues.threshold_calibration_ref ?? "";
+    const explicitThresholdLedgerStatusValue =
+      keyValues.threshold_ledger_status ??
+      keyValues.ledger_status ??
+      keyValues.threshold_calibration_status ??
+      "";
+    const hasExplicitThresholdLedgerContext =
+      Boolean(thresholdLedgerRefValue) || Boolean(explicitThresholdLedgerStatusValue);
+    const thresholdLedgerStatusValue =
+      explicitThresholdLedgerStatusValue || (hasExplicitThresholdLedgerContext ? keyValues.status ?? "" : "");
+    return {
+      thresholdLedgerRefValue,
+      thresholdLedgerStatusValue,
+      hasExplicitThresholdLedgerContext,
+    };
+  };
   const trivialExceptionMatch = bodyForAutonomousGate.match(
     /(?:^|\n)\s*(?:#{1,6}\s*)?(?:Trivial(?:\s*\/\s*self-only)? exception reason|Self-only exception reason|Self-review\s*\/\s*exception reason)\s*[：:]\s*(.+)/i,
   );
@@ -350,7 +371,37 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     const value = calibrationDataKeyValues[key];
     return Boolean(value) && hasMeaningfulLine(value);
   });
-  const hasMeaningfulCalibrationData = calibrationDataLines.some((line) => hasMeaningfulLine(line)) && hasCalibrationRequiredKeys;
+  const finalMergeGateLedgerContext = extractThresholdLedgerContext(finalMergeGateKeyValues);
+  const calibrationLedgerContext = extractThresholdLedgerContext(calibrationDataKeyValues);
+  const thresholdLedgerRefValue = calibrationLedgerContext.thresholdLedgerRefValue;
+  const hasExplicitThresholdLedgerContext = calibrationLedgerContext.hasExplicitThresholdLedgerContext;
+  const thresholdLedgerStatusValue = calibrationLedgerContext.thresholdLedgerStatusValue;
+  const thresholdLedgerRefPattern =
+    /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i;
+  const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue);
+  const pendingThresholdLedgerPattern = /(?:^|[\s,;])pending(?:$|[\s,;])/i;
+  const hasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(thresholdLedgerRefValue);
+  const hasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(thresholdLedgerStatusValue);
+  const finalMergeGateHasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(
+    finalMergeGateLedgerContext.thresholdLedgerRefValue,
+  );
+  const finalMergeGateHasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(
+    finalMergeGateLedgerContext.thresholdLedgerStatusValue,
+  );
+  const hasReadyPendingThresholdLedger =
+    finalMergeGateReadyFlag === "true" &&
+    (
+      hasPendingThresholdLedgerRef ||
+      hasPendingThresholdLedgerStatus ||
+      finalMergeGateHasPendingThresholdLedgerRef ||
+      finalMergeGateHasPendingThresholdLedgerStatus
+    );
+  const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !hasReadyPendingThresholdLedger;
+  const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedger;
+  const hasMeaningfulCalibrationData =
+    calibrationDataLines.some((line) => hasMeaningfulLine(line)) &&
+    hasCalibrationReadyStateCompatible &&
+    (hasCalibrationRequiredKeys || hasReadyThresholdLedgerRef);
   const directExecutionDecisionValues = new Set(["controller_direct", "trivial_direct", "no_worker"]);
   const directExecutionSignalPattern =
     /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i;
@@ -419,6 +470,8 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     hasCalibrationData,
     hasMeaningfulCalibrationData,
     hasCalibrationRequiredKeys,
+    hasExplicitThresholdLedgerContext,
+    hasReadyPendingThresholdLedger,
     hasDirectExecutionSignal,
     hasThresholdExceptionSupport,
     hasThresholdFollowUp,
@@ -426,6 +479,77 @@ const evaluateAutonomousCloseoutGate = ({ body, labels = [] }) => {
     thresholdFollowUpStatus,
     hasThresholdFollowUpEvidence,
   };
+};
+
+const evaluateAutonomousCloseoutFailures = ({ body, labels = [] }) => {
+  const gate = evaluateAutonomousCloseoutGate({ body, labels });
+  const failures = [];
+
+  if (!gate.autonomousDetected) {
+    return failures;
+  }
+
+  if (!gate.hasDelegationExecutionLog) {
+    failures.push("Autonomous PRs must include a `Delegation Execution Log` section.");
+  }
+
+  if (!gate.hasSpawnDirective && !gate.hasTrivialExceptionReason) {
+    failures.push(
+      "Autonomous PRs must name at least one worker profile or give an explicit trivial/self-only exception reason.",
+    );
+  }
+
+  if (!gate.hasMeaningfulSpecGateEvidence) {
+    failures.push("Autonomous PRs must include a meaningful `Spec gate evidence` field.");
+  }
+
+  if (!gate.hasMeaningfulFinalMergeGate) {
+    failures.push("Autonomous PRs must include a meaningful `Final merge gate` field.");
+  }
+
+  if (!gate.finalMergeGateReadyWithResolvedThreadsOnly) {
+    failures.push(
+      "Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders.",
+    );
+  }
+
+  if (!gate.hasMeaningfulReviewConversationCloseout) {
+    failures.push("Autonomous PRs must include a meaningful `Review conversation closeout` field.");
+  }
+
+  if (!gate.hasMeaningfulThresholdDecision) {
+    failures.push("Autonomous PRs must include a meaningful `Threshold decision` field.");
+  }
+
+  if (gate.hasReadyPendingThresholdLedger) {
+    failures.push("Threshold ledger ref/status: pending — merge blocked until pending ledger is merged.");
+  } else if (!gate.hasMeaningfulCalibrationData) {
+    failures.push(
+      "Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref/status.",
+    );
+  }
+
+  if (gate.hasDirectExecutionSignal && !gate.hasThresholdExceptionSupport) {
+    failures.push(
+      "Autonomous PRs that signal direct execution via `controller_direct`, `trivial_direct`, `no_worker`, `decision=...`, or `threshold_decision=...` must include a meaningful trivial/self-only exception or Controller fallback reason.",
+    );
+  }
+
+  if (gate.thresholdFollowUpStatus === "missing-evidence") {
+    failures.push(
+      "Autonomous PRs with `Threshold follow-up` or `Calibration data` indicating `status=open_followup` or `threshold_followup_needed=yes|true|needed` must include issue or PR evidence such as `#123` or a URL.",
+    );
+  }
+
+  if (!gate.hasTrivialExceptionReason && !gate.hasSpawnDirectiveWithModelReasoning) {
+    failures.push("Autonomous PRs with worker delegation must include a Spawn directive with `model=` and `reasoning=`.");
+  }
+
+  if (gate.hasSpawnAllowedWithoutReason) {
+    failures.push("Autonomous PRs with `controller_fallback=allowed` must include `fallback_reason=`.");
+  }
+
+  return failures;
 };
 
 const withSpawnDefaults = (values = {}) => ({
@@ -498,6 +622,7 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /- Review conversation closeout meaningful: \$\{hasMeaningfulReviewConversationCloseout \? 'yes' : 'no'\}/);
   assert.match(workflow, /- Threshold decision: \$\{.+\}/);
   assert.match(workflow, /- Calibration data: \$\{.+\}/);
+  assert.match(workflow, /- Threshold ledger ref\/status: \$\{hasThresholdLedgerRef \? 'present' : 'missing'\}/);
   assert.match(workflow, /- Threshold follow-up: \$\{.+\}/);
   assert.match(workflow, /hasMeaningfulReviewConversationCloseout/);
   assert.match(workflow, /const reviewConversationCloseoutBody = extractDelegationFieldBody\('Review conversation closeout'\)/);
@@ -513,7 +638,13 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /Autonomous PRs with `ready_to_merge=true` or `merge_ready=true` must set `unresolved_thread_count=0` and remove pending initial gate placeholders\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Review conversation closeout` field\./);
   assert.match(workflow, /Autonomous PRs must include a meaningful `Threshold decision` field\./);
-  assert.match(workflow, /Autonomous PRs must include meaningful `Calibration data` with `spawn_count`, `ci_rerun_count`, `review_thread_count`, `rework_reason`, `threshold_decision`, and `threshold_followup_needed`\./);
+  assert.match(workflow, /const extractThresholdLedgerContext = \(keyValues\) =>/);
+  assert.match(workflow, /const finalMergeGateLedgerContext = extractThresholdLedgerContext\(finalMergeGateKeyValues\)/);
+  assert.match(workflow, /const calibrationLedgerContext = extractThresholdLedgerContext\(calibrationDataKeyValues\)/);
+  assert.match(workflow, /const hasExplicitThresholdLedgerContext = calibrationLedgerContext\.hasExplicitThresholdLedgerContext/);
+  assert.match(workflow, /Threshold ledger ref\/status: pending — merge blocked until pending ledger is merged\./);
+  assert.match(workflow, /Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref\/status\./);
+  assert.match(workflow, /threshold_ledger_ref/);
   assert.match(workflow, /Autonomous PRs that signal direct execution via `controller_direct`, `trivial_direct`, `no_worker`, `decision=\.\.\.`, or `threshold_decision=\.\.\.` must include a meaningful trivial\/self-only exception or Controller fallback reason\./);
   assert.match(
     workflow,
@@ -528,6 +659,9 @@ test("Autonomous delegation gate ships root templates and workflow body checks",
   assert.match(workflow, /'branch'/);
   assert.match(workflow, /scope-exception/);
   assert.match(prTemplate, /Worker session closeout/);
+  assert.match(prTemplate, /threshold_ledger_ref=#375/);
+  assert.match(prTemplate, /不要把 threshold metrics 展開塞進 PR body/);
+  assert.match(prTemplate, /status \+ ref only/);
   assert.match(prTemplate, /Workflow friction \/ follow-up split/);
   assert.match(prTemplate, /latest_head_sha/);
   assert.match(prTemplate, /ci_check_summary/);
@@ -555,6 +689,18 @@ test("Autonomous workflow docs cover routing, closeout, lifecycle, and follow-up
 
   for (const pattern of [
     /## Cost Model 與摩擦預算/,
+    /## Autonomous Workflow Dialog/,
+    /### Start Dialog（開工前）/,
+    /### Closeout Dialog（PR ready \/ review 後）/,
+    /### Merge Gate Dialog（merge 前）/,
+    /spec_validate_pass/,
+    /manual_checklist/,
+    /not_using_spec/,
+    /threshold ledger plan/,
+    /#375 ledger comment/,
+    /#376/,
+    /status \+ ref/,
+    /Scope Police 只檢查 evidence ref\/status 是否存在/,
     /## Subagent Lifecycle 與 Thread-limit Cleanup/,
     /## Issue-first 與 Follow-up Split Policy/,
     /## PR Template 與 Policy-test Hardening/,
@@ -1233,7 +1379,7 @@ test("Autonomous PR spec gate and final merge gate require meaningful evidence",
   );
 });
 
-test("Autonomous PR threshold calibration gate requires decision, calibration keys, and follow-up evidence", () => {
+test("Autonomous PR threshold calibration gate accepts #375 ledger refs and follow-up evidence", () => {
   const bodyWithThresholdGate = ({
     thresholdDecision = "route=ops_spark-first; controller_direct=false",
     calibrationData = [
@@ -1245,6 +1391,13 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
       "threshold_followup_needed=no",
     ].join("\n"),
     thresholdFollowUp = "status=no_change\nthreshold_followup_needed=no\nfollowup_issue=none",
+    finalMergeGate = [
+      "latest_head_sha=abc1234",
+      "unresolved_thread_count=0",
+      "spec_gate_status=pass",
+      "evidence_urls=https://example.com/pr/370",
+      "ready_to_merge=false",
+    ].join("\n"),
     controllerFallbackReason,
     trivialExceptionReason,
   } = {}) =>
@@ -1263,16 +1416,7 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
         { label: "Calibration data", value: calibrationData },
         { label: "Threshold follow-up", value: thresholdFollowUp },
         { label: "Spec gate evidence", value: "spec validate=not using spec-injector; manual gate evidence refreshed" },
-        {
-          label: "Final merge gate",
-          value: [
-            "latest_head_sha=abc1234",
-            "unresolved_thread_count=0",
-            "spec_gate_status=pass",
-            "evidence_urls=https://example.com/pr/370",
-            "ready_to_merge=false",
-          ].join("\n"),
-        },
+        { label: "Final merge gate", value: finalMergeGate },
         { label: "Review conversation closeout", value: "threshold gate regression covered; no unresolved automated finding" },
       ],
     });
@@ -1315,6 +1459,52 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
     thresholdFollowUpStatus: "not-needed",
     hasThresholdFollowUpEvidence: false,
   });
+
+  assertGate(
+    "threshold ledger ref passes without expanding metrics in PR body",
+    bodyWithThresholdGate({
+      calibrationData: "threshold_ledger_ref=#375 pending until final closeout",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: true,
+      hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: true,
+    },
+  );
 
   assertGate("missing threshold decision is blocked", bodyWithThresholdGate({ thresholdDecision: "n/a" }), ["codex"], {
     autonomousDetected: true,
@@ -1396,6 +1586,379 @@ test("Autonomous PR threshold calibration gate requires decision, calibration ke
       hasThresholdFollowUpEvidence: false,
     },
   );
+
+  assertGate(
+    "threshold ledger ref rejects depending substring",
+    bodyWithThresholdGate({
+      calibrationData: "threshold_ledger_ref=depending_on_closeout",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "false",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "ready to merge blocks pending threshold ledger ref",
+    bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/ready-threshold",
+        "ready_to_merge=true",
+      ].join("\n"),
+      calibrationData: "threshold_ledger_ref=pending",
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: false,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "ready to merge blocks pending threshold ledger ref even with complete legacy metrics",
+    bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/ready-threshold-legacy",
+        "ready_to_merge=true",
+      ].join("\n"),
+      calibrationData: [
+        "threshold_ledger_ref=pending",
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: true,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: false,
+    },
+  );
+
+  assertGate(
+    "ready to merge blocks pending threshold ledger ref from final merge gate even with #375 calibration ref and complete legacy metrics",
+    bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/final-gate-pending-threshold-ref",
+        "ready_to_merge=true",
+        "threshold_ledger_ref=pending",
+      ].join("\n"),
+      calibrationData: [
+        "threshold_ledger_ref=#375",
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    }),
+    ["codex"],
+    {
+      autonomousDetected: true,
+      hasDelegationExecutionLog: true,
+      hasMeaningfulDelegationExecutionLog: true,
+      hasTrivialExceptionReason: false,
+      hasOpsSparkMention: true,
+      hasRoutineOpsWork: true,
+      hasSpawnDirective: true,
+      hasSpawnModel: true,
+      hasSpawnReasoning: true,
+      hasSpawnControllerFallback: true,
+      hasSpawnDirectiveWithModelReasoning: true,
+      hasSpawnAllowedWithoutReason: false,
+      hasRoutineOpsDelegationWarning: false,
+      hasControllerFallbackReasonField: false,
+      hasMeaningfulControllerFallbackReason: false,
+      hasSpecGateEvidence: true,
+      hasMeaningfulSpecGateEvidence: true,
+      hasFinalMergeGate: true,
+      hasMeaningfulFinalMergeGate: true,
+      hasFinalMergeGateRequiredKeys: true,
+      finalMergeGateReadyFlag: "true",
+      finalMergeGateHasExplicitPendingInitialGate: false,
+      finalMergeGateReadyWithResolvedThreadsOnly: true,
+      hasReviewConversationCloseout: true,
+      hasMeaningfulReviewConversationCloseout: true,
+      hasThresholdDecision: true,
+      hasMeaningfulThresholdDecision: true,
+      hasCalibrationData: true,
+      hasMeaningfulCalibrationData: false,
+      hasCalibrationRequiredKeys: true,
+      hasDirectExecutionSignal: false,
+      hasThresholdExceptionSupport: false,
+      hasThresholdFollowUp: true,
+      hasMeaningfulThresholdFollowUp: true,
+      thresholdFollowUpStatus: "not-needed",
+      hasThresholdFollowUpEvidence: true,
+    },
+  );
+
+  for (const statusKey of ["threshold_ledger_status", "ledger_status", "threshold_calibration_status"]) {
+    assertGate(
+      `ready to merge blocks pending ${statusKey} even with #375 ref and complete legacy metrics`,
+      bodyWithThresholdGate({
+        finalMergeGate: [
+          "latest_head_sha=abc1234",
+          "unresolved_thread_count=0",
+          "spec_gate_status=pass",
+          "evidence_urls=https://example.com/pr/ready-threshold-status",
+          "ready_to_merge=true",
+        ].join("\n"),
+        calibrationData: [
+          "threshold_ledger_ref=#375",
+          `${statusKey}=pending`,
+          "spawn_count=2",
+          "ci_rerun_count=1",
+          "review_thread_count=3",
+          "rework_reason=parser follow-up after automated review",
+          "threshold_decision=ops_spark_required",
+          "threshold_followup_needed=no",
+        ].join("\n"),
+      }),
+      ["codex"],
+      {
+        autonomousDetected: true,
+        hasDelegationExecutionLog: true,
+        hasMeaningfulDelegationExecutionLog: true,
+        hasTrivialExceptionReason: false,
+        hasOpsSparkMention: true,
+        hasRoutineOpsWork: true,
+        hasSpawnDirective: true,
+        hasSpawnModel: true,
+        hasSpawnReasoning: true,
+        hasSpawnControllerFallback: true,
+        hasSpawnDirectiveWithModelReasoning: true,
+        hasSpawnAllowedWithoutReason: false,
+        hasRoutineOpsDelegationWarning: false,
+        hasControllerFallbackReasonField: false,
+        hasMeaningfulControllerFallbackReason: false,
+        hasSpecGateEvidence: true,
+        hasMeaningfulSpecGateEvidence: true,
+        hasFinalMergeGate: true,
+        hasMeaningfulFinalMergeGate: true,
+        hasFinalMergeGateRequiredKeys: true,
+        finalMergeGateReadyFlag: "true",
+        finalMergeGateHasExplicitPendingInitialGate: false,
+        finalMergeGateReadyWithResolvedThreadsOnly: true,
+        hasReviewConversationCloseout: true,
+        hasMeaningfulReviewConversationCloseout: true,
+        hasThresholdDecision: true,
+        hasMeaningfulThresholdDecision: true,
+        hasCalibrationData: true,
+        hasMeaningfulCalibrationData: false,
+        hasCalibrationRequiredKeys: true,
+        hasDirectExecutionSignal: false,
+        hasThresholdExceptionSupport: false,
+        hasThresholdFollowUp: true,
+        hasMeaningfulThresholdFollowUp: true,
+        thresholdFollowUpStatus: "not-needed",
+        hasThresholdFollowUpEvidence: true,
+      },
+    );
+  }
+
+  {
+    const body = bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/ready-threshold-ledger-message",
+        "ready_to_merge=true",
+      ].join("\n"),
+      calibrationData: [
+        "threshold_ledger_ref=#375",
+        "threshold_ledger_status=pending",
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    });
+
+    assert.equal(evaluateAutonomousCloseoutGate({ body, labels: ["codex"] }).hasMeaningfulCalibrationData, false);
+    assert.deepEqual(evaluateAutonomousCloseoutFailures({ body, labels: ["codex"] }), [
+      "Threshold ledger ref/status: pending — merge blocked until pending ledger is merged.",
+    ]);
+  }
+
+  {
+    const body = bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/ready-generic-status",
+        "ready_to_merge=true",
+        "status=pending",
+      ].join("\n"),
+      calibrationData: [
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    });
+
+    const gate = evaluateAutonomousCloseoutGate({ body, labels: ["codex"] });
+    assert.equal(gate.hasExplicitThresholdLedgerContext, false);
+    assert.equal(gate.hasReadyPendingThresholdLedger, false);
+    assert.equal(gate.hasMeaningfulCalibrationData, true);
+    assert.doesNotMatch(
+      evaluateAutonomousCloseoutFailures({ body, labels: ["codex"] }).join("\n"),
+      /Threshold ledger ref\/status: pending/,
+    );
+  }
+
+  {
+    const body = bodyWithThresholdGate({
+      finalMergeGate: [
+        "latest_head_sha=abc1234",
+        "unresolved_thread_count=0",
+        "spec_gate_status=pass",
+        "evidence_urls=https://example.com/pr/final-gate-generic-status",
+        "ready_to_merge=true",
+        "status=pending",
+      ].join("\n"),
+      calibrationData: [
+        "spawn_count=2",
+        "ci_rerun_count=1",
+        "review_thread_count=3",
+        "rework_reason=parser follow-up after automated review",
+        "threshold_decision=ops_spark_required",
+        "threshold_followup_needed=no",
+      ].join("\n"),
+    });
+
+    const gate = evaluateAutonomousCloseoutGate({ body, labels: ["codex"] });
+    assert.equal(gate.hasExplicitThresholdLedgerContext, false);
+    assert.equal(gate.hasReadyPendingThresholdLedger, false);
+    assert.equal(gate.hasMeaningfulCalibrationData, true);
+    assert.doesNotMatch(
+      evaluateAutonomousCloseoutFailures({ body, labels: ["codex"] }).join("\n"),
+      /Threshold ledger ref\/status: pending/,
+    );
+  }
 
   assertGate(
     "controller-direct threshold path requires exception support",

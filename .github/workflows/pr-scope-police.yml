@@ -154,6 +154,24 @@ jobs:
                   })
                   .filter(Boolean),
               )
+            const extractThresholdLedgerContext = (keyValues) => {
+              const thresholdLedgerRefValue =
+                keyValues.threshold_ledger_ref ?? keyValues.ledger_ref ?? keyValues.threshold_calibration_ref ?? ''
+              const explicitThresholdLedgerStatusValue =
+                keyValues.threshold_ledger_status ??
+                keyValues.ledger_status ??
+                keyValues.threshold_calibration_status ??
+                ''
+              const hasExplicitThresholdLedgerContext =
+                Boolean(thresholdLedgerRefValue) || Boolean(explicitThresholdLedgerStatusValue)
+              const thresholdLedgerStatusValue =
+                explicitThresholdLedgerStatusValue || (hasExplicitThresholdLedgerContext ? keyValues.status ?? '' : '')
+              return {
+                thresholdLedgerRefValue,
+                thresholdLedgerStatusValue,
+                hasExplicitThresholdLedgerContext,
+              }
+            }
             const extractSpawnDirectives = () => {
               const spawnFieldPattern = /(?:^|\n)[^\S\n]*-[^\S\n]*(?:Spawn directive|spawn)[^\S\n]*[：:][^\S\n]*([^\n]+)/gi
               const spawnValuePattern = (key, line) => {
@@ -335,8 +353,37 @@ jobs:
               const value = calibrationDataKeyValues[key]
               return Boolean(value) && hasMeaningfulSectionLine(value)
             })
+            const finalMergeGateLedgerContext = extractThresholdLedgerContext(finalMergeGateKeyValues)
+            const calibrationLedgerContext = extractThresholdLedgerContext(calibrationDataKeyValues)
+            const thresholdLedgerRefValue = calibrationLedgerContext.thresholdLedgerRefValue
+            const hasExplicitThresholdLedgerContext = calibrationLedgerContext.hasExplicitThresholdLedgerContext
+            const thresholdLedgerStatusValue = calibrationLedgerContext.thresholdLedgerStatusValue
+            const thresholdLedgerRefPattern =
+              /(?:#375\b|github\.com\/nurockplayer\/tachiya\/issues\/375(?:#issuecomment-\d+)?\b|(?:^|[\s,;])not_needed(?:$|[\s,;])|(?:^|[\s,;])pending(?:$|[\s,;]))/i
+            const hasThresholdLedgerRef = thresholdLedgerRefPattern.test(thresholdLedgerRefValue)
+            const pendingThresholdLedgerPattern = /(?:^|[\s,;])pending(?:$|[\s,;])/i
+            const hasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(thresholdLedgerRefValue)
+            const hasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(thresholdLedgerStatusValue)
+            const finalMergeGateHasPendingThresholdLedgerRef = pendingThresholdLedgerPattern.test(
+              finalMergeGateLedgerContext.thresholdLedgerRefValue,
+            )
+            const finalMergeGateHasPendingThresholdLedgerStatus = pendingThresholdLedgerPattern.test(
+              finalMergeGateLedgerContext.thresholdLedgerStatusValue,
+            )
+            const hasReadyPendingThresholdLedger =
+              finalMergeGateReadyFlag === 'true' &&
+              (
+                hasPendingThresholdLedgerRef ||
+                hasPendingThresholdLedgerStatus ||
+                finalMergeGateHasPendingThresholdLedgerRef ||
+                finalMergeGateHasPendingThresholdLedgerStatus
+              )
+            const hasReadyThresholdLedgerRef = hasThresholdLedgerRef && !hasReadyPendingThresholdLedger
+            const hasCalibrationReadyStateCompatible = !hasReadyPendingThresholdLedger
             const hasMeaningfulCalibrationData =
-              calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) && hasCalibrationRequiredKeys
+              calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) &&
+              hasCalibrationReadyStateCompatible &&
+              (hasCalibrationRequiredKeys || hasReadyThresholdLedgerRef)
             const directExecutionDecisionValues = new Set(['controller_direct', 'trivial_direct', 'no_worker'])
             const directExecutionSignalPattern =
               /\b(?:(controller_direct|trivial_direct|no_worker)\s*[=:]\s*true|(?:threshold_decision|decision)\s*[=:]\s*(controller_direct|trivial_direct|no_worker))\b/i
@@ -504,9 +551,13 @@ jobs:
                 failures.push('Autonomous PRs must include a meaningful `Threshold decision` field.')
               }
 
-              if (!hasMeaningfulCalibrationData) {
+              if (hasReadyPendingThresholdLedger) {
                 failures.push(
-                  'Autonomous PRs must include meaningful `Calibration data` with `spawn_count`, `ci_rerun_count`, `review_thread_count`, `rework_reason`, `threshold_decision`, and `threshold_followup_needed`.',
+                  'Threshold ledger ref/status: pending — merge blocked until pending ledger is merged.',
+                )
+              } else if (!hasMeaningfulCalibrationData) {
+                failures.push(
+                  'Autonomous PRs must include meaningful `Calibration data` as either legacy key metrics or a #375 threshold ledger ref/status.',
                 )
               }
 
@@ -626,6 +677,7 @@ jobs:
               `- Calibration data: ${!hasCalibrationData ? 'missing' : hasMeaningfulCalibrationData ? 'meaningful' : 'invalid'}`,
             )
             summaryLines.push(`- Calibration required keys: ${hasCalibrationRequiredKeys ? 'present' : 'missing'}`)
+            summaryLines.push(`- Threshold ledger ref/status: ${hasThresholdLedgerRef ? 'present' : 'missing'}`)
             summaryLines.push(`- Threshold direct-execution signal: ${hasDirectExecutionSignal ? 'yes' : 'no'}`)
             summaryLines.push(
               `- Threshold exception support: ${hasThresholdExceptionSupport ? 'yes' : 'no'}`,
