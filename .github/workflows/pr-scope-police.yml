@@ -80,6 +80,9 @@ jobs:
                 'Worker session closeout',
                 'Workflow friction / follow-up split',
                 'Review conversation closeout',
+                'Threshold decision',
+                'Calibration data',
+                'Threshold follow-up',
               ]
               const pattern = new RegExp(
                 `(?:^|\\n)\\s*-\\s*${escapeRegExp(label)}\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*-\\s*(?:${delegatedLabels
@@ -203,6 +206,8 @@ jobs:
               'Spec gate evidence',
               'Final merge gate',
               'Trivial/self-only exception reason',
+              'Threshold decision',
+              'Calibration data',
             ]
             const hasMeaningfulDelegationExecutionLog = delegationExecutionLogLabels.some((label) =>
               hasMeaningfulDelegationField(label),
@@ -312,6 +317,64 @@ jobs:
               finalMergeGateLines.some((line) => hasMeaningfulSectionLine(line)) &&
               (finalMergeGateHasExplicitPendingInitialGate || hasFinalMergeGateRequiredKeys) &&
               finalMergeGateReadyWithResolvedThreadsOnly
+            const thresholdDecisionLines = extractMeaningfulDelegationFieldLines('Threshold decision')
+            const hasThresholdDecision = thresholdDecisionLines.length > 0
+            const hasMeaningfulThresholdDecision = thresholdDecisionLines.some((line) => hasMeaningfulSectionLine(line))
+            const calibrationDataLines = extractMeaningfulDelegationFieldLines('Calibration data')
+            const hasCalibrationData = calibrationDataLines.length > 0
+            const calibrationDataKeyValues = parseKeyValueLines(calibrationDataLines)
+            const calibrationRequiredKeys = [
+              'spawn_count',
+              'ci_rerun_count',
+              'review_thread_count',
+              'rework_reason',
+              'threshold_decision',
+              'threshold_followup_needed',
+            ]
+            const hasCalibrationRequiredKeys = calibrationRequiredKeys.every((key) => {
+              const value = calibrationDataKeyValues[key]
+              return Boolean(value) && hasMeaningfulSectionLine(value)
+            })
+            const hasMeaningfulCalibrationData =
+              calibrationDataLines.some((line) => hasMeaningfulSectionLine(line)) && hasCalibrationRequiredKeys
+            const directExecutionDecisionValues = new Set(['controller_direct', 'trivial_direct', 'no_worker'])
+            const isDirectExecutionSignalLine = (line) => {
+              const keyValueMatch = line.match(/^([A-Za-z0-9_.-]+)\s*[=:]\s*(.+)$/)
+              if (keyValueMatch) {
+                const key = keyValueMatch[1].trim().toLowerCase()
+                const value = keyValueMatch[2].trim().toLowerCase()
+                if (directExecutionDecisionValues.has(key) && value === 'true') {
+                  return true
+                }
+                if (['threshold_decision', 'decision'].includes(key) && directExecutionDecisionValues.has(value)) {
+                  return true
+                }
+              }
+              return directExecutionDecisionValues.has(line.trim().toLowerCase())
+            }
+            const hasDirectExecutionSignal = [...thresholdDecisionLines, ...calibrationDataLines].some((line) =>
+              isDirectExecutionSignalLine(line),
+            )
+            const hasThresholdExceptionSupport = hasTrivialExceptionReason || hasMeaningfulControllerFallbackReason
+            const thresholdFollowUpLines = extractMeaningfulDelegationFieldLines('Threshold follow-up')
+            const hasThresholdFollowUp = thresholdFollowUpLines.length > 0
+            const hasMeaningfulThresholdFollowUp = thresholdFollowUpLines.some((line) => hasMeaningfulSectionLine(line))
+            const thresholdFollowUpKeyValues = parseKeyValueLines(thresholdFollowUpLines)
+            const thresholdFollowUpValue = thresholdFollowUpLines.join(' ').toLowerCase()
+            const thresholdFollowUpNeedsEvidence =
+              normalizePlaceholderValue(thresholdFollowUpKeyValues.status ?? '') === 'open_followup' ||
+              /^(yes|true|needed)$/i.test(normalizePlaceholderValue(thresholdFollowUpKeyValues.threshold_followup_needed ?? '')) ||
+              /(?:^|\b)(yes|true|needed)(?:\b|$)/i.test(thresholdFollowUpValue)
+            const hasThresholdFollowUpEvidence = thresholdFollowUpLines.some((line) => /https?:\/\/\S+|#\d+\b/i.test(line))
+            const thresholdFollowUpStatus = !hasThresholdFollowUp
+              ? 'absent'
+              : !hasMeaningfulThresholdFollowUp
+                ? 'placeholder'
+                : !thresholdFollowUpNeedsEvidence
+                  ? 'not-needed'
+                  : hasThresholdFollowUpEvidence
+                    ? 'linked'
+                    : 'missing-evidence'
             const routineOpsKeywords = [
               'readback',
               'ci status',
@@ -435,6 +498,28 @@ jobs:
                 failures.push('Autonomous PRs must include a meaningful `Review conversation closeout` field.')
               }
 
+              if (!hasMeaningfulThresholdDecision) {
+                failures.push('Autonomous PRs must include a meaningful `Threshold decision` field.')
+              }
+
+              if (!hasMeaningfulCalibrationData) {
+                failures.push(
+                  'Autonomous PRs must include meaningful `Calibration data` with `spawn_count`, `ci_rerun_count`, `review_thread_count`, `rework_reason`, `threshold_decision`, and `threshold_followup_needed`.',
+                )
+              }
+
+              if (hasDirectExecutionSignal && !hasThresholdExceptionSupport) {
+                failures.push(
+                  'Autonomous PRs that signal direct execution via `controller_direct`, `trivial_direct`, `no_worker`, `decision=...`, or `threshold_decision=...` must include a meaningful trivial/self-only exception or Controller fallback reason.',
+                )
+              }
+
+              if (thresholdFollowUpNeedsEvidence && !hasThresholdFollowUpEvidence) {
+                failures.push(
+                  'Autonomous PRs with `Threshold follow-up` set to `status=open_followup` or `threshold_followup_needed=yes|true|needed` must include issue or PR evidence such as `#123` or a URL.',
+                )
+              }
+
               if (!hasTrivialExceptionReason && hasDelegationExecutionLog && !hasSpawnDirectiveWithModelReasoning) {
                 failures.push(
                   'Autonomous PRs with worker delegation must include a Spawn directive with `model=` and `reasoning=`.',
@@ -532,6 +617,19 @@ jobs:
             )
             summaryLines.push(`- Review conversation closeout present: ${hasReviewConversationCloseout ? 'yes' : 'no'}`)
             summaryLines.push(`- Review conversation closeout meaningful: ${hasMeaningfulReviewConversationCloseout ? 'yes' : 'no'}`)
+            summaryLines.push(
+              `- Threshold decision: ${!hasThresholdDecision ? 'missing' : hasMeaningfulThresholdDecision ? 'meaningful' : 'placeholder'}`,
+            )
+            summaryLines.push(
+              `- Calibration data: ${!hasCalibrationData ? 'missing' : hasMeaningfulCalibrationData ? 'meaningful' : 'invalid'}`,
+            )
+            summaryLines.push(`- Calibration required keys: ${hasCalibrationRequiredKeys ? 'present' : 'missing'}`)
+            summaryLines.push(`- Threshold direct-execution signal: ${hasDirectExecutionSignal ? 'yes' : 'no'}`)
+            summaryLines.push(
+              `- Threshold exception support: ${hasThresholdExceptionSupport ? 'yes' : 'no'}`,
+            )
+            summaryLines.push(`- Threshold follow-up: ${thresholdFollowUpStatus}`)
+            summaryLines.push(`- Threshold follow-up evidence: ${hasThresholdFollowUpEvidence ? 'yes' : 'no'}`)
             summaryLines.push('- Bypass label: `scope-exception`')
 
             const commentBody = summaryLines.join('\n')

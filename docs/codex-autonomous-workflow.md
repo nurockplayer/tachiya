@@ -91,19 +91,96 @@ PR body 必須保留 execution log，讓總控與 reviewer 能回頭核對實際
 
 profile 是路由單位，`model`、`reasoning` 為硬規則欄位；除非 `controller_fallback=allowed` 且有 `fallback_reason`，不得使用 controller profile 的 GPT-5.5。
 
-### Cost-aware Delegation Threshold
+### Threshold Calibration v2
 
-下列情況預設必須先委派 low-cost worker，再由總控審核結果，不得直接吃 controller 高成本推理：
+Threshold calibration v2 的目的不是把所有工作都升級成高推理，而是把「何時可 controller 直做、何時必須先走 Spark、何時需要 5.4 或 5.5」寫成可回看的資料化決策。每張 autonomous PR 都必須在 issue plan 與 PR `Delegation Execution Log` 留下 threshold 決策與 calibration data。
 
-- routine GitHub readback、CI/check 摘要、review thread 計數、PR body/comment 整理
-- 文件整理、規格改寫、驗證摘要、檔案定位與既有 pattern 掃描
-- pre-commit checklist、post-push readback、review closeout evidence 蒐集
+#### 1. Controller direct / trivial / self-only allowed
 
-只有遇到下列情況，才可以升級到 controller fallback 或高推理 worker，且必須在 issue/PR 明寫 `Controller fallback reason`：
+只有同時滿足下列條件，總控才可以不先派 worker，直接處理：
 
-- low-cost worker 無法取得必要資料、工具/額度不可用，或回報互相矛盾的 evidence
-- 決策已牽涉 schema、migration、ledger、auth、跨 repo contract 或 merge gate 判斷
-- 任務雖然表面上是 docs/readback，但實際上已經進入 blocking technical decision
+- 單檔或極小範圍修改，沒有跨檔共享狀態。
+- 不需要 CI/check readback、review thread readback、PR body/comment cleanup、或 closeout evidence 蒐集。
+- 不牽涉 schema、migration、ledger、auth、跨 repo contract、merge gate、或 review disposition 決策。
+- 不需要額外 spawn worker 才能把證據補齊。
+
+若走這條路，必須明寫 `Trivial/self-only exception reason`，不得只寫 `small task` 或 `quick fix` 這種空泛描述。
+
+#### 2. ops_spark required
+
+下列工作預設一定要先交給 `ops_spark`，或在其不可用時交給同級低成本替代 worker：
+
+- routine GitHub readback、CI/check 摘要、review thread 計數、PR body/comment 整理。
+- 文件整理、規格改寫、驗證摘要、檔案定位與既有 pattern 掃描。
+- pre-commit checklist、post-push readback、review closeout evidence 蒐集。
+- issue / PR / label / milestone / branch readback。
+- CodeRabbit / `chatgpt-codex-connector` review/comment/reaction 狀態讀回。
+
+同級低成本替代 worker 白名單只有 `repo_scout`、`docs_worker`。若 `ops_spark` 不可用，PR log 必須寫明 fallback profile 與原因；若連低成本替代 worker 都不可用，才可由 controller 補位，並把 `worker unavailable` 寫進 evidence。
+
+#### 3. 5.4 worker required
+
+任務已超過 routine readback / docs / summary，但還沒進入 schema 或 merge decision 層級時，預設要升級到 `gpt-5.4` 或 `gpt-5.4-mini` worker：
+
+- 單檔或小範圍 workflow / unit test 補強。
+- API/FastAPI router、service、CI 相關實作。
+- storefront / dashboard 前端修補。
+- 跨 repo contract、Docker、build contract 驗證。
+
+這類工作仍然不應直接吃 controller 的 `gpt-5.5`，除非低一階 worker 已經證明不足，且有明確 fallback reason。
+
+#### 4. 5.5 / schema / review / controller decision
+
+下列情況才進入 `gpt-5.5` 或 controller decision 層級：
+
+- schema、migration、ledger、資料一致性、帳務、金流、權限模型。
+- merge 前風險掃描、review finding disposition、blocking technical decision。
+- scope-exception、merge method、guarded merge、branch protection、stale review、rebase / merge conflict 決策。
+- low-cost worker 或 5.4 worker 回報互相矛盾 evidence，且需要總控做最後判斷。
+
+這些情況可以用 `schema_worker`、`review_worker` 或 controller 處理，但必須能從 issue/PR 讀出為什麼前一層 threshold 不足。
+
+#### 5. Controller fallback reason format
+
+只要 `controller_fallback=allowed`，就必須在 spawn directive 同時補 `fallback_reason`，並在 PR log 的 `Controller fallback reason` 欄位展開。建議格式如下：
+
+- `fallback_reason=<category>: <why lower tier was insufficient>; impact=<decision or blocker>; evidence=<url|sha|command>`
+
+`category` 只能從下列集合挑選，避免自由發揮：
+
+- `worker_unavailable`
+- `tool_unavailable`
+- `rate_limited`
+- `conflicting_evidence`
+- `schema_or_data_risk`
+- `review_or_merge_decision`
+
+可接受範例：
+
+- `fallback_reason=conflicting_evidence: ops_spark readback and CI summary disagree on required check set; impact=controller must decide merge gate; evidence=gh pr checks #370`
+- `fallback_reason=schema_or_data_risk: docs task escalated into ledger consistency decision; impact=needs schema_worker review; evidence=issue #370 comment`
+
+#### 6. Calibration data fields
+
+每張 autonomous PR 都必須在 `Calibration data` 用 key=value 記錄下列欄位：
+
+- `spawn_count`：本 PR 實際開了幾個 worker / subagent。
+- `ci_rerun_count`：因 CI、metadata rerun、或 required check 再跑的次數。
+- `review_thread_count`：closeout 時仍需處理或已處理的 review thread 總數。
+- `rework_reason`：若有重做、補派 worker、或重寫 PR body/comment，寫最主要原因；無則填 `none`。
+- `threshold_decision`：本次最後採用的 threshold 層級，例如 `controller_direct`、`ops_spark_required`、`worker_5_4_required`、`worker_5_5_required`。
+- `threshold_followup_needed`：若本次顯示 threshold 規則仍太鬆或太緊，填 `yes`；否則填 `no`。
+
+若是 manual / human PR，這些欄位可填 `n/a`；但只要是 autonomous PR，就不得留空。
+
+#### 7. Calibration review cadence
+
+Threshold calibration 不是寫完一次就算。至少每累積 3 張 autonomous PR，就要回看一次最近資料，決定 threshold 是否調整。
+
+- 最小回看樣本：最近 3 張 autonomous PR。
+- 若連續出現 `spawn_count` 過高、`ci_rerun_count` 過高、或 `review_thread_count` 常靠 controller 人工收斂，應考慮把更多 routine 工作下放或先拆 follow-up。
+- 若連續出現 `threshold_followup_needed=yes`，必須在 docs、PR template、或 routing policy 開 follow-up，不要只留在口頭判斷。
+- 若資料顯示現有規則運作正常，仍要在回看紀錄中明寫 `no threshold change`，避免默默漂移。
 
 ## Cost Model 與摩擦預算
 

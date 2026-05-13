@@ -14,16 +14,27 @@ Depends on PR: <!-- `none` 或 `#123` -->
   - <!-- 例：#345 的 Issue Delegation Plan -->
 - Actual worker profile(s):
   - <!-- 例：controller / docs_worker / ops_spark；routine readback / CI status / PR comment 整理 / review closeout evidence 預設要列出 ops_spark -->
-<!-- autonomous PR 的 Spawn directive 必須填在欄位同一行；多個 worker 請重複此欄位。格式：profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed|allowed>。非 autonomous human PR 可填 n/a。 -->
+<!-- autonomous PR 的 Spawn directive 必須填在欄位同一行；多個 worker 請重複此欄位。格式：profile=<profile> model=<model> reasoning=<level> controller_fallback=<not_allowed|allowed> [fallback_reason=<category>: <why>; impact=<decision>; evidence=<url|sha|command>]。非 autonomous human PR 可填 n/a。 -->
 - Spawn directive:
 - Controller fallback reason:
-  - <!-- 若有任何 worker 使用 controller_fallback=allowed，必填原因；否則填 n/a -->
+  - <!-- autonomous 例：fallback_reason=conflicting_evidence: ops_spark readback and CI summary disagree; impact=controller merge gate decision; evidence=gh pr checks #370。若無任何 worker 使用 controller_fallback=allowed，填 n/a；manual/human PR 也填 n/a -->
 - Task:
   - <!-- 每個 worker 實際負責的切片；請把 GitHub readback、CI status、PR body/comment cleanup、review closeout evidence、pre-commit checklist、post-push readback 拆成獨立 ops_spark slice -->
 - Model strength:
   - <!-- 例：controller = high；docs_worker = medium -->
 - Trivial/self-only exception reason:
   - <!-- 若無例外請填 n/a -->
+- Threshold decision:
+  - <!-- autonomous 例：decision=ops_spark_required; rationale=routine readback and PR body cleanup; escalated_to=none。manual/human PR 填 n/a -->
+- Calibration data:
+  - <!-- autonomous 例：spawn_count=2 -->
+  - <!-- autonomous 例：ci_rerun_count=1 -->
+  - <!-- autonomous 例：review_thread_count=0 -->
+  - <!-- autonomous 例：rework_reason=none -->
+  - <!-- autonomous 例：threshold_decision=ops_spark_required -->
+  - <!-- autonomous 例：threshold_followup_needed=no。manual/human PR 填 n/a -->
+- Threshold follow-up:
+  - <!-- autonomous 例：status=no_change; next_review_after_prs=3; followup_issue=none。若需要調整，例：status=open_followup; next_review_after_prs=3; followup_issue=#370。manual/human PR 填 n/a -->
 - Evidence / verification:
   - <!-- 例：git diff --check；node --test .github/workflow-tests/*.test.mjs；commit SHA；push branch；PR head SHA；CI/check/review/thread readback 摘要；若 git write 由 controller 執行，記錄原因與 ops_spark checklist/readback -->
 - Spec gate evidence:
