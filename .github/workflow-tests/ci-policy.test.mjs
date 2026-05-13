@@ -2675,10 +2675,13 @@ test("Policy CI makes AWP and template policy changes remotely visible", () => {
   assert.match(workflow, /\.github\/PULL_REQUEST_TEMPLATE\.md/);
   assert.match(workflow, /\.github\/ISSUE_TEMPLATE\/\*\*/);
   assert.match(workflow, /\.github\/workflows\/policy-ci\.yml/);
+  assert.match(workflow, /\.github\/workflows\/close-issue-on-develop-merge\.yml/);
   assert.match(workflow, /\.github\/workflows\/pr-scope-police\.yml/);
   assert.match(workflow, /\.github\/workflow-tests\/ci-policy\.test\.mjs/);
   assert.match(workflow, /docs\/codex-autonomous-workflow\.md/);
-  assert.match(workflow, /git diff --check/);
+  assert.match(workflow, /fetch-depth: 0/);
+  assert.match(workflow, /git diff --check "origin\/\$\{GITHUB_BASE_REF\}"\.\.\.HEAD/);
+  assert.match(workflow, /git diff-tree --check --no-commit-id --root -r HEAD/);
   assert.match(workflow, /node --test \.github\/workflow-tests\/ci-policy\.test\.mjs/);
   assert.match(workflow, /timeout-minutes: 5/);
   assert.doesNotMatch(workflow, /uv run/);
