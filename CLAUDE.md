@@ -190,8 +190,8 @@ autonomous work 一開始就必須先分派 worker，再進入計劃、開 issue
 | 操作 | 誰執行 |
 |---|---|
 | 摘要大量檔案、生成樣板、審查 log、搜尋 pattern、草擬測試 | Gemini |
-| 架構規劃、issue 撰寫、技術決策、最終 PR 審查 | Claude Code |
-| 實作、debug、patch、跑測試、推 branch、開 PR | Codex |
+| 架構規劃、issue 撰寫、技術決策、最終 PR 審查、git push、開 PR | Claude Code |
+| 實作、debug、patch、跑測試 | Codex |
 
 **委派原則（節省 Claude token）：**
 
