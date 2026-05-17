@@ -1,5 +1,7 @@
 用 `codex:rescue` 處理這個問題，目標是盡量直接修好並把 Claude token 用量壓低。
 
+安全邊界：此命令只授權本機修改與驗證；不得 commit、push、開 PR、開立或編輯 issue、comment、review、approve 或 merge，除非使用者在該回合另外明確要求並再次確認。
+
 問題：
 $ARGUMENTS
 

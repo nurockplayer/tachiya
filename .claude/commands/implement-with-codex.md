@@ -1,5 +1,7 @@
 用 `codex:rescue` 實作這個需求，並盡量節省 Claude token。
 
+安全邊界：此命令只授權本機修改與驗證；不得 commit、push、開 PR、開立或編輯 issue、comment、review、approve 或 merge，除非使用者在該回合另外明確要求並再次確認。
+
 需求：
 $ARGUMENTS
 
