@@ -51,6 +51,13 @@ dashboard/
 *.swo
 
 # ========================
+# OpenSpec（只忽略 ephemeral；source docs 必須 commit）
+# ========================
+openspec/cache/
+openspec/generated/
+.openspec/
+
+# ========================
 # OS
 # ========================
 .DS_Store

@@ -1,0 +1,29 @@
+schema: spec-driven
+
+context: |
+  Tachiya is a Saleor-based e-commerce platform with a Python/FastAPI backend, Saleor Dashboard, and Next.js storefront.
+  Backend code lives in api/ and uses FastAPI + PostgreSQL.
+  The storefront repo is nurockplayer/storefront; the dashboard is a local Saleor checkout.
+  Root repo scope: FastAPI, docker-compose, docs, and cross-repo contracts.
+  Product and architecture docs live under docs/.
+  New feature or behavior-change work must stay aligned to a GitHub source issue, PR scope policy, and OpenSpec change artifacts.
+  AI agents must not add dependencies, run package executors, or commit private/generated tool output without explicit human review.
+
+rules:
+  proposal:
+    - Reference the GitHub source issue.
+    - State observable behavior changes.
+    - Include explicit non-goals.
+    - Identify dependent issues or PRs.
+  design:
+    - List affected code areas (api/, frontend/, dashboard/, docker/, docs/).
+    - Explain trade-offs and rollback considerations.
+    - Call out schema, auth, payments, points ledger, or permission risks when present.
+  tasks:
+    - Use checkboxes that map directly to PR Acceptance Criteria.
+    - Keep each task independently reviewable.
+    - Include validation commands or evidence expectations.
+  specs:
+    - Describe behavior, not implementation details.
+    - Prefer Given/When/Then scenarios.
+    - Do not move proposed behavior into openspec/specs until it is accepted and archived.

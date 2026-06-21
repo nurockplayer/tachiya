@@ -2,11 +2,17 @@
 <!-- 簡要說明這個 PR 做了什麼 -->
 
 ## Scope 對齊
-Source of truth: <!-- issue / PR / docs，例如 #345 -->
+Source of truth: <!-- issue / PR / docs / openspec/changes/<change-id>，例如 #345 -->
 Depends on PR: <!-- `none` 或 `#123` -->
 
 ## 本 PR 明確不做
 - <!-- 請列出 non-goals；若無請填 n/a -->
+
+## OpenSpec SDD
+<!-- 新 feature / behavior change 預設必填；純 typo、metadata、小型 review follow-up 可填 n/a + 理由。 -->
+- OpenSpec change：<!-- 例：openspec/changes/add-points-ledger；若不適用請填 n/a + reason -->
+- Status：<!-- proposed / in-progress / archived / n/a -->
+- Contract docs updated：<!-- yes / no / n/a + reason -->
 
 ## Delegation Execution Log
 <!-- Codex autonomous PR 必填；非 autonomous human PR 可填 n/a。 -->
