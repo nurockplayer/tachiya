@@ -192,6 +192,17 @@ make logs   # 查看 logs
 
 核心判斷：Codex 需要即時看輸出來決策 → 自己做；純執行 → 交給 Codex
 
+### OpenSpec SDD Workflow
+
+新 feature 或 behavior change 預設使用 OpenSpec 作為 proposal / specs / design / tasks 的 implementation source of truth。完整規範見 [docs/ai/openspec-workflow.md](docs/ai/openspec-workflow.md)。
+
+- 先確認 GitHub source issue，再建立 `openspec/changes/<change-id>/`；PR body 的 `Source of truth` 必須同時指向 issue 與 OpenSpec change path。
+- OpenSpec change 至少包含 `.openspec.yaml`、`proposal.md`、`design.md`、`tasks.md`、以及 `specs/<domain>/spec.md` delta specs。
+- 實作只能對齊 `tasks.md` 與 delta specs；OpenSpec artifacts 不授權擴張 issue scope。
+- `openspec/specs/**` 只放已採納的 living behavior；proposal 尚未完成前不得直接寫入 main specs。
+- OpenSpec 不取代 autonomous Spec gate；autonomous workflow 仍遵守 `docs/codex-autonomous-workflow.md`。
+- 不得自行安裝 OpenSpec CLI 或提交未 review generated output；若本機沒有 OPSX 或 `openspec` 指令，可用人工 artifacts fallback，但仍要保留完整 change 結構。
+
 ### Autonomous Worker Profiles
 
 當使用者授權 autonomous product work 時，Codex 作為總控 agent，負責架構、計劃、scope、最終 review、guarded merge 與 closeout。
@@ -240,6 +251,7 @@ Codex --max-turns 5
 |---|---|---|
 | `README.md` | 所有人 | 開發環境建置（快速上手） |
 | `docs/` | 工程師 | 架構設計、API 規格、技術決策 |
+| `docs/ai/` | AI 協作者 / 工程師 | AI 協作指南與較長篇的 agent-facing 文件 |
 | GitHub Wiki | 全體人員 | 產品說明、功能介紹、非技術文件 |
 
 ## 架構參考

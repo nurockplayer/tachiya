@@ -239,6 +239,19 @@ claude --max-turns 5
 
 如果任務非常單純，可視情況降到 `3`；原則上請把單次執行限制在 `3-5` turns 內，避免無限制迴圈消耗 token。
 
+### OpenSpec SDD
+
+新 feature 或 behavior change 預設先走 OpenSpec SDD。實作前應讀 [docs/ai/openspec-workflow.md](docs/ai/openspec-workflow.md)，並確認：
+
+- GitHub source issue 已存在。
+- `openspec/changes/<change-id>/proposal.md`、`design.md`、`tasks.md` 與 delta specs 已對齊 issue scope。
+- PR body 的 `Source of truth` 指向 issue 與 OpenSpec change path，Acceptance Criteria 對齊 `tasks.md`。
+- 若本機支援 OPSX，優先使用 `/opsx:propose`、`/opsx:apply`、`/opsx:sync`、`/opsx:archive`；若沒有工具，允許人工建立 artifacts，但不得省略 `.openspec.yaml`。
+- 不得自行安裝 OpenSpec CLI、使用 package executor、或提交 private context / cache / task package / 未 review generated output。
+- OpenSpec 不取代 `docs/codex-autonomous-workflow.md` 的 autonomous gates。
+
+若使用者授權 autonomous product work，Claude / Codex 應採用 [docs/codex-autonomous-workflow.md](docs/codex-autonomous-workflow.md) 的 Worker Profiles、issue-first、review gate、CodeRabbit fallback 與 PR Scope Police 合約。
+
 ## 文件放置規範
 
 | 位置 | 對象 | 內容 |
